@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+}
+
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  phone       String?  @unique
+  password    String
+  role        UserRole @default(CUSTOMER)
+  address     String?
+  city        String?
+  district    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  bookings    Booking[]
+}
+
+model Cinema {
+  id        String   @id @default(cuid())
+  name      String
+  city      String
+  address   String
+  halls     Hall[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Hall {
+  id        String   @id @default(cuid())
+  cinemaId  String
+  name      String
+  capacity  Int
+  cinema    Cinema   @relation(fields: [cinemaId], references: [id], onDelete: Cascade)
+  showtimes Showtime[]
+  seats     Seat[]
+}
+
+model Seat {
+  id         String   @id @default(cuid())
+  hallId     String
+  code       String
+  rowLabel   String
+  seatNumber Int
+  type       String   @default("STANDARD")
+  isActive   Boolean  @default(true)
+  hall       Hall     @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  tickets    Ticket[]
+
+  @@unique([hallId, code])
+}
+
+model Movie {
+  id           String     @id @default(cuid())
+  title        String
+  slug         String     @unique
+  genre        String
+  duration     Int
+  ageRating    String
+  synopsis     String
+  posterUrl    String
+  trailerUrl   String?
+  releaseDate  DateTime
+  isNowShowing Boolean    @default(true)
+  isComingSoon Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  showtimes    Showtime[]
+}
+
+model Showtime {
+  id        String   @id @default(cuid())
+  movieId   String
+  hallId    String
+  startTime DateTime
+  endTime   DateTime
+  language  String   @default("VietSub")
+  format    String   @default("2D")
+  basePrice Int
+  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  hall      Hall     @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  bookings  Booking[]
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  userId        String?
+  showtimeId    String
+  bookingCode   String        @unique
+  customerName  String
+  customerPhone String
+  customerEmail String
+  note          String?
+  paymentMethod String
+  status        BookingStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(UNPAID)
+  totalPrice    Int
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  showtime      Showtime      @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
+  tickets       Ticket[]
+  payment       Payment?
+}
+
+model Ticket {
+  id        String  @id @default(cuid())
+  bookingId String
+  seatId    String
+  seatCode  String
+  price     Int
+  qrCode    String?
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  seat      Seat    @relation(fields: [seatId], references: [id], onDelete: Restrict)
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  bookingId       String   @unique
+  provider        String
+  transactionCode String?
+  amount          Int
+  status          String   @default("PENDING")
+  paidAt          DateTime?
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
