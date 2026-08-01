@@ -8,13 +8,18 @@ const navItems = [
   { href: '/phim', label: 'Phim' },
   { href: '/dat-ve', label: 'Đặt vé' },
   { href: '/gio-hang', label: 'Giỏ vé' },
-  { href: '/thanh-toan', label: 'Thanh toán' },
-  { href: '/admin', label: 'Admin' }
+  { href: '/thanh-toan', label: 'Thanh toán' }
 ];
 
 export async function SiteHeader() {
   const session = await getServerSession(authOptions);
-  const navigationItems = session?.user.role === 'ADMIN' ? navItems : navItems.filter((item) => item.href !== '/admin');
+  const navigationItems = [...navItems];
+
+  if (session && session.user.role === 'ADMIN') {
+    navigationItems.push({ href: '/admin', label: 'Admin' });
+  } else if (!session) {
+    navigationItems.push({ href: '/admin/dang-nhap', label: 'Admin' });
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
