@@ -1,39 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { movies as mockMovies } from '@/lib/mock-data';
-
-async function ensureMoviesSeeded() {
-  for (const movie of mockMovies) {
-    await prisma.movie.upsert({
-      where: { slug: movie.slug },
-      update: {
-        title: movie.title,
-        genre: movie.genre,
-        duration: movie.duration,
-        ageRating: movie.ageRating,
-        synopsis: movie.synopsis,
-        posterUrl: movie.posterUrl,
-        trailerUrl: movie.trailerUrl,
-        releaseDate: new Date(movie.releaseDate),
-        isNowShowing: movie.isNowShowing,
-        isComingSoon: movie.isComingSoon
-      },
-      create: {
-        title: movie.title,
-        slug: movie.slug,
-        genre: movie.genre,
-        duration: movie.duration,
-        ageRating: movie.ageRating,
-        synopsis: movie.synopsis,
-        posterUrl: movie.posterUrl,
-        trailerUrl: movie.trailerUrl,
-        releaseDate: new Date(movie.releaseDate),
-        isNowShowing: movie.isNowShowing,
-        isComingSoon: movie.isComingSoon
-      }
-    });
-  }
-}
+import { ensureMoviesSeeded } from '@/lib/seed-movies';
 
 export async function GET() {
   await ensureMoviesSeeded();

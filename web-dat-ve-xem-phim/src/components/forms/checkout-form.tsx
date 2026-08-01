@@ -5,11 +5,17 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type CheckoutFormProps = {
+  movieTitle: string;
+  cinemaName: string;
+  hallName: string;
+  showtimeId: string;
+  showtimeStart: string;
+  seats: string[];
   subtotal: number;
   bookingFee?: number;
 };
 
-export function CheckoutForm({ subtotal, bookingFee = 0 }: CheckoutFormProps) {
+export function CheckoutForm({ movieTitle, cinemaName, hallName, showtimeId, showtimeStart, seats, subtotal, bookingFee = 0 }: CheckoutFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -42,7 +48,15 @@ export function CheckoutForm({ subtotal, bookingFee = 0 }: CheckoutFormProps) {
     const response = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, paymentMethod, subtotal, bookingFee, total })
+      body: JSON.stringify({
+        ...form,
+        paymentMethod,
+        subtotal,
+        bookingFee,
+        total,
+        showtimeId,
+        seats: seats.join(',')
+      })
     });
 
     const data = (await response.json()) as { message: string; redirectTo?: string };
@@ -58,7 +72,16 @@ export function CheckoutForm({ subtotal, bookingFee = 0 }: CheckoutFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
       <div>
         <h2 className="text-2xl font-semibold text-white">Thông tin thanh toán</h2>
-        <p className="mt-2 text-sm text-slate-300">Form giữ nguyên cấu trúc từ project cũ, chỉ đổi thành ngữ cảnh đặt vé phim.</p>
+        <p className="mt-2 text-sm text-slate-300">
+          {movieTitle} · {cinemaName} · {hallName} · {new Date(showtimeStart).toLocaleString('vi-VN')}
+        </p>
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+        <div className="flex items-center justify-between">
+          <span>Ghế đã chọn</span>
+          <span className="font-semibold text-white">{seats.join(', ') || 'Chưa chọn'}</span>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

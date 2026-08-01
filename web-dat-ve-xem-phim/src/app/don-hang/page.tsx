@@ -12,13 +12,22 @@ export default async function OrdersPage() {
       movie: {
         title: string;
       };
+        hall: {
+          cinema: {
+            name: string;
+          };
+          name: string;
+        };
       startTime: Date;
     };
+      tickets: {
+        seatCode: string;
+      }[];
   };
 
   const bookings = await prisma.booking.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { showtime: { include: { movie: true } } }
+    include: { showtime: { include: { movie: true, hall: { include: { cinema: true } } } }, tickets: true }
   }) as BookingSummary[];
 
   return (
@@ -44,6 +53,7 @@ export default async function OrdersPage() {
               <span className="rounded-full bg-white/5 px-3 py-1">Mã đơn: {booking.bookingCode}</span>
               <span className="rounded-full bg-white/5 px-3 py-1">Thanh toán: {booking.paymentStatus}</span>
               <span className="rounded-full bg-white/5 px-3 py-1">Tổng tiền: {booking.totalPrice.toLocaleString('vi-VN')} đ</span>
+              <span className="rounded-full bg-white/5 px-3 py-1">Ghế: {booking.tickets.map((ticket) => ticket.seatCode).join(', ')}</span>
             </div>
           </article>
         ))}

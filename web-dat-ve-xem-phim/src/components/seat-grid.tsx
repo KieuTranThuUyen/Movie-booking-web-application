@@ -1,20 +1,25 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 type SeatGridProps = {
+  movieSlug: string;
+  showtimeId: string;
   movieTitle: string;
   cinemaName: string;
   hallName: string;
   startTime: string;
   basePrice: number;
+  soldSeats: string[];
 };
 
 const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
-const soldSeats = ['A3', 'A4', 'B6', 'C2', 'D5', 'E1'];
 
-export function SeatGrid({ movieTitle, cinemaName, hallName, startTime, basePrice }: SeatGridProps) {
-  const [selectedSeats, setSelectedSeats] = useState<string[]>(['B2', 'B3']);
+export function SeatGrid({ movieSlug, showtimeId, movieTitle, cinemaName, hallName, startTime, basePrice, soldSeats }: SeatGridProps) {
+  const router = useRouter();
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [message, setMessage] = useState('');
 
   const total = useMemo(() => selectedSeats.length * basePrice, [selectedSeats, basePrice]);
 
@@ -28,6 +33,16 @@ export function SeatGrid({ movieTitle, cinemaName, hallName, startTime, basePric
         ? current.filter((seat) => seat !== seatCode)
         : [...current, seatCode].sort()
     );
+  };
+
+  const goToCart = () => {
+    if (selectedSeats.length === 0) {
+      setMessage('Vui lòng chọn ít nhất một ghế.');
+      return;
+    }
+
+    const seatParam = selectedSeats.join(',');
+    router.push(`/gio-hang?movie=${movieSlug}&showtime=${showtimeId}&seats=${seatParam}`);
   };
 
   return (
@@ -68,6 +83,7 @@ export function SeatGrid({ movieTitle, cinemaName, hallName, startTime, basePric
             </div>
           ))}
         </div>
+        {message ? <p className="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">{message}</p> : null}
       </section>
 
       <aside className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
@@ -97,10 +113,10 @@ export function SeatGrid({ movieTitle, cinemaName, hallName, startTime, basePric
 
         <button
           type="button"
-          onClick={() => window.location.assign('/thanh-toan')}
+          onClick={goToCart}
           className="inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
         >
-          Tiếp tục thanh toán
+          Tiếp tục sang giỏ vé
         </button>
       </aside>
     </div>

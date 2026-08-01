@@ -2,19 +2,20 @@
 
 import type { ChangeEvent, FormEvent } from 'react';
 import { useState } from 'react';
+import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
 export function LoginForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [form, setForm] = useState({ name: '', password: '', remember: true });
+  const [form, setForm] = useState({ identifier: '', password: '' });
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const { name, type, checked, value } = event.target;
+    const { name, value } = event.target;
     setForm((current) => ({
       ...current,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: value
     }));
   };
 
@@ -23,35 +24,42 @@ export function LoginForm() {
     setLoading(true);
     setMessage('');
 
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+    const result = await signIn('credentials', {
+      redirect: false,
+      identifier: form.identifier,
+      password: form.password,
+      callbackUrl: '/tai-khoan'
     });
 
-    const data = (await response.json()) as { message: string; redirectTo?: string };
     setLoading(false);
-    setMessage(data.message);
 
-    if (response.ok && data.redirectTo) {
-      router.push(data.redirectTo);
+    if (result?.error) {
+      setMessage('Email/số điện thoại hoặc mật khẩu không đúng.');
+      return;
     }
+
+    if (result?.url) {
+      router.push(result.url);
+      return;
+    }
+
+    router.push('/tai-khoan');
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
       <div>
         <h2 className="text-2xl font-semibold text-white">Đăng nhập</h2>
-        <p className="mt-2 text-sm text-slate-300">Dùng lại form đăng nhập từ project cũ nhưng chuyển sang luồng tài khoản phim.</p>
+        <p className="mt-2 text-sm text-slate-300">Đăng nhập bằng email hoặc số điện thoại để truy cập tài khoản đặt vé.</p>
       </div>
 
       <label className="block space-y-2 text-sm text-slate-200">
-        <span>Tên người dùng</span>
+        <span>Email hoặc số điện thoại</span>
         <input
-          name="name"
-          value={form.name}
+          name="identifier"
+          value={form.identifier}
           onChange={handleChange}
-          placeholder="Nhập tên người dùng"
+          placeholder="Nhập email hoặc số điện thoại"
           className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400/60"
           required
         />
@@ -68,11 +76,6 @@ export function LoginForm() {
           className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400/60"
           required
         />
-      </label>
-
-      <label className="flex items-center gap-3 text-sm text-slate-300">
-        <input type="checkbox" name="remember" checked={form.remember} onChange={handleChange} className="h-4 w-4 rounded border-white/20 bg-transparent" />
-        Ghi nhớ đăng nhập
       </label>
 
       {message ? <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">{message}</p> : null}

@@ -50,12 +50,28 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
             movie: true,
             hall: {
               include: {
-                cinema: true
+                cinema: true,
+                seats: true
               }
             }
           }
         })
       : null) ?? movie?.showtimes[0] ?? null;
+
+  const soldSeats = showtime
+    ? (
+        await prisma.ticket.findMany({
+          where: {
+            booking: {
+              showtimeId: showtime.id
+            }
+          },
+          select: {
+            seatCode: true
+          }
+        })
+      ).map((ticket) => ticket.seatCode)
+    : [];
 
   if (!movie || !showtime) {
     return (
@@ -76,11 +92,14 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
 
       <div className="mt-10">
         <SeatGrid
+          movieSlug={movie.slug}
+          showtimeId={showtime.id}
           movieTitle={movie.title}
           cinemaName={showtime.hall.cinema.name}
           hallName={showtime.hall.name}
           startTime={showtime.startTime.toISOString()}
           basePrice={showtime.basePrice}
+          soldSeats={soldSeats}
         />
       </div>
     </main>

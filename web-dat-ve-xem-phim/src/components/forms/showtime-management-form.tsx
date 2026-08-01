@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { useState } from 'react';
 
 type MovieOption = {
+  id: string;
   slug: string;
   title: string;
 };

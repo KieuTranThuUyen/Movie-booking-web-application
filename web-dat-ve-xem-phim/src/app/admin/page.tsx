@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { CinemaManagementForm } from '@/components/forms/cinema-management-form';
+import { MovieManagementForm } from '@/components/forms/movie-management-form';
 import { ShowtimeManagementForm } from '@/components/forms/showtime-management-form';
-import { movies as mockMovies } from '@/lib/mock-data';
 
 export default async function AdminPage() {
   type BookingSummary = {
@@ -17,14 +17,17 @@ export default async function AdminPage() {
     };
   };
 
-  const [bookings, moviesCount, usersCount] = await Promise.all([
+  const [bookings, moviesCount, usersCount, movies] = await Promise.all([
     prisma.booking.findMany({
       orderBy: { createdAt: 'desc' },
       take: 5,
       include: { showtime: { include: { movie: true } } }
     }) as Promise<BookingSummary[]>,
     prisma.movie.count(),
-    prisma.user.count()
+    prisma.user.count(),
+    prisma.movie.findMany({
+      orderBy: [{ isNowShowing: 'desc' }, { releaseDate: 'desc' }]
+    })
   ]);
 
   const cinemas = await prisma.cinema.findMany({
@@ -74,6 +77,16 @@ export default async function AdminPage() {
       </div>
 
       <section className="mt-10 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
+        <h2 className="text-xl font-semibold text-white">Quản lý phim</h2>
+        <p className="mt-3 text-sm leading-7 text-slate-300">
+          Tạo, cập nhật và xóa phim trực tiếp từ cơ sở dữ liệu.
+        </p>
+        <div className="mt-6">
+          <MovieManagementForm movies={movies} />
+        </div>
+      </section>
+
+      <section className="mt-10 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
         <h2 className="text-xl font-semibold text-white">Quản lý rạp chiếu và sơ đồ ghế</h2>
         <p className="mt-3 text-sm leading-7 text-slate-300">
           Tạo rạp, thêm phòng chiếu và sinh sơ đồ ghế khác nhau cho từng phòng để phù hợp với mô tả hệ thống.
@@ -90,7 +103,7 @@ export default async function AdminPage() {
         </p>
         <div className="mt-6">
           <ShowtimeManagementForm
-            movies={mockMovies.map((movie) => ({ slug: movie.slug, title: movie.title }))}
+            movies={movies.map((movie) => ({ id: movie.id, slug: movie.slug, title: movie.title }))}
             halls={cinemas.flatMap((cinema) => cinema.halls.map((hall) => ({ id: hall.id, name: hall.name, cinema: { name: cinema.name } })))}
           />
         </div>
