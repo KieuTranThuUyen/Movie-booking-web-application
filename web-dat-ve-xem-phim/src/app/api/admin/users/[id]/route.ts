@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
@@ -10,7 +11,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const params = await context.params;
   const body = (await request.json()) as { name?: string; email?: string; password?: string; phone?: string; role?: string };
 
-  const data: any = {};
+  const data: Prisma.UserUpdateInput = {};
 
   if (body.name !== undefined) data.name = body.name;
   if (body.email !== undefined) data.email = body.email;

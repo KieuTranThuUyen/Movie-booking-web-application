@@ -66,7 +66,7 @@ export function UserManagementForm() {
                 <div className="mt-1 text-slate-400">{user.email} {user.phone ? `· ${user.phone}` : ''}</div>
               </div>
               <div className="flex items-center gap-2">
-                <select value={user.role} onChange={(e) => setUsers((cur) => cur.map((u) => (u.id === user.id ? { ...u, role: e.target.value as any } : u)))} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none">
+                <select value={user.role} onChange={(e) => setUsers((cur) => cur.map((u) => (u.id === user.id ? { ...u, role: e.target.value as UserItem['role'] } : u)))} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none">
                   <option value="CUSTOMER">Customer</option>
                   <option value="ADMIN">Admin</option>
                 </select>
