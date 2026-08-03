@@ -39,5 +39,12 @@ export async function POST(request: Request) {
     data: seatRecords
   });
 
-  return NextResponse.json({ message: 'Tạo phòng chiếu và sơ đồ ghế thành công.', hall });
+  const createdHall = await prisma.hall.findUnique({
+    where: { id: hall.id },
+    include: {
+      seats: true
+    }
+  });
+
+  return NextResponse.json({ message: 'Tạo phòng chiếu và sơ đồ ghế thành công.', hall: createdHall });
 }
