@@ -1,173 +1,134 @@
+import { BookingStatus, PaymentStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { CinemaManagementForm } from '@/components/forms/cinema-management-form';
-import { MovieManagementForm } from '@/components/forms/movie-management-form';
-import { ShowtimeManagementForm } from '@/components/forms/showtime-management-form';
-import { UserManagementForm } from '@/components/forms/user-management-form';
 
 export default async function AdminPage() {
-  type BookingSummary = {
-    id: string;
-    bookingCode: string;
-    customerName: string;
-    totalPrice: number;
-    status: string;
-    showtime: {
-      movie: {
-        title: string;
-      };
-    };
-  };
-
-  const [bookings, moviesCount, usersCount, movies] = await Promise.all([
-    prisma.booking.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      include: { showtime: { include: { movie: true } } }
-    }) as Promise<BookingSummary[]>,
+  const [bookingsCount, moviesCount, usersCount, showtimesCount, cinemasCount, hallsCount, pendingBookings, confirmedBookings, paidBookings] = await Promise.all([
+    prisma.booking.count(),
     prisma.movie.count(),
     prisma.user.count(),
-    prisma.movie.findMany({
-      orderBy: [{ isNowShowing: 'desc' }, { releaseDate: 'desc' }]
-    })
+    prisma.showtime.count(),
+    prisma.cinema.count(),
+    prisma.hall.count(),
+    prisma.booking.count({ where: { status: BookingStatus.PENDING } }),
+    prisma.booking.count({ where: { status: BookingStatus.CONFIRMED } }),
+    prisma.booking.count({ where: { paymentStatus: PaymentStatus.PAID } })
   ]);
 
-  const cinemas = await prisma.cinema.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      halls: {
-        include: {
-          seats: true
-        }
-      }
-    }
-  });
+  const completionRate = bookingsCount === 0 ? 0 : Math.round((confirmedBookings / bookingsCount) * 100);
+  const paymentRate = bookingsCount === 0 ? 0 : Math.round((paidBookings / bookingsCount) * 100);
 
-  const showtimes = await prisma.showtime.findMany({
-    orderBy: { startTime: 'asc' },
-    include: {
-      movie: true,
-      hall: {
-        include: {
-          cinema: true
-        }
-      }
+  const kpis = [
+    {
+      label: 'Tổng đơn đặt',
+      value: bookingsCount,
+      note: `${pendingBookings} đơn chờ xử lý`,
+      tone: 'from-sky-500/25 to-cyan-500/5'
+    },
+    {
+      label: 'Tỷ lệ xác nhận',
+      value: `${completionRate}%`,
+      note: `${confirmedBookings}/${bookingsCount || 0} đơn đã xác nhận`,
+      tone: 'from-emerald-500/25 to-teal-500/5'
+    },
+    {
+      label: 'Tỷ lệ thanh toán',
+      value: `${paymentRate}%`,
+      note: `${paidBookings}/${bookingsCount || 0} đơn đã thanh toán`,
+      tone: 'from-amber-500/25 to-orange-500/5'
+    },
+    {
+      label: 'Nội dung hệ thống',
+      value: `${moviesCount} phim`,
+      note: `${showtimesCount} suất chiếu`,
+      tone: 'from-fuchsia-500/25 to-indigo-500/5'
+    },
+    {
+      label: 'Người dùng',
+      value: usersCount,
+      note: 'Tài khoản đã đăng ký',
+      tone: 'from-violet-500/25 to-blue-500/5'
+    },
+    {
+      label: 'Hạ tầng rạp',
+      value: `${cinemasCount} rạp`,
+      note: `${hallsCount} phòng chiếu`,
+      tone: 'from-rose-500/25 to-pink-500/5'
     }
-  });
-
-  const stats = [
-    { label: 'Phim', value: moviesCount },
-    { label: 'Suất chiếu', value: await prisma.showtime.count() },
-    { label: 'Đơn đặt', value: bookings.length },
-    { label: 'Người dùng', value: usersCount }
   ];
 
   return (
-    <main className="page-shell py-12 lg:py-16">
-      <div className="space-y-3">
-        <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">Admin</p>
-        <h1 className="text-4xl font-bold text-white">Bảng điều khiển quản trị</h1>
+    <section className="space-y-8">
+      <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-6 shadow-glow">
+        <div className="pointer-events-none absolute -right-14 -top-16 h-44 w-44 rounded-full bg-sky-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 left-20 h-56 w-56 rounded-full bg-fuchsia-500/15 blur-3xl" />
+        <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
+          <div>
+            <p className="text-sm uppercase tracking-[0.28em] text-sky-300/80">Tổng quan vận hành</p>
+            <h2 className="mt-3 text-3xl font-bold text-white lg:text-4xl">Bức tranh nhanh toàn bộ hệ thống đặt vé</h2>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
+              Theo dõi năng lực vận hành theo thời gian thực, ưu tiên xử lý đơn chờ xác nhận và cập nhật các khu vực quản trị quan trọng chỉ bằng một lần nhấp.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Cần ưu tiên hôm nay</div>
+            <div className="mt-3 grid gap-3 text-sm">
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                <span className="text-slate-300">Đơn chờ xử lý</span>
+                <span className="font-semibold text-amber-200">{pendingBookings}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                <span className="text-slate-300">Đơn đã xác nhận</span>
+                <span className="font-semibold text-emerald-200">{confirmedBookings}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                <span className="text-slate-300">Đơn đã thanh toán</span>
+                <span className="font-semibold text-sky-200">{paidBookings}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="rounded-[24px] border border-white/10 bg-white/5 p-5 shadow-glow">
-            <div className="text-sm text-slate-400">{stat.label}</div>
-            <div className="mt-2 text-3xl font-semibold text-white">{stat.value}</div>
-          </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {kpis.map((item) => (
+          <article key={item.label} className="relative overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/75 p-5 shadow-glow backdrop-blur-xl">
+            <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${item.tone}`} />
+            <div className="relative">
+              <p className="text-sm text-slate-300">{item.label}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{item.value}</p>
+              <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">{item.note}</p>
+            </div>
+          </article>
         ))}
       </div>
 
-      <section className="mt-10 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-        <h2 className="text-xl font-semibold text-white">Quản lý phim</h2>
-        <p className="mt-3 text-sm leading-7 text-slate-300">
-          Tạo, cập nhật và xóa phim trực tiếp từ cơ sở dữ liệu.
-        </p>
-        <div className="mt-6">
-          <MovieManagementForm movies={movies} />
+      <div className="rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-glow backdrop-blur-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold text-white">Nhịp độ xử lý đơn</h3>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">Từ dữ liệu hiện tại</span>
         </div>
-      </section>
-
-      <section className="mt-10 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-        <h2 className="text-xl font-semibold text-white">Quản lý rạp chiếu và sơ đồ ghế</h2>
-        <p className="mt-3 text-sm leading-7 text-slate-300">
-          Tạo rạp, thêm phòng chiếu và sinh sơ đồ ghế khác nhau cho từng phòng để phù hợp với mô tả hệ thống.
-        </p>
-        <div className="mt-6">
-          <CinemaManagementForm cinemas={cinemas} />
-        </div>
-      </section>
-
-      <section className="mt-10 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-        <h2 className="text-xl font-semibold text-white">Quản lý suất chiếu</h2>
-        <p className="mt-3 text-sm leading-7 text-slate-300">
-          Tạo suất chiếu cho phim và phòng đã có, đồng thời hiển thị danh sách suất chiếu đang lưu trong cơ sở dữ liệu.
-        </p>
-        <div className="mt-6">
-          <ShowtimeManagementForm
-            movies={movies.map((movie) => ({ id: movie.id, slug: movie.slug, title: movie.title }))}
-            halls={cinemas.flatMap((cinema) => cinema.halls.map((hall) => ({ id: hall.id, name: hall.name, cinema: { name: cinema.name } })))}
-          />
-        </div>
-        <div className="mt-6 grid gap-3">
-          {showtimes.length === 0 ? (
-            <p className="text-sm text-slate-400">Chưa có suất chiếu nào.</p>
-          ) : (
-            showtimes.slice(0, 6).map((showtime) => (
-              <div key={showtime.id} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="font-semibold text-white">{showtime.movie.title}</span>
-                  <span className="text-sky-200">{new Date(showtime.startTime).toLocaleString('vi-VN')}</span>
-                </div>
-                <div className="mt-2 text-slate-400">
-                  {showtime.hall.cinema.name} · {showtime.hall.name} · {showtime.format} · {showtime.language} · {showtime.basePrice.toLocaleString('vi-VN')} đ
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="mt-10 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-        <h2 className="text-xl font-semibold text-white">Quản lý người dùng</h2>
-        <p className="mt-3 text-sm leading-7 text-slate-300">Xem danh sách người dùng, thay đổi vai trò và xóa người dùng khi cần.</p>
-        <div className="mt-6">
-          <UserManagementForm />
-        </div>
-      </section>
-
-      <div className="mt-10 grid gap-6 lg:grid-cols-2">
-        <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-          <h2 className="text-xl font-semibold text-white">Quản lý phim</h2>
-          <p className="mt-3 text-sm leading-7 text-slate-300">
-            Thêm, sửa, xóa phim; cập nhật poster, trailer, thể loại, thời lượng và trạng thái đang chiếu / sắp chiếu.
-          </p>
-        </section>
-        <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-          <h2 className="text-xl font-semibold text-white">Quản lý đặt vé</h2>
-          <p className="mt-3 text-sm leading-7 text-slate-300">
-            Theo dõi booking, ghế đã bán, tình trạng thanh toán, xử lý hủy vé và xác nhận đơn.
-          </p>
-          <div className="mt-6 space-y-3">
-            {bookings.length === 0 ? (
-              <p className="text-sm text-slate-400">Chưa có đơn đặt vé nào được ghi nhận.</p>
-            ) : (
-              bookings.map((booking) => (
-                <div key={booking.id} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-semibold text-white">{booking.bookingCode}</span>
-                    <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-200">
-                      {booking.status}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-slate-400">
-                    {booking.showtime.movie.title} · {booking.customerName} · {booking.totalPrice.toLocaleString('vi-VN')} đ
-                  </div>
-                </div>
-              ))
-            )}
+        <div className="mt-4 space-y-4">
+          <div>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="text-slate-300">Xác nhận đơn</span>
+              <span className="font-semibold text-emerald-200">{completionRate}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-white/10">
+              <div className="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-300" style={{ width: `${completionRate}%` }} />
+            </div>
           </div>
-        </section>
+          <div>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="text-slate-300">Thanh toán thành công</span>
+              <span className="font-semibold text-sky-200">{paymentRate}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-white/10">
+              <div className="h-2 rounded-full bg-gradient-to-r from-sky-400 to-indigo-300" style={{ width: `${paymentRate}%` }} />
+            </div>
+          </div>
+        </div>
       </div>
-    </main>
+    </section>
   );
 }
