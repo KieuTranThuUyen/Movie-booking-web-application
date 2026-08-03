@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { SignOutButton } from '@/components/sign-out-button';
 
-const navItems = [
+const publicNavItems = [
   { href: '/', label: 'Trang chủ' },
   { href: '/phim', label: 'Phim' },
   { href: '/dat-ve', label: 'Đặt vé' },
@@ -11,15 +11,18 @@ const navItems = [
   { href: '/thanh-toan', label: 'Thanh toán' }
 ];
 
+const adminNavItems = [
+  { href: '/admin', label: 'Tổng quan' },
+  { href: '/admin/movies', label: 'Quản lý phim' },
+  { href: '/admin/cinemas', label: 'Quản lý rạp' },
+  { href: '/admin/showtimes', label: 'Quản lý suất chiếu' },
+  { href: '/admin/users', label: 'Quản lý người dùng' },
+  { href: '/admin/bookings', label: 'Quản lý đặt vé' }
+];
+
 export async function SiteHeader() {
   const session = await getServerSession(authOptions);
-  const navigationItems = [...navItems];
-
-  if (session && session.user.role === 'ADMIN') {
-    navigationItems.push({ href: '/admin', label: 'Admin' });
-  } else if (!session) {
-    navigationItems.push({ href: '/admin/dang-nhap', label: 'Admin' });
-  }
+  const navigationItems = session?.user.role === 'ADMIN' ? adminNavItems : [...publicNavItems, ...(!session ? [{ href: '/admin/dang-nhap', label: 'Admin' }] : [])];
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
@@ -45,7 +48,7 @@ export async function SiteHeader() {
         <div className="hidden items-center gap-3 sm:flex">
           {session ? (
             <>
-              <Link href="/tai-khoan" className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5">
+              <Link href={session.user.role === 'ADMIN' ? '/admin' : '/tai-khoan'} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5">
                 {session.user.name ?? 'Tài khoản'}
               </Link>
               <SignOutButton className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100" />

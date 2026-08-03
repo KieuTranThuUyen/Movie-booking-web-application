@@ -31,7 +31,7 @@ export default function AdminLoginPage() {
     // wait a moment for session to be available
     const session = await getSession();
 
-    if (!session?.user || (session.user as any).role !== 'ADMIN') {
+    if (!session?.user || session.user.role !== 'ADMIN') {
       // Not admin — sign out and show error
       await signOut({ redirect: false });
       setLoading(false);
