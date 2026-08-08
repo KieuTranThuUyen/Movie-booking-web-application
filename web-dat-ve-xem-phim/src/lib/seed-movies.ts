@@ -5,40 +5,35 @@ const globalForMovies = globalThis as unknown as {
   movieSeedPromise?: Promise<void>;
 };
 
-async function runMovieSeed() {
+async function runMovieSeed(): Promise<void> {
   for (const movie of mockMovies) {
-    await prisma.movie.upsert({
-      where: { slug: movie.slug },
-      update: {
-        title: movie.title,
-        genre: movie.genre,
-        duration: movie.duration,
-        ageRating: movie.ageRating,
-        synopsis: movie.synopsis,
-        posterUrl: movie.posterUrl,
-        trailerUrl: movie.trailerUrl,
-        releaseDate: new Date(movie.releaseDate),
-        isNowShowing: movie.isNowShowing,
-        isComingSoon: movie.isComingSoon
-      },
-      create: {
-        title: movie.title,
+    const existingMovie = await prisma.movie.findUnique({
+      where: {
         slug: movie.slug,
-        genre: movie.genre,
-        duration: movie.duration,
-        ageRating: movie.ageRating,
-        synopsis: movie.synopsis,
-        posterUrl: movie.posterUrl,
-        trailerUrl: movie.trailerUrl,
-        releaseDate: new Date(movie.releaseDate),
-        isNowShowing: movie.isNowShowing,
-        isComingSoon: movie.isComingSoon
-      }
+      },
     });
+
+    if (!existingMovie) {
+      await prisma.movie.create({
+        data: {
+          title: movie.title,
+          slug: movie.slug,
+          genre: movie.genre,
+          duration: movie.duration,
+          ageRating: movie.ageRating,
+          synopsis: movie.synopsis,
+          posterUrl: movie.posterUrl,
+          trailerUrl: movie.trailerUrl,
+          releaseDate: new Date(movie.releaseDate),
+          isNowShowing: movie.isNowShowing,
+          isComingSoon: movie.isComingSoon,
+        },
+      });
+    }
   }
 }
 
-export function ensureMoviesSeeded() {
+export function ensureMoviesSeeded(): Promise<void> {
   if (!globalForMovies.movieSeedPromise) {
     globalForMovies.movieSeedPromise = runMovieSeed().finally(() => {
       globalForMovies.movieSeedPromise = undefined;
