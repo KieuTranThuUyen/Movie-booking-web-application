@@ -37,13 +37,38 @@ export async function SiteHeader() {
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-5 text-sm text-slate-300 lg:flex">
-          {navigationItems.map((item) => (
-            <Link key={item.href} href={item.href} className="transition hover:text-white">
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="hidden lg:flex flex-1 max-w-md">
+          <form
+            action="/phim"
+            method="GET"
+            className="relative w-full"
+          >
+            <input
+              type="text"
+              name="search"
+              placeholder="Tìm kiếm phim..."
+              className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-white/20 focus:bg-white/10"
+            />
+
+            <button
+              type="submit"
+              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
+              aria-label="Tìm kiếm"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-4 w-4"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-4-4" />
+              </svg>
+            </button>
+          </form>
+        </div>
 
         <div className="hidden items-center gap-3 sm:flex">
           {session ? (
