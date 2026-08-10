@@ -6,7 +6,7 @@ import { SignOutButton } from '@/components/sign-out-button';
 const publicNavItems = [
   { href: '/', label: 'Trang chủ' },
   { href: '/phim', label: 'Phim' },
-  { href: '/dat-ve', label: 'Đặt vé' },
+  { href: '/suat-chieu', label: 'Đặt vé' },
   { href: '/gio-hang', label: 'Giỏ vé' },
   { href: '/thanh-toan', label: 'Thanh toán' }
 ];
@@ -73,9 +73,14 @@ export async function SiteHeader() {
         <div className="hidden items-center gap-3 sm:flex">
           {session ? (
             <>
-              <Link href={session.user.role === 'ADMIN' ? '/admin' : '/tai-khoan'} className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5">
-                {session.user.name ?? 'Tài khoản'}
-              </Link>
+              <Link
+                  href="/tai-khoan"
+                  className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5"
+                >
+                  {session.user.role === 'ADMIN'
+                    ? 'Administrator'
+                    : session.user.name ?? 'Tài khoản'}
+                </Link>
               <SignOutButton className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100" />
             </>
           ) : (
