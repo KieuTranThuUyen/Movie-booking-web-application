@@ -30,7 +30,7 @@ export function MovieCard({ movie }: MovieCardProps) {
             Xem chi tiết
           </Link>
           <Link
-            href={`/dat-ve?movie=${movie.slug}`}
+            href={`/suat-chieu?movie=${movie.slug}`}
             className="inline-flex flex-1 items-center justify-center rounded-full border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5"
           >
             Đặt vé

@@ -19,20 +19,6 @@ export default async function MovieDetailPage({
     where: {
       slug: resolvedParams.slug,
     },
-    include: {
-      showtimes: {
-        orderBy: {
-          startTime: 'asc',
-        },
-        include: {
-          hall: {
-            include: {
-              cinema: true,
-            },
-          },
-        },
-      },
-    },
   });
 
   if (!movie) {
@@ -45,15 +31,20 @@ export default async function MovieDetailPage({
   const now = new Date();
   const releaseDate = new Date(movie.releaseDate);
 
-  const hasUpcomingShowtime = movie.showtimes.some(
-    (showtime) => new Date(showtime.startTime) >= now
-  );
+  const upcomingShowtimeCount = await prisma.showtime.count({
+    where: {
+      movieId: movie.id,
+      startTime: {
+        gte: now,
+      },
+    },
+  });
 
   let movieStatus: 'Sắp chiếu' | 'Đang chiếu' | 'Đã kết thúc';
 
   if (releaseDate > now) {
     movieStatus = 'Sắp chiếu';
-  } else if (hasUpcomingShowtime) {
+  } else if (upcomingShowtimeCount > 0) {
     movieStatus = 'Đang chiếu';
   } else {
     movieStatus = 'Đã kết thúc';
@@ -108,6 +99,13 @@ export default async function MovieDetailPage({
               <p className="text-lg leading-8 text-slate-300">
                 {movie.synopsis}
               </p>
+
+            <Link
+              href={`/suat-chieu?movie=${encodeURIComponent(movie.slug)}`}
+              className="inline-flex rounded-full bg-white px-6 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
+            >
+              Đặt vé
+            </Link>
             </div>
 
             {/* =========================
@@ -149,73 +147,6 @@ export default async function MovieDetailPage({
               ))}
             </div>
 
-            {/* =========================
-                SUẤT CHIẾU
-               ========================= */}
-            <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-              <div className="text-base font-semibold text-white">
-                Suất chiếu
-              </div>
-
-              <div className="mt-4 grid gap-3">
-                {movie.showtimes.length === 0 ? (
-                  <p className="text-sm text-slate-400">
-                    Phim này hiện chưa có suất chiếu.
-                  </p>
-                ) : (
-                  movie.showtimes.map((showtime) => {
-                    const isPast =
-                      new Date(showtime.startTime) < now;
-
-                    return (
-                      <div
-                        key={showtime.id}
-                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <div className="font-semibold text-white">
-                            {showtime.hall.cinema.name}
-                          </div>
-
-                          <div className="mt-1 text-sm text-slate-400">
-                            {showtime.hall.name} ·{' '}
-                            {showtime.format} ·{' '}
-                            {showtime.language}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`text-sm ${
-                              isPast
-                                ? 'text-slate-500'
-                                : 'text-slate-300'
-                            }`}
-                          >
-                            {new Date(
-                              showtime.startTime
-                            ).toLocaleString('vi-VN')}
-                          </span>
-
-                          {isPast ? (
-                            <span className="rounded-full bg-slate-500/10 px-4 py-2 text-sm font-semibold text-slate-500">
-                              Đã chiếu
-                            </span>
-                          ) : (
-                            <Link
-                              href={`/dat-ve?movie=${movie.slug}&showtime=${showtime.id}`}
-                              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
-                            >
-                              Đặt vé
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
 
           </div>
         </div>
