@@ -33,45 +33,53 @@ const emptyForm = {
   trailerUrl: '',
   releaseDate: '',
   isNowShowing: true,
-  isComingSoon: false
+  isComingSoon: false,
 };
 
-export function MovieManagementForm({ movies }: MovieManagementFormProps) {
+export function MovieManagementForm({
+  movies,
+}: MovieManagementFormProps) {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [editingMovieId, setEditingMovieId] = useState(movies[0]?.id ?? '');
-  const [form, setForm] = useState(() => {
-    const selectedMovie = movies[0];
 
-    if (!selectedMovie) {
-      return emptyForm;
-    }
+  // QUAN TRỌNG:
+  // Không tự động chọn movies[0]
+  const [editingMovieId, setEditingMovieId] = useState('');
 
-    return {
-      title: selectedMovie.title,
-      slug: selectedMovie.slug,
-      genre: selectedMovie.genre,
-      duration: selectedMovie.duration,
-      ageRating: selectedMovie.ageRating,
-      synopsis: selectedMovie.synopsis,
-      posterUrl: selectedMovie.posterUrl,
-      trailerUrl: selectedMovie.trailerUrl ?? '',
-      releaseDate: String(selectedMovie.releaseDate).slice(0, 10),
-      isNowShowing: selectedMovie.isNowShowing,
-      isComingSoon: selectedMovie.isComingSoon
-    };
-  });
+  // Ban đầu form trống để TẠO PHIM
+  const [form, setForm] = useState(emptyForm);
 
-  const selectedMovie = useMemo(() => movies.find((movie) => movie.id === editingMovieId), [editingMovieId, movies]);
+  const selectedMovie = useMemo(
+    () =>
+      movies.find(
+        (movie) => movie.id === editingMovieId,
+      ),
+    [editingMovieId, movies],
+  );
 
+  // =========================
+  // CHUYỂN SANG TẠO PHIM MỚI
+  // =========================
+  const handleCreateNew = () => {
+    setEditingMovieId('');
+    setForm(emptyForm);
+    setMessage('');
+  };
+
+  // =========================
+  // CHỌN PHIM ĐỂ SỬA
+  // =========================
   const syncSelectedMovie = (movieId: string) => {
-    setEditingMovieId(movieId);
-    const movie = movies.find((item) => item.id === movieId);
+    const movie = movies.find(
+      (item) => item.id === movieId,
+    );
 
     if (!movie) {
-      setForm(emptyForm);
+      handleCreateNew();
       return;
     }
+
+    setEditingMovieId(movie.id);
 
     setForm({
       title: movie.title,
@@ -82,133 +90,502 @@ export function MovieManagementForm({ movies }: MovieManagementFormProps) {
       synopsis: movie.synopsis,
       posterUrl: movie.posterUrl,
       trailerUrl: movie.trailerUrl ?? '',
-      releaseDate: String(movie.releaseDate).slice(0, 10),
+      releaseDate: String(
+        movie.releaseDate,
+      ).slice(0, 10),
       isNowShowing: movie.isNowShowing,
-      isComingSoon: movie.isComingSoon
+      isComingSoon: movie.isComingSoon,
     });
+
+    setMessage('');
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  // =========================
+  // SUBMIT
+  // =========================
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
+
     setLoading(true);
     setMessage('');
 
-    const response = await fetch(editingMovieId ? `/api/admin/movies/${editingMovieId}` : '/api/admin/movies', {
-      method: editingMovieId ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
-    });
+    try {
+      const response = await fetch(
+        editingMovieId
+          ? `/api/admin/movies/${editingMovieId}`
+          : '/api/admin/movies',
+        {
+          method: editingMovieId ? 'PATCH' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(form),
+        },
+      );
 
-    const data = (await response.json()) as { message: string; movie?: MovieItem };
-    setLoading(false);
-    setMessage(data.message);
+      const data = (await response.json()) as {
+        message: string;
+        movie?: MovieItem;
+      };
 
-    if (response.ok && data.movie) {
-      setEditingMovieId(data.movie.id);
-      setForm({
-        title: data.movie.title,
-        slug: data.movie.slug,
-        genre: data.movie.genre,
-        duration: data.movie.duration,
-        ageRating: data.movie.ageRating,
-        synopsis: data.movie.synopsis,
-        posterUrl: data.movie.posterUrl,
-        trailerUrl: data.movie.trailerUrl ?? '',
-        releaseDate: String(data.movie.releaseDate).slice(0, 10),
-        isNowShowing: data.movie.isNowShowing,
-        isComingSoon: data.movie.isComingSoon
-      });
+      if (!response.ok) {
+        setMessage(
+          data.message || 'Có lỗi xảy ra.',
+        );
+        return;
+      }
+
+      setMessage(data.message);
+
+      // Sau khi tạo/cập nhật thành công
+      if (data.movie) {
+        setEditingMovieId(data.movie.id);
+
+        setForm({
+          title: data.movie.title,
+          slug: data.movie.slug,
+          genre: data.movie.genre,
+          duration: data.movie.duration,
+          ageRating: data.movie.ageRating,
+          synopsis: data.movie.synopsis,
+          posterUrl: data.movie.posterUrl,
+          trailerUrl:
+            data.movie.trailerUrl ?? '',
+          releaseDate: String(
+            data.movie.releaseDate,
+          ).slice(0, 10),
+          isNowShowing:
+            data.movie.isNowShowing,
+          isComingSoon:
+            data.movie.isComingSoon,
+        });
+      }
+    } catch {
+      setMessage(
+        'Không thể kết nối đến máy chủ.',
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
+  // =========================
+  // DELETE
+  // =========================
   const handleDelete = async () => {
     if (!editingMovieId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Bạn có chắc muốn xóa phim này không?',
+    );
+
+    if (!confirmed) {
       return;
     }
 
     setLoading(true);
     setMessage('');
 
-    const response = await fetch(`/api/admin/movies/${editingMovieId}`, { method: 'DELETE' });
-    const data = (await response.json()) as { message: string };
-    setLoading(false);
-    setMessage(data.message);
+    try {
+      const response = await fetch(
+        `/api/admin/movies/${editingMovieId}`,
+        {
+          method: 'DELETE',
+        },
+      );
 
-    if (response.ok) {
-      const nextMovie = movies.find((movie) => movie.id !== editingMovieId);
-      syncSelectedMovie(nextMovie?.id ?? '');
+      const data = (await response.json()) as {
+        message: string;
+      };
+
+      if (!response.ok) {
+        setMessage(
+          data.message || 'Không thể xóa phim.',
+        );
+        return;
+      }
+
+      setMessage(data.message);
+
+      // Sau khi xóa → chuyển sang form tạo phim
+      setEditingMovieId('');
+      setForm(emptyForm);
+    } catch {
+      setMessage(
+        'Không thể kết nối đến máy chủ.',
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-4">
-        <div className="text-sm font-semibold text-white">Danh sách phim hiện có</div>
-        <div className="mt-4 max-h-[480px] space-y-2 overflow-auto pr-1">
-          {movies.map((movie) => (
-            <button
-              key={movie.id}
-              type="button"
-              onClick={() => syncSelectedMovie(movie.id)}
-              className={`block w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                movie.id === editingMovieId ? 'border-sky-400/60 bg-sky-500/15 text-white' : 'border-white/10 bg-slate-950/60 text-slate-300 hover:border-white/20'
-              }`}
-            >
-              <div className="font-semibold text-white">{movie.title}</div>
-              <div className="mt-1 text-slate-400">{movie.slug}</div>
-            </button>
-          ))}
+      {/* =====================================================
+          DANH SÁCH PHIM
+      ====================================================== */}
+      <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-white">
+              Danh sách phim hiện có
+            </h3>
+
+            <p className="mt-1 text-xs text-slate-400">
+              {movies.length} phim
+            </p>
+          </div>
+
+          {/* NÚT TẠO PHIM */}
+          <button
+            type="button"
+            onClick={handleCreateNew}
+            className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
+          >
+            + Tạo phim
+          </button>
+        </div>
+
+        <div className="mt-4 max-h-[600px] space-y-2 overflow-y-auto pr-1">
+          {movies.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-center">
+              <p className="text-sm text-slate-400">
+                Chưa có phim nào.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleCreateNew}
+                className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-950"
+              >
+                + Tạo phim đầu tiên
+              </button>
+            </div>
+          ) : (
+            movies.map((movie) => (
+              <button
+                key={movie.id}
+                type="button"
+                onClick={() =>
+                  syncSelectedMovie(movie.id)
+                }
+                className={`block w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                  movie.id === editingMovieId
+                    ? 'border-sky-400/60 bg-sky-500/15 text-white'
+                    : 'border-white/10 bg-slate-950/60 text-slate-300 hover:border-white/20'
+                }`}
+              >
+                <div className="font-semibold text-white">
+                  {movie.title}
+                </div>
+
+                <div className="mt-1 text-xs text-slate-500">
+                  {movie.slug}
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {movie.isNowShowing && (
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">
+                      Đang chiếu
+                    </span>
+                  )}
+
+                  {movie.isComingSoon && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
+                      Sắp chiếu
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
+      {/* =====================================================
+          FORM
+      ====================================================== */}
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl"
+      >
         <div>
-          <h3 className="text-xl font-semibold text-white">Quản lý phim</h3>
-          <p className="mt-2 text-sm text-slate-300">Tạo, chỉnh sửa và xóa phim đang lưu trong cơ sở dữ liệu.</p>
+          <h3 className="text-xl font-semibold text-white">
+            {editingMovieId
+              ? 'Chỉnh sửa phim'
+              : 'Tạo phim mới'}
+          </h3>
+
+          <p className="mt-2 text-sm text-slate-300">
+            {editingMovieId
+              ? 'Cập nhật thông tin phim đang chọn.'
+              : 'Nhập thông tin để tạo phim mới.'}
+          </p>
         </div>
 
+        {/* TÊN + SLUG */}
         <div className="grid gap-3 sm:grid-cols-2">
-          <input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Tên phim" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
-          <input value={form.slug} onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))} placeholder="Slug" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
+          <input
+            value={form.title}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                title: event.target.value,
+              }))
+            }
+            placeholder="Tên phim"
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+            required
+          />
+
+          <input
+            value={form.slug}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                slug: event.target.value,
+              }))
+            }
+            placeholder="Slug, ví dụ: vu-dieu-rap-chieu"
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+            required
+          />
         </div>
 
+        {/* THỂ LOẠI + THỜI LƯỢNG */}
         <div className="grid gap-3 sm:grid-cols-2">
-          <input value={form.genre} onChange={(event) => setForm((current) => ({ ...current, genre: event.target.value }))} placeholder="Thể loại" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
-          <input type="number" min={1} value={form.duration} onChange={(event) => setForm((current) => ({ ...current, duration: Number(event.target.value) }))} placeholder="Thời lượng" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
+          <input
+            value={form.genre}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                genre: event.target.value,
+              }))
+            }
+            placeholder="Thể loại"
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+            required
+          />
+
+          <input
+            type="number"
+            min={1}
+            value={form.duration}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                duration: Number(
+                  event.target.value,
+                ),
+              }))
+            }
+            placeholder="Thời lượng (phút)"
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+            required
+          />
         </div>
 
+        {/* ĐỘ TUỔI + NGÀY PHÁT HÀNH */}
         <div className="grid gap-3 sm:grid-cols-2">
-          <input value={form.ageRating} onChange={(event) => setForm((current) => ({ ...current, ageRating: event.target.value }))} placeholder="Độ tuổi" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
-          <input type="date" value={form.releaseDate} onChange={(event) => setForm((current) => ({ ...current, releaseDate: event.target.value }))} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
+          <select
+            value={form.ageRating}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                ageRating: event.target.value,
+              }))
+            }
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+            required
+          >
+            <option
+              value="P"
+              className="bg-slate-950"
+            >
+              P - Phổ biến
+            </option>
+
+            <option
+              value="K"
+              className="bg-slate-950"
+            >
+              K
+            </option>
+
+            <option
+              value="T13"
+              className="bg-slate-950"
+            >
+              T13
+            </option>
+
+            <option
+              value="T16"
+              className="bg-slate-950"
+            >
+              T16
+            </option>
+
+            <option
+              value="T18"
+              className="bg-slate-950"
+            >
+              T18
+            </option>
+          </select>
+
+          <input
+            type="date"
+            value={form.releaseDate}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                releaseDate:
+                  event.target.value,
+              }))
+            }
+            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+            required
+          />
         </div>
 
-        <input value={form.posterUrl} onChange={(event) => setForm((current) => ({ ...current, posterUrl: event.target.value }))} placeholder="Poster URL" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
-        <input value={form.trailerUrl} onChange={(event) => setForm((current) => ({ ...current, trailerUrl: event.target.value }))} placeholder="Trailer URL" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" />
+        {/* POSTER */}
+        <input
+          value={form.posterUrl}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              posterUrl: event.target.value,
+            }))
+          }
+          placeholder="Poster URL"
+          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+          required
+        />
 
-        <textarea value={form.synopsis} onChange={(event) => setForm((current) => ({ ...current, synopsis: event.target.value }))} rows={5} placeholder="Mô tả phim" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" required />
+        {/* TRAILER */}
+        <input
+          value={form.trailerUrl}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              trailerUrl: event.target.value,
+            }))
+          }
+          placeholder="Trailer URL - không bắt buộc"
+          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+        />
 
+        {/* MÔ TẢ */}
+        <textarea
+          value={form.synopsis}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              synopsis: event.target.value,
+            }))
+          }
+          rows={5}
+          placeholder="Mô tả phim"
+          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+          required
+        />
+
+        {/* TRẠNG THÁI */}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-            <input type="checkbox" checked={form.isNowShowing} onChange={(event) => setForm((current) => ({ ...current, isNowShowing: event.target.checked }))} />
+            <input
+              type="checkbox"
+              checked={form.isNowShowing}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  isNowShowing:
+                    event.target.checked,
+                }))
+              }
+            />
+
             Đang chiếu
           </label>
+
           <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-            <input type="checkbox" checked={form.isComingSoon} onChange={(event) => setForm((current) => ({ ...current, isComingSoon: event.target.checked }))} />
+            <input
+              type="checkbox"
+              checked={form.isComingSoon}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  isComingSoon:
+                    event.target.checked,
+                }))
+              }
+            />
+
             Sắp chiếu
           </label>
         </div>
 
+        {/* BUTTON */}
         <div className="flex flex-wrap gap-3">
-          <button type="submit" disabled={loading} className="rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 disabled:opacity-60">
-            {loading ? 'Đang lưu...' : editingMovieId ? 'Cập nhật phim' : 'Tạo phim'}
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-2xl bg-white px-5 py-3 font-semibold text-slate-950 transition hover:bg-slate-100 disabled:opacity-60"
+          >
+            {loading
+              ? 'Đang lưu...'
+              : editingMovieId
+                ? 'Cập nhật phim'
+                : 'Tạo phim'}
           </button>
-          <button type="button" onClick={handleDelete} disabled={loading || !editingMovieId} className="rounded-2xl border border-rose-400/40 px-4 py-3 font-semibold text-rose-200 disabled:opacity-50">
+
+          {/* TẠO PHIM MỚI KHI ĐANG SỬA */}
+          {editingMovieId && (
+            <button
+              type="button"
+              onClick={handleCreateNew}
+              disabled={loading}
+              className="rounded-2xl border border-white/10 px-5 py-3 font-semibold text-slate-200 transition hover:bg-white/5 disabled:opacity-50"
+            >
+              Tạo phim mới
+            </button>
+          )}
+
+          {/* XÓA */}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={
+              loading || !editingMovieId
+            }
+            className="rounded-2xl border border-rose-400/40 px-5 py-3 font-semibold text-rose-200 transition hover:bg-rose-500/10 disabled:opacity-50"
+          >
             Xóa phim
           </button>
         </div>
 
-        {message ? <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">{message}</p> : null}
-        {selectedMovie ? <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Đang chọn: {selectedMovie.title}</p> : null}
+        {/* MESSAGE */}
+        {message ? (
+          <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+            {message}
+          </p>
+        ) : null}
+
+        {/* PHIM ĐANG CHỌN */}
+        {selectedMovie ? (
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+            Đang chọn: {selectedMovie.title}
+          </p>
+        ) : (
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            Đang ở chế độ tạo phim mới
+          </p>
+        )}
       </form>
     </div>
   );
