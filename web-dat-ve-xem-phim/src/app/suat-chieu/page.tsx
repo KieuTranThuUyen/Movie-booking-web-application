@@ -231,7 +231,6 @@ export default async function ShowtimesPage({
           method="GET"
           className="mt-8 rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-glow"
         >
-          {/* Giữ phim hiện tại khi lọc */}
           {movieSlug ? (
             <input
               type="hidden"
@@ -309,9 +308,7 @@ export default async function ShowtimesPage({
                 defaultValue={time}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-400"
               >
-                <option value="">
-                  Tất cả khung giờ
-                </option>
+                <option value="">Tất cả khung giờ</option>
 
                 {Object.entries(TIME_RANGES).map(
                   ([value, item]) => (
@@ -389,7 +386,6 @@ export default async function ShowtimesPage({
             </Link>
           </div>
         ) : (
-          /* DANH SÁCH SUẤT CHIẾU */
           <div className="mt-5 grid gap-4">
             {timeFilteredShowtimes.map((showtime) => (
               <article
@@ -462,13 +458,40 @@ export default async function ShowtimesPage({
                       {/* GIÁ */}
                       <div>
                         <span className="text-slate-500">
-                          Giá:{' '}
+                          Giá từ:{' '}
                         </span>
-                        {showtime.basePrice.toLocaleString(
+                        {showtime.standardPrice.toLocaleString(
                           'vi-VN',
                         )}{' '}
                         đ
                       </div>
+                    </div>
+
+                    {/* BẢNG GIÁ */}
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-emerald-300">
+                        Thường:{' '}
+                        {showtime.standardPrice.toLocaleString(
+                          'vi-VN',
+                        )}{' '}
+                        đ
+                      </span>
+
+                      <span className="rounded-full bg-amber-500/10 px-3 py-1 text-amber-300">
+                        VIP:{' '}
+                        {showtime.vipPrice.toLocaleString(
+                          'vi-VN',
+                        )}{' '}
+                        đ
+                      </span>
+
+                      <span className="rounded-full bg-pink-500/10 px-3 py-1 text-pink-300">
+                        Ghế đôi:{' '}
+                        {showtime.couplePrice.toLocaleString(
+                          'vi-VN',
+                        )}{' '}
+                        đ
+                      </span>
                     </div>
                   </div>
 

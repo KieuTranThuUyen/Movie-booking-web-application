@@ -5,7 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useState
+  useState,
 } from 'react';
 
 type HeldSeat = {
@@ -33,7 +33,11 @@ type SeatGridProps = {
   cinemaName: string;
   hallName: string;
   startTime: string;
-  basePrice: number;
+
+  standardPrice: number;
+  vipPrice: number;
+  couplePrice: number;
+
   soldSeats: string[];
   heldSeats: HeldSeat[];
 };
@@ -46,11 +50,19 @@ const formatRemainingTime = (expiresAt: string) => {
     new Date(expiresAt).getTime() - Date.now()
   );
 
-  const totalSeconds = Math.floor(remaining / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
+  const totalSeconds = Math.floor(
+    remaining / 1000
+  );
+
+  const minutes = Math.floor(
+    totalSeconds / 60
+  );
+
   const seconds = totalSeconds % 60;
 
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  return `${minutes}:${seconds
+    .toString()
+    .padStart(2, '0')}`;
 };
 
 export function SeatGrid({
@@ -60,9 +72,11 @@ export function SeatGrid({
   cinemaName,
   hallName,
   startTime,
-  basePrice,
+  standardPrice,
+  vipPrice,
+  couplePrice,
   soldSeats,
-  heldSeats
+  heldSeats,
 }: SeatGridProps) {
   const router = useRouter();
 
@@ -72,26 +86,61 @@ export function SeatGrid({
    * ============================================================
    */
 
-  // Các ghế mà user hiện tại đang chọn
-  const [selectedSeats, setSelectedSeats] = useState<string[]>(
-    []
-  );
+  const [selectedSeats, setSelectedSeats] =
+    useState<string[]>([]);
 
-  // Tất cả các hold hiện tại của suất chiếu
   const [currentHeldSeats, setCurrentHeldSeats] =
     useState<HeldSeat[]>(heldSeats);
 
-  // Danh sách ghế thực tế trong database
   const [seats, setSeats] = useState<Seat[]>([]);
 
   const [message, setMessage] = useState('');
-  const [loadingSeat, setLoadingSeat] = useState('');
-  const [loadingSeats, setLoadingSeats] = useState(true);
 
-  // Countdown từng ghế
+  const [loadingSeat, setLoadingSeat] =
+    useState('');
+
+  const [loadingSeats, setLoadingSeats] =
+    useState(true);
+
   const [timeLeft, setTimeLeft] = useState<
     Record<string, string>
   >({});
+
+  /*
+   * ============================================================
+   * PRICE
+   * ============================================================
+   */
+
+  const getSeatPrice = useCallback(
+    (seatCode: string) => {
+      const seat = seats.find(
+        (item) => item.code === seatCode
+      );
+
+      if (!seat) {
+        return 0;
+      }
+
+      switch (seat.type?.toUpperCase()) {
+        case 'VIP':
+          return Number(vipPrice) || 0;
+
+        case 'COUPLE':
+          return Number(couplePrice) || 0;
+
+        case 'STANDARD':
+        default:
+          return Number(standardPrice) || 0;
+      }
+    },
+    [
+      seats,
+      standardPrice,
+      vipPrice,
+      couplePrice,
+    ]
+  );
 
   /*
    * ============================================================
@@ -99,10 +148,16 @@ export function SeatGrid({
    * ============================================================
    */
 
-  const total = useMemo(
-    () => selectedSeats.length * basePrice,
-    [selectedSeats, basePrice]
-  );
+  const total = useMemo(() => {
+    return selectedSeats.reduce(
+      (sum, seatCode) =>
+        sum + getSeatPrice(seatCode),
+      0
+    );
+  }, [
+    selectedSeats,
+    getSeatPrice,
+  ]);
 
   /*
    * ============================================================
@@ -117,7 +172,7 @@ export function SeatGrid({
           showtimeId
         )}/seats`,
         {
-          cache: 'no-store'
+          cache: 'no-store',
         }
       );
 
@@ -127,7 +182,8 @@ export function SeatGrid({
         );
       }
 
-      const data = (await response.json()) as Seat[];
+      const data =
+        (await response.json()) as Seat[];
 
       setSeats(data);
     } catch (error) {
@@ -148,18 +204,6 @@ export function SeatGrid({
    * ============================================================
    * FETCH HELD SEATS
    * ============================================================
-   *
-   * API GET trả về:
-   *
-   * {
-   *   id,
-   *   seatId,
-   *   seatCode,
-   *   expiresAt,
-   *   userId,
-   *   isMine
-   * }
-   *
    */
 
   const fetchHeldSeats = useCallback(async () => {
@@ -169,7 +213,7 @@ export function SeatGrid({
           showtimeId
         )}`,
         {
-          cache: 'no-store'
+          cache: 'no-store',
         }
       );
 
@@ -177,40 +221,35 @@ export function SeatGrid({
         return;
       }
 
-      const data = (await response.json()) as HeldSeat[];
+      const data =
+        (await response.json()) as HeldSeat[];
 
       setCurrentHeldSeats(data);
 
-      /*
-       * Đồng bộ selectedSeats với các hold của chính user.
-       *
-       * Điều này rất quan trọng:
-       *
-       * Nếu reload trang mà user vẫn còn hold,
-       * các ghế đó vẫn được xem là ghế của user.
-       */
       const myHeldSeatCodes = data
         .filter((hold) => hold.isMine)
         .map((hold) => hold.seatCode);
 
       setSelectedSeats((current) => {
-        /*
-         * Những ghế hiện đang selected nhưng
-         * không còn hold của mình nữa → xóa.
-         */
-        const validCurrent = current.filter((seatCode) =>
-          myHeldSeatCodes.includes(seatCode)
+        const validCurrent = current.filter(
+          (seatCode) =>
+            myHeldSeatCodes.includes(
+              seatCode
+            )
         );
 
-        /*
-         * Thêm các hold của chính user chưa có
-         * trong selectedSeats.
-         */
-        const newMineSeats = myHeldSeatCodes.filter(
-          (seatCode) => !validCurrent.includes(seatCode)
-        );
+        const newMineSeats =
+          myHeldSeatCodes.filter(
+            (seatCode) =>
+              !validCurrent.includes(
+                seatCode
+              )
+          );
 
-        return [...validCurrent, ...newMineSeats].sort();
+        return [
+          ...validCurrent,
+          ...newMineSeats,
+        ].sort();
       });
     } catch (error) {
       console.error(
@@ -229,14 +268,15 @@ export function SeatGrid({
   useEffect(() => {
     fetchSeats();
     fetchHeldSeats();
-  }, [fetchSeats, fetchHeldSeats]);
+  }, [
+    fetchSeats,
+    fetchHeldSeats,
+  ]);
 
   /*
    * ============================================================
    * AUTO REFRESH HOLD
    * ============================================================
-   *
-   * Cứ 5 giây lấy trạng thái mới từ server.
    */
 
   useEffect(() => {
@@ -257,11 +297,16 @@ export function SeatGrid({
 
   useEffect(() => {
     const updateCountdown = () => {
-      const nextTimeLeft: Record<string, string> = {};
+      const nextTimeLeft: Record<
+        string,
+        string
+      > = {};
 
       currentHeldSeats.forEach((hold) => {
         nextTimeLeft[hold.seatCode] =
-          formatRemainingTime(hold.expiresAt);
+          formatRemainingTime(
+            hold.expiresAt
+          );
       });
 
       setTimeLeft(nextTimeLeft);
@@ -286,58 +331,63 @@ export function SeatGrid({
    */
 
   useEffect(() => {
-    const expiredTimer = window.setInterval(() => {
-      const now = Date.now();
+    const expiredTimer =
+      window.setInterval(() => {
+        const now = Date.now();
 
-      const expiredSeats = currentHeldSeats.filter(
-        (hold) =>
-          new Date(hold.expiresAt).getTime() <= now
-      );
+        const expiredSeats =
+          currentHeldSeats.filter(
+            (hold) =>
+              new Date(
+                hold.expiresAt
+              ).getTime() <= now
+          );
 
-      if (expiredSeats.length === 0) {
-        return;
-      }
+        if (expiredSeats.length === 0) {
+          return;
+        }
 
-      const expiredCodes = expiredSeats.map(
-        (hold) => hold.seatCode
-      );
+        const expiredCodes =
+          expiredSeats.map(
+            (hold) => hold.seatCode
+          );
 
-      /*
-       * Xóa khỏi UI
-       */
-      setCurrentHeldSeats((current) =>
-        current.filter(
-          (hold) =>
-            !expiredCodes.includes(hold.seatCode)
-        )
-      );
+        setCurrentHeldSeats((current) =>
+          current.filter(
+            (hold) =>
+              !expiredCodes.includes(
+                hold.seatCode
+              )
+          )
+        );
 
-      /*
-       * Xóa khỏi selectedSeats
-       */
-      setSelectedSeats((current) =>
-        current.filter(
-          (seatCode) =>
-            !expiredCodes.includes(seatCode)
-        )
-      );
+        setSelectedSeats((current) =>
+          current.filter(
+            (seatCode) =>
+              !expiredCodes.includes(
+                seatCode
+              )
+          )
+        );
 
-      setMessage(
-        `Ghế ${expiredCodes.join(
-          ', '
-        )} đã hết thời gian giữ.`
-      );
+        setMessage(
+          `Ghế ${expiredCodes.join(
+            ', '
+          )} đã hết thời gian giữ.`
+        );
 
-      /*
-       * Đồng bộ lại server
-       */
-      fetchHeldSeats();
-    }, 1000);
+        fetchHeldSeats();
+      }, 1000);
 
     return () => {
-      window.clearInterval(expiredTimer);
+      window.clearInterval(
+        expiredTimer
+      );
     };
-  }, [currentHeldSeats, fetchHeldSeats]);
+  }, [
+    currentHeldSeats,
+    fetchHeldSeats,
+  ]);
 
   /*
    * ============================================================
@@ -348,7 +398,8 @@ export function SeatGrid({
   const getHeldSeat = useCallback(
     (seatCode: string) => {
       return currentHeldSeats.find(
-        (hold) => hold.seatCode === seatCode
+        (hold) =>
+          hold.seatCode === seatCode
       );
     },
     [currentHeldSeats]
@@ -363,7 +414,8 @@ export function SeatGrid({
   const getSeatByCode = useCallback(
     (seatCode: string) => {
       return seats.find(
-        (seat) => seat.code === seatCode
+        (seat) =>
+          seat.code === seatCode
       );
     },
     [seats]
@@ -375,15 +427,15 @@ export function SeatGrid({
    * ============================================================
    */
 
-  const holdSeat = async (seatCode: string) => {
+  const holdSeat = async (
+    seatCode: string
+  ) => {
     setLoadingSeat(seatCode);
     setMessage('');
 
     try {
-      /*
-       * Tìm seatId
-       */
-      const seat = getSeatByCode(seatCode);
+      const seat =
+        getSeatByCode(seatCode);
 
       if (!seat) {
         setMessage(
@@ -392,9 +444,6 @@ export function SeatGrid({
         return;
       }
 
-      /*
-       * Kiểm tra ghế active
-       */
       if (!seat.isActive) {
         setMessage(
           `Ghế ${seatCode} đang bị khóa bởi quản trị viên.`
@@ -402,48 +451,52 @@ export function SeatGrid({
         return;
       }
 
-      /*
-       * Kiểm tra ghế đã bán
-       */
-      if (soldSeats.includes(seatCode)) {
+      if (
+        soldSeats.includes(seatCode)
+      ) {
         setMessage(
           `Ghế ${seatCode} đã được đặt.`
         );
         return;
       }
 
-      /*
-       * Lấy hold mới nhất
-       */
-      const latestResponse = await fetch(
-        `/api/seat-holds?showtimeId=${encodeURIComponent(
-          showtimeId
-        )}`,
-        {
-          cache: 'no-store'
-        }
-      );
+      const latestResponse =
+        await fetch(
+          `/api/seat-holds?showtimeId=${encodeURIComponent(
+            showtimeId
+          )}`,
+          {
+            cache: 'no-store',
+          }
+        );
 
       if (latestResponse.ok) {
         const latestHolds =
           (await latestResponse.json()) as HeldSeat[];
 
-        setCurrentHeldSeats(latestHolds);
-
-        const existingHold = latestHolds.find(
-          (hold) => hold.seatCode === seatCode
+        setCurrentHeldSeats(
+          latestHolds
         );
 
+        const existingHold =
+          latestHolds.find(
+            (hold) =>
+              hold.seatCode ===
+              seatCode
+          );
+
         if (existingHold) {
-          /*
-           * Nếu chính mình đã giữ:
-           * Không tạo hold mới.
-           */
           if (existingHold.isMine) {
-            setSelectedSeats((current) =>
-              current.includes(seatCode)
-                ? current
-                : [...current, seatCode].sort()
+            setSelectedSeats(
+              (current) =>
+                current.includes(
+                  seatCode
+                )
+                  ? current
+                  : [
+                      ...current,
+                      seatCode,
+                    ].sort()
             );
 
             setMessage(
@@ -453,9 +506,6 @@ export function SeatGrid({
             return;
           }
 
-          /*
-           * Nếu người khác đang giữ
-           */
           setMessage(
             `Ghế ${seatCode} đang được người khác giữ.`
           );
@@ -464,28 +514,28 @@ export function SeatGrid({
         }
       }
 
-      /*
-       * POST tạo hold
-       */
-      const holdResponse = await fetch(
-        '/api/seat-holds',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            showtimeId,
-            seatIds: [seat.id]
-          })
-        }
-      );
+      const holdResponse =
+        await fetch(
+          '/api/seat-holds',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              showtimeId,
+              seatIds: [seat.id],
+            }),
+          }
+        );
 
-      const data = (await holdResponse.json()) as {
-        message: string;
-        expiresAt?: string;
-        holds?: HeldSeat[];
-      };
+      const data =
+        (await holdResponse.json()) as {
+          message: string;
+          expiresAt?: string;
+          holds?: HeldSeat[];
+        };
 
       if (!holdResponse.ok) {
         setMessage(data.message);
@@ -495,37 +545,38 @@ export function SeatGrid({
         return;
       }
 
-      /*
-       * Thêm ghế vào selected
-       */
-      setSelectedSeats((current) =>
-        current.includes(seatCode)
-          ? current
-          : [...current, seatCode].sort()
+      setSelectedSeats(
+        (current) =>
+          current.includes(seatCode)
+            ? current
+            : [
+                ...current,
+                seatCode,
+              ].sort()
       );
 
-      /*
-       * Cập nhật hold
-       */
       if (data.holds) {
-        setCurrentHeldSeats((current) => {
-          const newHolds = data.holds ?? [];
+        setCurrentHeldSeats(
+          (current) => {
+            const newHolds =
+              data.holds ?? [];
 
-          const withoutDuplicate =
-            current.filter(
-              (hold) =>
-                !newHolds.some(
-                  (newHold) =>
-                    newHold.seatCode ===
-                    hold.seatCode
-                )
-            );
+            const withoutDuplicate =
+              current.filter(
+                (hold) =>
+                  !newHolds.some(
+                    (newHold) =>
+                      newHold.seatCode ===
+                      hold.seatCode
+                  )
+              );
 
-          return [
-            ...withoutDuplicate,
-            ...newHolds
-          ];
-        });
+            return [
+              ...withoutDuplicate,
+              ...newHolds,
+            ];
+          }
+        );
       } else {
         await fetchHeldSeats();
       }
@@ -563,24 +614,21 @@ export function SeatGrid({
     setMessage('');
 
     try {
-      /*
-       * Không có hold
-       */
       if (!heldSeat) {
-        setSelectedSeats((current) =>
-          current.filter(
-            (seat) => seat !== seatCode
-          )
+        setSelectedSeats(
+          (current) =>
+            current.filter(
+              (seat) =>
+                seat !== seatCode
+            )
         );
 
         return;
       }
 
-      /*
-       * Chỉ cho phép release nếu
-       * hold thuộc chính user.
-       */
-      if (heldSeat.isMine === false) {
+      if (
+        heldSeat.isMine === false
+      ) {
         setMessage(
           `Ghế ${seatCode} đang được người khác giữ.`
         );
@@ -588,49 +636,49 @@ export function SeatGrid({
         return;
       }
 
-      /*
-       * DELETE API
-       */
-      const response = await fetch(
-        '/api/seat-holds',
-        {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            showtimeId,
-            seatIds: [heldSeat.seatId]
-          })
-        }
-      );
+      const response =
+        await fetch(
+          '/api/seat-holds',
+          {
+            method: 'DELETE',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              showtimeId,
+              seatIds: [
+                heldSeat.seatId,
+              ],
+            }),
+          }
+        );
 
-      const data = (await response.json()) as {
-        message: string;
-      };
+      const data =
+        (await response.json()) as {
+          message: string;
+        };
 
       if (!response.ok) {
         setMessage(data.message);
         return;
       }
 
-      /*
-       * Xóa selected
-       */
-      setSelectedSeats((current) =>
-        current.filter(
-          (seat) => seat !== seatCode
-        )
+      setSelectedSeats(
+        (current) =>
+          current.filter(
+            (seat) =>
+              seat !== seatCode
+          )
       );
 
-      /*
-       * Xóa hold khỏi UI
-       */
-      setCurrentHeldSeats((current) =>
-        current.filter(
-          (hold) =>
-            hold.seatCode !== seatCode
-        )
+      setCurrentHeldSeats(
+        (current) =>
+          current.filter(
+            (hold) =>
+              hold.seatCode !==
+              seatCode
+          )
       );
 
       setMessage(
@@ -659,54 +707,50 @@ export function SeatGrid({
   const toggleSeat = async (
     seatCode: string
   ) => {
-    /*
-     * Ghế đã bán
-     */
-    if (soldSeats.includes(seatCode)) {
+    if (
+      soldSeats.includes(seatCode)
+    ) {
       return;
     }
 
-    /*
-     * Đang loading
-     */
-    if (loadingSeat === seatCode) {
+    if (
+      loadingSeat === seatCode
+    ) {
       return;
     }
 
     const heldSeat =
       getHeldSeat(seatCode);
 
-    /*
-     * Nếu user đang chọn ghế
-     * → bỏ giữ
-     */
     if (
-      selectedSeats.includes(seatCode)
+      selectedSeats.includes(
+        seatCode
+      )
     ) {
-      await releaseSeat(seatCode);
+      await releaseSeat(
+        seatCode
+      );
+
       return;
     }
 
-    /*
-     * Nếu ghế đang hold
-     */
     if (heldSeat) {
-      /*
-       * Hold của chính mình
-       */
       if (heldSeat.isMine) {
-        setSelectedSeats((current) =>
-          current.includes(seatCode)
-            ? current
-            : [...current, seatCode].sort()
+        setSelectedSeats(
+          (current) =>
+            current.includes(
+              seatCode
+            )
+              ? current
+              : [
+                  ...current,
+                  seatCode,
+                ].sort()
         );
 
         return;
       }
 
-      /*
-       * Hold của người khác
-       */
       setMessage(
         `Ghế ${seatCode} đang được người khác giữ.`
       );
@@ -714,9 +758,6 @@ export function SeatGrid({
       return;
     }
 
-    /*
-     * Ghế trống
-     */
     await holdSeat(seatCode);
   };
 
@@ -727,7 +768,9 @@ export function SeatGrid({
    */
 
   const goToCart = async () => {
-    if (selectedSeats.length === 0) {
+    if (
+      selectedSeats.length === 0
+    ) {
       setMessage(
         'Vui lòng chọn ít nhất một ghế.'
       );
@@ -736,17 +779,15 @@ export function SeatGrid({
     }
 
     try {
-      /*
-       * Lấy hold mới nhất
-       */
-      const response = await fetch(
-        `/api/seat-holds?showtimeId=${encodeURIComponent(
-          showtimeId
-        )}`,
-        {
-          cache: 'no-store'
-        }
-      );
+      const response =
+        await fetch(
+          `/api/seat-holds?showtimeId=${encodeURIComponent(
+            showtimeId
+          )}`,
+          {
+            cache: 'no-store',
+          }
+        );
 
       if (!response.ok) {
         setMessage(
@@ -763,11 +804,6 @@ export function SeatGrid({
         latestHeldSeats
       );
 
-      /*
-       * Quan trọng:
-       *
-       * Chỉ chấp nhận hold của chính user.
-       */
       const missingSeats =
         selectedSeats.filter(
           (seatCode) => {
@@ -778,32 +814,35 @@ export function SeatGrid({
                   seatCode
               );
 
-            return !hold || !hold.isMine;
+            return (
+              !hold ||
+              !hold.isMine
+            );
           }
         );
 
-      if (missingSeats.length > 0) {
+      if (
+        missingSeats.length > 0
+      ) {
         setMessage(
           `Ghế ${missingSeats.join(
             ', '
           )} không còn được bạn giữ. Vui lòng chọn lại.`
         );
 
-        setSelectedSeats((current) =>
-          current.filter(
-            (seatCode) =>
-              !missingSeats.includes(
-                seatCode
-              )
-          )
+        setSelectedSeats(
+          (current) =>
+            current.filter(
+              (seatCode) =>
+                !missingSeats.includes(
+                  seatCode
+                )
+            )
         );
 
         return;
       }
 
-      /*
-       * seats=A1,A2,A3
-       */
       const seatParam =
         selectedSeats.join(',');
 
@@ -836,9 +875,9 @@ export function SeatGrid({
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-      {/* =====================================================
+      {/* ======================================================
           SEAT AREA
-      ====================================================== */}
+      ======================================================= */}
 
       <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
         <div>
@@ -851,47 +890,132 @@ export function SeatGrid({
             {hallName} |{' '}
             {new Date(
               startTime
-            ).toLocaleString('vi-VN')}
+            ).toLocaleString(
+              'vi-VN'
+            )}
           </p>
         </div>
 
-        {/* =================================================
+        {/* ==================================================
             LEGEND
-        ================================================== */}
+        =================================================== */}
 
-        <div className="mt-6 flex flex-wrap gap-4 text-xs text-slate-300">
-          {/* Ghế trống */}
-          <div className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded border border-white/10 bg-white/5" />
-            Ghế trống
+        <div className="mt-6 space-y-4">
+          {/* LOẠI GHẾ */}
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Loại ghế
+            </p>
+
+            <div className="flex flex-wrap gap-4 text-xs text-slate-300">
+              {/* STANDARD */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-sky-400/50 bg-sky-500/10" />
+
+                <span>
+                  Ghế thường
+                </span>
+              </div>
+
+              {/* VIP */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-amber-400/70 bg-amber-500/15" />
+
+                <span>
+                  Ghế VIP
+                </span>
+              </div>
+
+              {/* COUPLE */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-pink-400/70 bg-pink-500/15" />
+
+                <span>
+                  Ghế đôi
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Ghế của mình */}
-          <div className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded bg-emerald-500" />
-            Ghế đang chọn
-          </div>
+          {/* TRẠNG THÁI GHẾ */}
 
-          {/* Đã bán */}
-          <div className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded border border-rose-400/40 bg-rose-500/30" />
-            Đã bán
-          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Trạng thái
+            </p>
 
-          {/* Người khác giữ */}
-          <div className="flex items-center gap-2">
-            <span className="h-4 w-4 rounded border border-amber-400/40 bg-amber-500/30" />
-            Đang được giữ
+            <div className="flex flex-wrap gap-4 text-xs text-slate-300">
+              {/* TRỐNG */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-sky-400/50 bg-sky-500/10" />
+
+                <span>
+                  Ghế trống
+                </span>
+              </div>
+
+              {/* ĐANG CHỌN */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-emerald-400/60 bg-emerald-500" />
+
+                <span>
+                  Đang chọn
+                </span>
+              </div>
+
+              {/* ĐÃ BÁN */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-rose-400/40 bg-rose-500/20" />
+
+                <span>
+                  Đã bán
+                </span>
+              </div>
+
+              {/* NGƯỜI KHÁC GIỮ */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-amber-400/40 bg-amber-500/20" />
+
+                <span>
+                  Đang được giữ
+                </span>
+              </div>
+
+              {/* KHÓA */}
+
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded border border-slate-500/20 bg-slate-700/30" />
+
+                <span>
+                  Đang khóa
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* =================================================
+        {/* ==================================================
             SEAT GRID
-        ================================================== */}
+        =================================================== */}
 
         <div className="mt-6 grid gap-3 rounded-[24px] border border-white/10 bg-white/5 p-4">
-          {/* Màn hình */}
-          <div className="mx-auto mb-3 h-2 w-1/2 rounded-full bg-sky-400/60" />
+          {/* SCREEN */}
+
+          <div className="mx-auto mb-3 flex w-1/2 flex-col items-center">
+            <div className="h-2 w-full rounded-full bg-sky-400/60 shadow-[0_0_25px_rgba(56,189,248,0.35)]" />
+
+            <span className="mt-2 text-[10px] uppercase tracking-[0.3em] text-slate-500">
+              Màn hình
+            </span>
+          </div>
 
           {loadingSeats ? (
             <div className="py-10 text-center text-sm text-slate-400">
@@ -910,19 +1034,14 @@ export function SeatGrid({
                 {Array.from(
                   { length: 8 },
                   (_, index) => {
-                    const seatCode = `${row}${
-                      index + 1
-                    }`;
+                    const seatCode =
+                      `${row}${index + 1}`;
 
                     const seat =
                       getSeatByCode(
                         seatCode
                       );
 
-                    /*
-                     * Nếu DB không có ghế
-                     * → xem là inactive.
-                     */
                     const isInactive =
                       seat
                         ? !seat.isActive
@@ -943,30 +1062,19 @@ export function SeatGrid({
                         seatCode
                       );
 
-                    /*
-                     * Quan trọng:
-                     *
-                     * Chỉ xem là hold của người khác
-                     * khi:
-                     *
-                     * heldSeat tồn tại
-                     * &&
-                     * heldSeat.isMine === false
-                     */
                     const isHeldBySomeoneElse =
                       Boolean(
                         heldSeat
                       ) &&
-                      heldSeat?.isMine === false;
+                      heldSeat?.isMine ===
+                        false;
 
-                    /*
-                     * Hold của mình
-                     */
                     const isMyHold =
                       Boolean(
                         heldSeat
                       ) &&
-                      heldSeat?.isMine === true;
+                      heldSeat?.isMine ===
+                        true;
 
                     const isLoading =
                       loadingSeat ===
@@ -978,6 +1086,40 @@ export function SeatGrid({
                             seatCode
                           ]
                         : undefined;
+
+                    const seatPrice =
+                      getSeatPrice(
+                        seatCode
+                      );
+
+                    const seatType =
+                      seat?.type
+                        ?.toUpperCase() ??
+                      'STANDARD';
+
+                    /*
+                     * MÀU THEO LOẠI GHẾ
+                     */
+
+                    const seatTypeClass =
+                      seatType === 'VIP'
+                        ? 'border-amber-400/70 bg-amber-500/15 text-amber-200'
+                        : seatType ===
+                            'COUPLE'
+                          ? 'border-pink-400/70 bg-pink-500/15 text-pink-200'
+                          : 'border-sky-400/50 bg-sky-500/10 text-sky-200';
+
+                    /*
+                     * TÊN LOẠI GHẾ
+                     */
+
+                    const seatTypeLabel =
+                      seatType === 'VIP'
+                        ? 'Ghế VIP'
+                        : seatType ===
+                            'COUPLE'
+                          ? 'Ghế đôi'
+                          : 'Ghế thường';
 
                     return (
                       <button
@@ -1010,7 +1152,9 @@ export function SeatGrid({
                                       remainingTime ??
                                       '...'
                                     }`
-                                  : 'Ghế trống'
+                                  : `${seatTypeLabel} - ${seatPrice.toLocaleString(
+                                      'vi-VN'
+                                    )} đ`
                         }
                         className={`relative h-11 w-11 rounded-xl border text-xs font-semibold transition ${
                           isSold
@@ -1021,30 +1165,37 @@ export function SeatGrid({
                                 ? 'cursor-not-allowed border-amber-400/40 bg-amber-500/20 text-amber-200'
                                 : isSelected ||
                                     isMyHold
-                                  ? 'border-emerald-400/60 bg-emerald-500 text-slate-950'
-                                  : 'border-white/10 bg-white/5 text-slate-200 hover:border-sky-400/60 hover:bg-sky-500/20'
+                                  ? 'border-emerald-400/60 bg-emerald-500 text-slate-950 shadow-[0_0_18px_rgba(16,185,129,0.35)]'
+                                  : `${seatTypeClass} hover:brightness-125`
                         }`}
                       >
                         {seatCode}
 
                         {/* COUNTDOWN CỦA MÌNH */}
+
                         {(isSelected ||
                           isMyHold) &&
                         remainingTime ? (
                           <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-normal text-emerald-300">
-                            {remainingTime}
+                            {
+                              remainingTime
+                            }
                           </span>
                         ) : null}
 
                         {/* COUNTDOWN NGƯỜI KHÁC */}
+
                         {isHeldBySomeoneElse &&
                         remainingTime ? (
                           <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-normal text-amber-300">
-                            {remainingTime}
+                            {
+                              remainingTime
+                            }
                           </span>
                         ) : null}
 
                         {/* LOADING */}
+
                         {isLoading ? (
                           <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/30 text-[10px]">
                             ...
@@ -1059,9 +1210,9 @@ export function SeatGrid({
           )}
         </div>
 
-        {/* =================================================
+        {/* ==================================================
             MESSAGE
-        ================================================== */}
+        =================================================== */}
 
         {message ? (
           <p className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
@@ -1070,9 +1221,9 @@ export function SeatGrid({
         ) : null}
       </section>
 
-      {/* =====================================================
+      {/* ======================================================
           BOOKING INFO
-      ====================================================== */}
+      ======================================================= */}
 
       <aside className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
         <div>
@@ -1081,20 +1232,24 @@ export function SeatGrid({
           </h3>
 
           <p className="mt-2 text-sm text-slate-300">
-            Ghế được giữ trong 10 phút để bạn hoàn tất
-            quá trình đặt vé.
+            Ghế được giữ trong 10 phút để
+            bạn hoàn tất quá trình đặt vé.
           </p>
         </div>
 
         <div className="space-y-3 rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+          {/* GHẾ */}
+
           <div className="flex items-center justify-between gap-3">
             <span>Ghế đã chọn</span>
 
-            <span className="font-semibold text-white">
+            <span className="text-right font-semibold text-white">
               {selectedSeats.join(', ') ||
                 'Chưa chọn'}
             </span>
           </div>
+
+          {/* SỐ LƯỢNG */}
 
           <div className="flex items-center justify-between gap-3">
             <span>Số lượng</span>
@@ -1104,16 +1259,71 @@ export function SeatGrid({
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <span>Giá mỗi vé</span>
+          {/* GIÁ GHẾ */}
 
-            <span className="font-semibold text-white">
-              {basePrice.toLocaleString(
-                'vi-VN'
-              )}{' '}
-              đ
-            </span>
+          <div className="border-t border-white/10 pt-3">
+            <p className="mb-2 text-sm text-slate-300">
+              Chi tiết giá
+            </p>
+
+            {selectedSeats.length ===
+            0 ? (
+              <p className="text-xs text-slate-500">
+                Chưa chọn ghế
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {selectedSeats.map(
+                  (seatCode) => {
+                    const seat =
+                      getSeatByCode(
+                        seatCode
+                      );
+
+                    const price =
+                      getSeatPrice(
+                        seatCode
+                      );
+
+                    const type =
+                      seat?.type?.toUpperCase() ??
+                      'STANDARD';
+
+                    const typeLabel =
+                      type === 'VIP'
+                        ? 'VIP'
+                        : type ===
+                            'COUPLE'
+                          ? 'Ghế đôi'
+                          : 'Thường';
+
+                    return (
+                      <div
+                        key={seatCode}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span>
+                          {seatCode}{' '}
+                          <span className="text-slate-500">
+                            ({typeLabel})
+                          </span>
+                        </span>
+
+                        <span>
+                          {price.toLocaleString(
+                            'vi-VN'
+                          )}{' '}
+                          đ
+                        </span>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            )}
           </div>
+
+          {/* TỔNG */}
 
           <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-base font-semibold text-white">
             <span>Tổng cộng</span>
@@ -1126,6 +1336,8 @@ export function SeatGrid({
             </span>
           </div>
         </div>
+
+        {/* BUTTON */}
 
         <button
           type="button"
