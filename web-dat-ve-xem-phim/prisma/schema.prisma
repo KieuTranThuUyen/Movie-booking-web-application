@@ -94,18 +94,22 @@ model Movie {
 }
 
 model Showtime {
-  id        String     @id @default(cuid())
-  movieId   String
-  hallId    String
-  startTime DateTime
-  endTime   DateTime
-  language  String     @default("VietSub")
-  format    String     @default("2D")
-  basePrice Int
-  movie     Movie      @relation(fields: [movieId], references: [id], onDelete: Cascade)
-  hall      Hall       @relation(fields: [hallId], references: [id], onDelete: Cascade)
-  bookings  Booking[]
-  seatHolds SeatHold[]
+  id            String   @id @default(cuid())
+  movieId       String
+  hallId        String
+  startTime     DateTime
+  endTime       DateTime
+  language      String   @default("VietSub")
+  format        String   @default("2D")
+
+  standardPrice Int      @default(85000)
+  vipPrice      Int      @default(100000)
+  couplePrice   Int      @default(160000)
+
+  movie         Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  hall          Hall     @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+  seatHolds     SeatHold[]
 }
 
 model Booking {
