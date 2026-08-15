@@ -36,13 +36,24 @@ export default function RootLayout({
         className={`${manrope.variable} ${spaceGrotesk.variable} font-sans text-slate-100`}
       >
         <AppSessionProvider>
-          <AdminSidebarWrapper />
 
-          <SiteHeader />
+          {/* Sidebar - không in */}
+          <div className="print:hidden">
+            <AdminSidebarWrapper />
+          </div>
+
+          {/* Header - không in */}
+          <div className="print:hidden">
+            <SiteHeader />
+          </div>
 
           {children}
 
-          <SiteFooter />
+          {/* Footer - không in */}
+          <div className="print:hidden">
+            <SiteFooter />
+          </div>
+
         </AppSessionProvider>
       </body>
     </html>

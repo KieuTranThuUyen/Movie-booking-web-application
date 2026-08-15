@@ -33,3 +33,62 @@ body {
     @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
   }
 }
+
+/* ============================================================
+   IN VÉ ĐIỆN TỬ
+   Không in Header / Footer / Sidebar của website
+   ============================================================ */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    background: white !important;
+    color: #000 !important;
+  }
+
+  /*
+   * Ẩn Header, Footer và Sidebar của website
+   */
+  header,
+  footer,
+  nav,
+  aside {
+    display: none !important;
+  }
+
+  /*
+   * Ẩn các nút / thành phần chỉ dùng khi xem trên màn hình
+   */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /*
+   * Nội dung chính khi in
+   */
+  #ticket-print-page {
+    width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /*
+   * Vé điện tử
+   */
+  #electronic-ticket {
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+}
