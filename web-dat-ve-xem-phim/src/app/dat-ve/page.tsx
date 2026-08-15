@@ -5,7 +5,6 @@ import { getServerSession } from 'next-auth/next';
 import { SeatGrid } from '@/components/seat-grid';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
-import { SEAT_PRICES } from '@/lib/seat-pricing';
 
 type BookingPageProps = {
   searchParams: Promise<{
@@ -36,13 +35,13 @@ export default async function BookingPage({
 
   if (!session?.user?.id) {
     const callbackUrl = `/dat-ve?showtime=${encodeURIComponent(
-      showtimeId
+      showtimeId,
     )}`;
 
     redirect(
       `/dang-nhap?callbackUrl=${encodeURIComponent(
-        callbackUrl
-      )}`
+        callbackUrl,
+      )}`,
     );
   }
 
@@ -54,8 +53,10 @@ export default async function BookingPage({
     where: {
       id: showtimeId,
     },
+
     include: {
       movie: true,
+
       hall: {
         include: {
           cinema: true,
@@ -124,6 +125,7 @@ export default async function BookingPage({
   await prisma.seatHold.deleteMany({
     where: {
       showtimeId: showtime.id,
+
       expiresAt: {
         lte: now,
       },
@@ -152,7 +154,7 @@ export default async function BookingPage({
   });
 
   const soldSeats = soldTickets.map(
-    (ticket) => ticket.seatCode
+    (ticket) => ticket.seatCode,
   );
 
   // ============================================================
@@ -208,7 +210,11 @@ export default async function BookingPage({
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white">
       <div className="mx-auto max-w-7xl">
-        {/* HEADER */}
+
+        {/* ======================================================
+            HEADER
+        ====================================================== */}
+
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
             Đặt vé xem phim
@@ -223,9 +229,13 @@ export default async function BookingPage({
           </p>
         </div>
 
-        {/* THÔNG TIN SUẤT CHIẾU */}
+        {/* ======================================================
+            THÔNG TIN SUẤT CHIẾU
+        ====================================================== */}
+
         <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5">
           <div className="grid gap-4 text-sm md:grid-cols-4">
+
             <div>
               <p className="text-slate-500">
                 Phim
@@ -263,14 +273,71 @@ export default async function BookingPage({
 
               <p className="mt-1 font-semibold text-white">
                 {new Date(
-                  showtime.startTime
+                  showtime.startTime,
                 ).toLocaleString('vi-VN')}
               </p>
             </div>
+
           </div>
         </div>
 
-        {/* SƠ ĐỒ GHẾ */}
+        {/* ======================================================
+            BẢNG GIÁ SUẤT CHIẾU
+        ====================================================== */}
+
+        <div className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5">
+          <p className="text-sm font-medium text-slate-300">
+            Giá vé của suất chiếu này
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-4">
+              <p className="text-sm text-slate-400">
+                Ghế thường
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-emerald-300">
+                {showtime.standardPrice.toLocaleString(
+                  'vi-VN',
+                )}{' '}
+                đ
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
+              <p className="text-sm text-slate-400">
+                Ghế VIP
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-amber-300">
+                {showtime.vipPrice.toLocaleString(
+                  'vi-VN',
+                )}{' '}
+                đ
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-pink-400/20 bg-pink-500/5 p-4">
+              <p className="text-sm text-slate-400">
+                Ghế đôi
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-pink-300">
+                {showtime.couplePrice.toLocaleString(
+                  'vi-VN',
+                )}{' '}
+                đ
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ======================================================
+            SƠ ĐỒ GHẾ
+        ====================================================== */}
+
         <div className="mt-8">
           <SeatGrid
             movieSlug={showtime.movie.slug}
@@ -280,22 +347,23 @@ export default async function BookingPage({
             hallName={showtime.hall.name}
             startTime={showtime.startTime.toISOString()}
 
-            // ====================================================
-            // GIÁ GHẾ
-            // ====================================================
+            // ==================================================
+            // GIÁ LẤY THEO SUẤT CHIẾU
+            // ==================================================
 
-            standardPrice={SEAT_PRICES.STANDARD}
-            vipPrice={SEAT_PRICES.VIP}
-            couplePrice={SEAT_PRICES.COUPLE}
+            standardPrice={showtime.standardPrice}
+            vipPrice={showtime.vipPrice}
+            couplePrice={showtime.couplePrice}
 
-            // ====================================================
+            // ==================================================
             // TRẠNG THÁI GHẾ
-            // ====================================================
+            // ==================================================
 
             soldSeats={soldSeats}
             heldSeats={activeHeldSeats}
           />
         </div>
+
       </div>
     </main>
   );

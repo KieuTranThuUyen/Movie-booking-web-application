@@ -1,7 +1,6 @@
 import { CheckoutForm } from '@/components/forms/checkout-form';
 import { prisma } from '@/lib/prisma';
 import { ensureMoviesSeeded } from '@/lib/seed-movies';
-import { SEAT_PRICES } from '@/lib/seat-pricing';
 
 type CheckoutPageProps = {
   searchParams: Promise<{
@@ -16,7 +15,15 @@ export default async function CheckoutPage({
   const resolvedSearchParams =
     await searchParams;
 
+  // ============================================================
+  // SEED MOVIES
+  // ============================================================
+
   await ensureMoviesSeeded();
+
+  // ============================================================
+  // LẤY SHOWTIME
+  // ============================================================
 
   const showtime =
     resolvedSearchParams.showtime
@@ -24,8 +31,10 @@ export default async function CheckoutPage({
           where: {
             id: resolvedSearchParams.showtime,
           },
+
           include: {
             movie: true,
+
             hall: {
               include: {
                 cinema: true,
@@ -36,6 +45,10 @@ export default async function CheckoutPage({
         })
       : null;
 
+  // ============================================================
+  // LẤY GHẾ
+  // ============================================================
+
   const seats = (
     resolvedSearchParams.seats ?? ''
   )
@@ -43,13 +56,22 @@ export default async function CheckoutPage({
     .map((seat) => seat.trim())
     .filter(Boolean);
 
+  // ============================================================
+  // TÍNH TIỀN
+  //
+  // Giá lấy trực tiếp từ Showtime.
+  // Không sử dụng subtotal từ URL.
+  // ============================================================
+
   let subtotal = 0;
 
   if (showtime) {
     const selectedSeats =
       showtime.hall.seats.filter(
         (seat) =>
-          seats.includes(seat.code)
+          seats.includes(
+            seat.code,
+          ),
       );
 
     subtotal =
@@ -57,34 +79,42 @@ export default async function CheckoutPage({
         (total, seat) => {
           switch (
             String(
-              seat.type
+              seat.type,
             ).toUpperCase()
           ) {
             case 'VIP':
               return (
                 total +
-                SEAT_PRICES.VIP
+                showtime.vipPrice
               );
 
             case 'COUPLE':
               return (
                 total +
-                SEAT_PRICES.COUPLE
+                showtime.couplePrice
               );
 
             case 'STANDARD':
             default:
               return (
                 total +
-                SEAT_PRICES.STANDARD
+                showtime.standardPrice
               );
           }
         },
-        0
+        0,
       );
   }
 
+  // ============================================================
+  // PHÍ DỊCH VỤ
+  // ============================================================
+
   const bookingFee = 0;
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <main className="page-shell py-12 lg:py-16">
@@ -120,8 +150,8 @@ export default async function CheckoutPage({
           />
         ) : (
           <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 text-slate-300 shadow-glow backdrop-blur-xl">
-            Chưa có thông tin suất chiếu để
-            thanh toán.
+            Chưa có thông tin suất chiếu
+            để thanh toán.
           </div>
         )}
       </div>

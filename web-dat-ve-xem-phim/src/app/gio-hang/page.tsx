@@ -2,10 +2,7 @@ import Link from 'next/link';
 
 import { prisma } from '@/lib/prisma';
 import { ensureMoviesSeeded } from '@/lib/seed-movies';
-import {
-  formatSeatType,
-  getSeatPrice,
-} from '@/lib/seat-pricing';
+import { formatSeatType } from '@/lib/seat-pricing';
 
 type CartPageProps = {
   searchParams: Promise<{
@@ -21,19 +18,15 @@ export default async function CartPage({
   const resolvedSearchParams =
     await searchParams;
 
-  /*
-   * ============================================================
-   * SEED MOVIES
-   * ============================================================
-   */
+  // ============================================================
+  // SEED MOVIES
+  // ============================================================
 
   await ensureMoviesSeeded();
 
-  /*
-   * ============================================================
-   * LẤY SHOWTIME
-   * ============================================================
-   */
+  // ============================================================
+  // LẤY SHOWTIME
+  // ============================================================
 
   const showtime =
     resolvedSearchParams.showtime
@@ -41,8 +34,10 @@ export default async function CartPage({
           where: {
             id: resolvedSearchParams.showtime,
           },
+
           include: {
             movie: true,
+
             hall: {
               include: {
                 cinema: true,
@@ -53,11 +48,9 @@ export default async function CartPage({
         })
       : null;
 
-  /*
-   * ============================================================
-   * LẤY DANH SÁCH GHẾ
-   * ============================================================
-   */
+  // ============================================================
+  // LẤY DANH SÁCH GHẾ
+  // ============================================================
 
   const selectedSeats = (
     resolvedSearchParams.seats ?? ''
@@ -66,53 +59,71 @@ export default async function CartPage({
     .map((seat) => seat.trim())
     .filter(Boolean);
 
-  /*
-   * ============================================================
-   * LẤY CHI TIẾT GHẾ
-   *
-   * Giá được xác định theo type của ghế:
-   *
-   * STANDARD = 70.000
-   * VIP      = 90.000
-   * COUPLE   = 140.000
-   * ============================================================
-   */
+  // ============================================================
+  // LẤY CHI TIẾT GHẾ
+  //
+  // QUAN TRỌNG:
+  // Giá lấy trực tiếp từ Showtime.
+  //
+  // STANDARD -> showtime.standardPrice
+  // VIP      -> showtime.vipPrice
+  // COUPLE   -> showtime.couplePrice
+  // ============================================================
 
   const seatDetails =
     showtime?.hall.seats
       .filter((seat) =>
         selectedSeats.includes(
-          seat.code
-        )
+          seat.code,
+        ),
       )
-      .map((seat) => ({
-        code: seat.code,
-        type: formatSeatType(
-          seat.type
-        ),
-        price: getSeatPrice(
-          seat.type
-        ),
-      })) ?? [];
+      .map((seat) => {
+        const type = formatSeatType(
+          seat.type,
+        );
 
-  /*
-   * ============================================================
-   * TÍNH TỔNG
-   * ============================================================
-   */
+        let price =
+          showtime.standardPrice;
+
+        switch (type) {
+          case 'VIP':
+            price =
+              showtime.vipPrice;
+            break;
+
+          case 'COUPLE':
+            price =
+              showtime.couplePrice;
+            break;
+
+          case 'STANDARD':
+          default:
+            price =
+              showtime.standardPrice;
+            break;
+        }
+
+        return {
+          code: seat.code,
+          type,
+          price,
+        };
+      }) ?? [];
+
+  // ============================================================
+  // TÍNH TỔNG
+  // ============================================================
 
   const subtotal =
     seatDetails.reduce(
       (total, seat) =>
         total + seat.price,
-      0
+      0,
     );
 
-  /*
-   * ============================================================
-   * RENDER
-   * ============================================================
-   */
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <main className="page-shell py-12 lg:py-16">
@@ -152,9 +163,9 @@ export default async function CartPage({
 
               <div className="mt-2 text-sm text-slate-300">
                 {new Date(
-                  showtime.startTime
+                  showtime.startTime,
                 ).toLocaleString(
-                  'vi-VN'
+                  'vi-VN',
                 )}
               </div>
 
@@ -192,12 +203,12 @@ export default async function CartPage({
 
                           <span className="font-semibold text-white">
                             {seat.price.toLocaleString(
-                              'vi-VN'
+                              'vi-VN',
                             )}{' '}
                             đ
                           </span>
                         </div>
-                      )
+                      ),
                     )
                   ) : (
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
@@ -209,9 +220,9 @@ export default async function CartPage({
             </div>
           ) : (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-slate-300">
-              Chưa có dữ liệu giỏ vé. Hãy quay
-              lại màn hình chọn ghế để thêm vé
-              trước khi thanh toán.
+              Chưa có dữ liệu giỏ vé. Hãy
+              quay lại màn hình chọn ghế để
+              thêm vé trước khi thanh toán.
             </div>
           )}
         </section>
@@ -259,12 +270,12 @@ export default async function CartPage({
 
                       <span className="text-white">
                         {seat.price.toLocaleString(
-                          'vi-VN'
+                          'vi-VN',
                         )}{' '}
                         đ
                       </span>
                     </div>
-                  )
+                  ),
                 )}
               </div>
             </div>
@@ -278,7 +289,7 @@ export default async function CartPage({
 
               <span className="text-white">
                 {subtotal.toLocaleString(
-                  'vi-VN'
+                  'vi-VN',
                 )}{' '}
                 đ
               </span>
@@ -291,12 +302,12 @@ export default async function CartPage({
             href={
               showtime
                 ? `/thanh-toan?showtime=${encodeURIComponent(
-                    showtime.id
+                    showtime.id,
                   )}&seats=${encodeURIComponent(
                     selectedSeats.join(
-                      ','
-                    )
-                  )}&subtotal=${subtotal}`
+                      ',',
+                    ),
+                  )}`
                 : '/dat-ve'
             }
             className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
