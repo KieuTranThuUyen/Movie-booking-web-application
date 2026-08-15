@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth/next';
 
@@ -24,9 +25,64 @@ type BookingSummary = {
     startTime: Date;
   };
   tickets: {
+    id: string;
     seatCode: string;
   }[];
 };
+
+function getBookingStatusLabel(status: string) {
+  switch (status) {
+    case 'PENDING':
+      return 'Chờ xử lý';
+    case 'CONFIRMED':
+      return 'Đã xác nhận';
+    case 'CANCELED':
+      return 'Đã hủy';
+    default:
+      return status;
+  }
+}
+
+function getPaymentStatusLabel(status: string) {
+  switch (status) {
+    case 'UNPAID':
+      return 'Chưa thanh toán';
+    case 'PAID':
+      return 'Đã thanh toán';
+    case 'REFUNDED':
+      return 'Đã hoàn tiền';
+    default:
+      return status;
+  }
+}
+
+function getBookingStatusClass(status: string) {
+  switch (status) {
+    case 'CONFIRMED':
+      return 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300';
+
+    case 'CANCELED':
+      return 'border-rose-400/20 bg-rose-500/10 text-rose-300';
+
+    case 'PENDING':
+    default:
+      return 'border-amber-400/20 bg-amber-500/10 text-amber-300';
+  }
+}
+
+function getPaymentStatusClass(status: string) {
+  switch (status) {
+    case 'PAID':
+      return 'bg-emerald-500/10 text-emerald-300';
+
+    case 'REFUNDED':
+      return 'bg-rose-500/10 text-rose-300';
+
+    case 'UNPAID':
+    default:
+      return 'bg-amber-500/10 text-amber-300';
+  }
+}
 
 export default async function OrdersPage() {
   // ============================================================
@@ -89,9 +145,18 @@ export default async function OrdersPage() {
 
       <div className="mt-10 grid gap-4">
         {bookings.length === 0 ? (
-          <p className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 text-sm text-slate-300">
-            Bạn chưa có đơn đặt vé nào được ghi nhận.
-          </p>
+          <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
+            <p className="text-sm text-slate-300">
+              Bạn chưa có đơn đặt vé nào được ghi nhận.
+            </p>
+
+            <Link
+              href="/suat-chieu"
+              className="mt-4 inline-flex rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400"
+            >
+              Đặt vé ngay
+            </Link>
+          </div>
         ) : (
           bookings.map((booking) => (
             <article
@@ -112,8 +177,12 @@ export default async function OrdersPage() {
                   </p>
                 </div>
 
-                <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
-                  {booking.status}
+                <div
+                  className={`rounded-full border px-4 py-2 text-sm ${getBookingStatusClass(
+                    booking.status
+                  )}`}
+                >
+                  {getBookingStatusLabel(booking.status)}
                 </div>
               </div>
 
@@ -122,8 +191,13 @@ export default async function OrdersPage() {
                   Mã đơn: {booking.bookingCode}
                 </span>
 
-                <span className="rounded-full bg-white/5 px-3 py-1">
-                  Thanh toán: {booking.paymentStatus}
+                <span
+                  className={`rounded-full px-3 py-1 ${getPaymentStatusClass(
+                    booking.paymentStatus
+                  )}`}
+                >
+                  Thanh toán:{' '}
+                  {getPaymentStatusLabel(booking.paymentStatus)}
                 </span>
 
                 <span className="rounded-full bg-white/5 px-3 py-1">
@@ -133,10 +207,21 @@ export default async function OrdersPage() {
 
                 <span className="rounded-full bg-white/5 px-3 py-1">
                   Ghế:{' '}
-                  {booking.tickets
-                    .map((ticket) => ticket.seatCode)
-                    .join(', ')}
+                  {booking.tickets.length > 0
+                    ? booking.tickets
+                        .map((ticket) => ticket.seatCode)
+                        .join(', ')
+                    : 'Không có'}
                 </span>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href={`/ve/${booking.id}`}
+                  className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
+                >
+                  Xem vé điện tử
+                </Link>
               </div>
             </article>
           ))
