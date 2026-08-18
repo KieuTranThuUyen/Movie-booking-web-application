@@ -15,12 +15,8 @@ type RouteContext = {
   }>;
 };
 
-/* ============================================================
-   POST - CONFIRM DEMO PAYMENT
-   ============================================================ */
-
 export async function POST(
-  request: Request,
+  _request: Request,
   context: RouteContext,
 ) {
   try {
@@ -36,9 +32,7 @@ export async function POST(
           message:
             'Bạn cần đăng nhập.',
         },
-        {
-          status: 401,
-        },
+        { status: 401 },
       );
     }
 
@@ -51,23 +45,13 @@ export async function POST(
           message:
             'Thiếu mã đơn đặt vé.',
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
-
-    /* ========================================================
-       TRANSACTION
-       ======================================================== */
 
     const result =
       await prisma.$transaction(
         async (tx) => {
-          /* ==================================================
-             BOOKING
-             ================================================== */
-
           const booking =
             await tx.booking.findUnique({
               where: {
@@ -106,10 +90,6 @@ export async function POST(
             );
           }
 
-          /* ==================================================
-             QUYỀN
-             ================================================== */
-
           if (
             booking.userId !==
             userId
@@ -118,10 +98,6 @@ export async function POST(
               'FORBIDDEN',
             );
           }
-
-          /* ==================================================
-             IDEMPOTENCY
-             ================================================== */
 
           if (
             booking.paymentStatus ===
@@ -134,10 +110,6 @@ export async function POST(
               alreadyPaid: true,
             };
           }
-
-          /* ==================================================
-             BOOKING STATUS
-             ================================================== */
 
           if (
             booking.status ===
@@ -156,10 +128,6 @@ export async function POST(
               'BOOKING_NOT_PENDING',
             );
           }
-
-          /* ==================================================
-             PAYMENT
-             ================================================== */
 
           if (!booking.payment) {
             throw new Error(
@@ -185,10 +153,6 @@ export async function POST(
             );
           }
 
-          /* ==================================================
-             SHOWTIME
-             ================================================== */
-
           const now =
             new Date();
 
@@ -200,13 +164,6 @@ export async function POST(
               'SHOWTIME_STARTED',
             );
           }
-
-          /* ==================================================
-             SEAT HOLD
-
-             QUAN TRỌNG:
-             Chỉ lấy SeatHold thuộc booking này.
-             ================================================== */
 
           const seatHolds =
             await tx.seatHold.findMany({
@@ -241,10 +198,6 @@ export async function POST(
             );
           }
 
-          /* ==================================================
-             GHẾ ACTIVE
-             ================================================== */
-
           const inactiveSeats =
             seatHolds.filter(
               (hold) =>
@@ -263,10 +216,6 @@ export async function POST(
                 .join(',')}`,
             );
           }
-
-          /* ==================================================
-             TÍNH GIÁ
-             ================================================== */
 
           const getSeatPrice =
             (seatType: string) => {
@@ -321,10 +270,6 @@ export async function POST(
             );
           }
 
-          /* ==================================================
-             GHẾ ĐÃ BÁN
-             ================================================== */
-
           const occupiedTickets =
             await tx.ticket.findMany({
               where: {
@@ -364,10 +309,6 @@ export async function POST(
             );
           }
 
-          /* ==================================================
-             TICKET ĐÃ TỒN TẠI
-             ================================================== */
-
           if (
             booking.tickets.length > 0
           ) {
@@ -375,10 +316,6 @@ export async function POST(
               'TICKETS_ALREADY_EXIST',
             );
           }
-
-          /* ==================================================
-             TẠO TICKET
-             ================================================== */
 
           await tx.ticket.createMany({
             data: seatHolds.map(
@@ -409,10 +346,6 @@ export async function POST(
             ),
           });
 
-          /* ==================================================
-             PAYMENT -> PAID
-             ================================================== */
-
           await tx.payment.update({
             where: {
               id:
@@ -431,10 +364,6 @@ export async function POST(
             },
           });
 
-          /* ==================================================
-             BOOKING -> CONFIRMED
-             ================================================== */
-
           const updatedBooking =
             await tx.booking.update({
               where: {
@@ -450,10 +379,6 @@ export async function POST(
                   PaymentStatus.PAID,
               },
             });
-
-          /* ==================================================
-             XÓA HOLD
-             ================================================== */
 
           await tx.seatHold.deleteMany({
             where: {
@@ -471,13 +396,7 @@ export async function POST(
         },
       );
 
-    /* ========================================================
-       ALREADY PAID
-       ======================================================== */
-
-    if (
-      result.alreadyPaid
-    ) {
+    if (result.alreadyPaid) {
       return NextResponse.json(
         {
           message:
@@ -487,28 +406,20 @@ export async function POST(
             result.booking.id,
 
           bookingCode:
-            result.booking
-              .bookingCode,
+            result.booking.bookingCode,
 
           status:
             result.booking.status,
 
           paymentStatus:
-            result.booking
-              .paymentStatus,
+            result.booking.paymentStatus,
 
           redirectTo:
             `/ve/${result.booking.id}`,
         },
-        {
-          status: 200,
-        },
+        { status: 200 },
       );
     }
-
-    /* ========================================================
-       SUCCESS
-       ======================================================== */
 
     return NextResponse.json(
       {
@@ -519,22 +430,18 @@ export async function POST(
           result.booking.id,
 
         bookingCode:
-          result.booking
-            .bookingCode,
+          result.booking.bookingCode,
 
         status:
           result.booking.status,
 
         paymentStatus:
-          result.booking
-            .paymentStatus,
+          result.booking.paymentStatus,
 
         redirectTo:
           `/ve/${result.booking.id}`,
       },
-      {
-        status: 200,
-      },
+      { status: 200 },
     );
   } catch (error) {
     console.error(
@@ -552,9 +459,7 @@ export async function POST(
           message:
             'Không tìm thấy đơn đặt vé.',
         },
-        {
-          status: 404,
-        },
+        { status: 404 },
       );
     }
 
@@ -568,9 +473,7 @@ export async function POST(
           message:
             'Bạn không có quyền thanh toán đơn này.',
         },
-        {
-          status: 403,
-        },
+        { status: 403 },
       );
     }
 
@@ -584,9 +487,7 @@ export async function POST(
           message:
             'Đơn đặt vé đã bị hủy.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -600,9 +501,7 @@ export async function POST(
           message:
             'Đơn đặt vé không còn ở trạng thái chờ thanh toán.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -616,9 +515,7 @@ export async function POST(
           message:
             'Không tìm thấy giao dịch thanh toán.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -632,9 +529,7 @@ export async function POST(
           message:
             'Giao dịch không còn ở trạng thái chờ thanh toán.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -648,9 +543,7 @@ export async function POST(
           message:
             'Số tiền thanh toán không hợp lệ.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -664,9 +557,7 @@ export async function POST(
           message:
             'Suất chiếu đã bắt đầu. Không thể thanh toán.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -680,9 +571,7 @@ export async function POST(
           message:
             'Thời gian giữ ghế đã hết. Vui lòng quay lại chọn ghế.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -703,9 +592,7 @@ export async function POST(
           message:
             `Ghế ${seats} hiện không thể sử dụng.`,
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -726,9 +613,7 @@ export async function POST(
           message:
             `Ghế ${seats} vừa được người khác đặt. Vui lòng chọn ghế khác.`,
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -742,9 +627,7 @@ export async function POST(
           message:
             'Vé của đơn hàng đã tồn tại. Không thể tạo vé trùng.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -758,9 +641,7 @@ export async function POST(
           message:
             'Tổng tiền đơn hàng không hợp lệ. Vui lòng tạo lại đơn.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -769,9 +650,7 @@ export async function POST(
         message:
           'Không thể xác nhận thanh toán. Vui lòng thử lại.',
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }

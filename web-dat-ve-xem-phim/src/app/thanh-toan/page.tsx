@@ -75,7 +75,6 @@ export default async function CheckoutPage({
     );
   }
 
-  // Không cho thanh toán suất chiếu đã bắt đầu.
   if (showtime.startTime <= new Date()) {
     return (
       <main className="page-shell py-12 lg:py-16">
@@ -92,15 +91,10 @@ export default async function CheckoutPage({
     );
   }
 
-  // ============================================================
-  // KIỂM TRA GHẾ
-  // ============================================================
-
   const selectedSeats = showtime.hall.seats.filter(
     (seat) => seats.includes(seat.code),
   );
 
-  // Có mã ghế không tồn tại.
   if (selectedSeats.length !== seats.length) {
     return (
       <main className="page-shell py-12 lg:py-16">
@@ -118,7 +112,6 @@ export default async function CheckoutPage({
     );
   }
 
-  // Không cho thanh toán ghế đã bị khóa.
   const inactiveSeats = selectedSeats.filter(
     (seat) => !seat.isActive,
   );
@@ -143,17 +136,6 @@ export default async function CheckoutPage({
     );
   }
 
-  // ============================================================
-  // TÍNH GIÁ
-  //
-  // Giá được lấy từ database:
-  // Showtime.standardPrice
-  // Showtime.vipPrice
-  // Showtime.couplePrice
-  //
-  // KHÔNG lấy giá từ URL.
-  // ============================================================
-
   const getSeatPrice = (seatType: string) => {
     switch (seatType.toUpperCase()) {
       case 'VIP':
@@ -174,14 +156,7 @@ export default async function CheckoutPage({
     0,
   );
 
-  // Hiện tại hệ thống chưa thu phí dịch vụ.
   const bookingFee = 0;
-
-  const total = subtotal + bookingFee;
-
-  // ============================================================
-  // RENDER
-  // ============================================================
 
   return (
     <main className="page-shell py-12 lg:py-16">

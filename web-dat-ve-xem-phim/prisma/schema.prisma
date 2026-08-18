@@ -21,7 +21,13 @@ enum BookingStatus {
 enum PaymentStatus {
   UNPAID
   PAID
+  PARTIALLY_REFUNDED
   REFUNDED
+}
+
+enum TicketStatus {
+  ACTIVE
+  CANCELED
 }
 
 model User {
@@ -138,7 +144,8 @@ model Booking {
   status        BookingStatus @default(PENDING)
   paymentStatus PaymentStatus @default(UNPAID)
 
-  totalPrice Int
+  totalPrice     Int
+  refundedAmount Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -146,23 +153,21 @@ model Booking {
   user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   showtime Showtime @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
 
-  tickets Ticket[]
-  payment Payment?
-
-  /**
-   * Mỗi booking biết chính xác những SeatHold
-   * thuộc về booking đó.
-   */
+  tickets   Ticket[]
+  payment   Payment?
   seatHolds SeatHold[]
 }
 
 model Ticket {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   bookingId String
   seatId    String
   seatCode  String
   price     Int
   qrCode    String?
+
+  status     TicketStatus @default(ACTIVE)
+  canceledAt DateTime?
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   seat    Seat    @relation(fields: [seatId], references: [id], onDelete: Restrict)
@@ -186,26 +191,16 @@ model SeatHold {
 
   seatId     String
   showtimeId String
-
-  /**
-   * NULL:
-   * ghế đang được chọn nhưng chưa tạo booking.
-   * Có giá trị:
-   * ghế đã thuộc về một booking cụ thể.
-   */
-  bookingId String?
-
-  userId String?
+  bookingId  String?
+  userId     String?
 
   expiresAt DateTime
   createdAt DateTime @default(now())
 
   seat     Seat     @relation(fields: [seatId], references: [id], onDelete: Cascade)
   showtime Showtime @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
-
-  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  booking  Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([seatId, showtimeId])
   @@index([expiresAt])

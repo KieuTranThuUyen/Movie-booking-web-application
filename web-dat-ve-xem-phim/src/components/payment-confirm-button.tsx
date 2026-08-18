@@ -12,18 +12,13 @@ export function PaymentConfirmButton({
   bookingId,
   isPaid,
 }: PaymentConfirmButtonProps) {
-  const router =
-    useRouter();
+  const router = useRouter();
 
   const [loading, setLoading] =
     useState(false);
 
   const [message, setMessage] =
     useState('');
-
-  /* ==========================================================
-     XÁC NHẬN THANH TOÁN
-     ========================================================== */
 
   const handleConfirm =
     async () => {
@@ -40,6 +35,7 @@ export function PaymentConfirmButton({
             `/api/payments/${bookingId}/confirm`,
             {
               method: 'POST',
+
               headers: {
                 'Content-Type':
                   'application/json',
@@ -63,20 +59,11 @@ export function PaymentConfirmButton({
           return;
         }
 
-        /* ======================================================
-           SAU KHI THANH TOÁN THÀNH CÔNG
-
-           Đi thẳng đến vé điện tử.
-           ====================================================== */
-
         const target =
           data.redirectTo ||
           `/ve/${data.bookingId || bookingId}`;
 
-        router.push(
-          target,
-        );
-
+        router.push(target);
         router.refresh();
       } catch (error) {
         console.error(
@@ -91,10 +78,6 @@ export function PaymentConfirmButton({
         setLoading(false);
       }
     };
-
-  /* ==========================================================
-     ĐÃ THANH TOÁN
-     ========================================================== */
 
   if (isPaid) {
     return (
@@ -122,10 +105,6 @@ export function PaymentConfirmButton({
     );
   }
 
-  /* ==========================================================
-     CHƯA THANH TOÁN
-     ========================================================== */
-
   return (
     <div className="mt-6">
       {message && (
@@ -136,9 +115,7 @@ export function PaymentConfirmButton({
 
       <button
         type="button"
-        onClick={
-          handleConfirm
-        }
+        onClick={handleConfirm}
         disabled={loading}
         className="w-full rounded-2xl bg-emerald-400 px-5 py-4 font-bold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
       >
@@ -148,8 +125,8 @@ export function PaymentConfirmButton({
       </button>
 
       <p className="mt-3 text-center text-xs leading-5 text-slate-500">
-        Đây là thanh toán mô phỏng phục vụ
-        kiểm thử quy trình đặt vé.
+        Đây là thanh toán mô phỏng phục vụ kiểm thử
+        quy trình đặt vé.
       </p>
     </div>
   );

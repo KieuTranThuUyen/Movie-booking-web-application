@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE `Booking` ADD COLUMN `refundedAmount` INTEGER NOT NULL DEFAULT 0,
+    MODIFY `paymentStatus` ENUM('UNPAID', 'PAID', 'PARTIALLY_REFUNDED', 'REFUNDED') NOT NULL DEFAULT 'UNPAID';
+
+-- AlterTable
+ALTER TABLE `Ticket` ADD COLUMN `canceledAt` DATETIME(3) NULL;

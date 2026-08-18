@@ -18,14 +18,9 @@ const ONLINE_PAYMENT_METHODS = [
 type OnlinePaymentMethod =
   (typeof ONLINE_PAYMENT_METHODS)[number];
 
-/* ============================================================
-   GET
-   ============================================================ */
-
 export async function GET() {
   try {
-    const session =
-      await getServerSession(authOptions);
+    const session = await getServerSession(authOptions);
 
     const user = session?.user;
 
@@ -35,131 +30,83 @@ export async function GET() {
           message:
             'Bạn cần đăng nhập để xem đơn đặt vé.',
         },
-        {
-          status: 401,
-        },
+        { status: 401 },
       );
     }
 
-    const userId = user.id;
-
-    const isAdmin =
-      user.role === 'ADMIN';
-
-    const bookings =
-      await prisma.booking.findMany({
-        where: isAdmin
+    const bookings = await prisma.booking.findMany({
+      where:
+        user.role === 'ADMIN'
           ? undefined
           : {
-              userId,
+              userId: user.id,
             },
 
-        orderBy: {
-          createdAt: 'desc',
-        },
+      orderBy: {
+        createdAt: 'desc',
+      },
 
-        include: {
-          showtime: {
-            include: {
-              movie: true,
-
-              hall: {
-                include: {
-                  cinema: true,
-                },
+      include: {
+        showtime: {
+          include: {
+            movie: true,
+            hall: {
+              include: {
+                cinema: true,
               },
             },
           },
-
-          tickets: true,
-
-          payment: true,
         },
-      });
-
-    const result =
-      bookings.map(
-        (booking) => ({
-          id: booking.id,
-
-          bookingCode:
-            booking.bookingCode,
-
-          customerName:
-            booking.customerName,
-
-          customerEmail:
-            booking.customerEmail,
-
-          customerPhone:
-            booking.customerPhone,
-
-          status:
-            booking.status,
-
-          paymentStatus:
-            booking.paymentStatus,
-
-          paymentMethod:
-            booking.paymentMethod,
-
-          totalPrice:
-            booking.totalPrice,
-
-          createdAt:
-            booking.createdAt,
-
-          movieTitle:
-            booking.showtime.movie.title,
-
-          showtimeLabel:
-            `${booking.showtime.movie.title} · ` +
-            `${booking.showtime.hall.cinema.name} · ` +
-            `${booking.showtime.hall.name} · ` +
-            `${new Date(
-              booking.showtime.startTime,
-            ).toLocaleString(
-              'vi-VN',
-            )}`,
-
-          seats:
-            booking.tickets.map(
-              (ticket) =>
-                ticket.seatCode,
-            ),
-
-          payment:
-            booking.payment
-              ? {
-                  id:
-                    booking.payment.id,
-
-                  provider:
-                    booking.payment.provider,
-
-                  amount:
-                    booking.payment.amount,
-
-                  status:
-                    booking.payment.status,
-
-                  transactionCode:
-                    booking.payment
-                      .transactionCode,
-
-                  paidAt:
-                    booking.payment.paidAt,
-                }
-              : null,
-        }),
-      );
-
-    return NextResponse.json(
-      result,
-      {
-        status: 200,
+        tickets: true,
+        payment: true,
       },
-    );
+    });
+
+    const result = bookings.map((booking) => ({
+      id: booking.id,
+      bookingCode: booking.bookingCode,
+
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      customerPhone: booking.customerPhone,
+
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      paymentMethod: booking.paymentMethod,
+
+      totalPrice: booking.totalPrice,
+      createdAt: booking.createdAt,
+
+      movieTitle: booking.showtime.movie.title,
+
+      showtimeLabel:
+        `${booking.showtime.movie.title} · ` +
+        `${booking.showtime.hall.cinema.name} · ` +
+        `${booking.showtime.hall.name} · ` +
+        `${new Date(
+          booking.showtime.startTime,
+        ).toLocaleString('vi-VN')}`,
+
+      seats: booking.tickets.map(
+        (ticket) => ticket.seatCode,
+      ),
+
+      payment: booking.payment
+        ? {
+            id: booking.payment.id,
+            provider: booking.payment.provider,
+            amount: booking.payment.amount,
+            status: booking.payment.status,
+            transactionCode:
+              booking.payment.transactionCode,
+            paidAt: booking.payment.paidAt,
+          }
+        : null,
+    }));
+
+    return NextResponse.json(result, {
+      status: 200,
+    });
   } catch (error) {
     console.error(
       'GET /api/bookings error:',
@@ -171,23 +118,14 @@ export async function GET() {
         message:
           'Không thể lấy danh sách đơn đặt vé.',
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }
 
-/* ============================================================
-   POST - TẠO BOOKING
-   ============================================================ */
-
-export async function POST(
-  request: Request,
-) {
+export async function POST(request: Request) {
   try {
-    const session =
-      await getServerSession(authOptions);
+    const session = await getServerSession(authOptions);
 
     const user = session?.user;
 
@@ -197,30 +135,22 @@ export async function POST(
           message:
             'Bạn cần đăng nhập trước khi thanh toán.',
         },
-        {
-          status: 401,
-        },
+        { status: 401 },
       );
     }
 
     const userId = user.id;
 
-    const body =
-      (await request.json()) as {
-        paymentMethod?: string;
-        showtimeId?: string;
-        seats?: string;
-        note?: string;
-      };
+    const body = (await request.json()) as {
+      paymentMethod?: string;
+      showtimeId?: string;
+      seats?: string;
+      note?: string;
+    };
 
-    /* ========================================================
-       PAYMENT METHOD
-       ======================================================== */
-
-    const paymentMethod =
-      String(
-        body.paymentMethod ?? '',
-      ).toUpperCase();
+    const paymentMethod = String(
+      body.paymentMethod ?? '',
+    ).toUpperCase();
 
     if (
       !ONLINE_PAYMENT_METHODS.includes(
@@ -232,33 +162,23 @@ export async function POST(
           message:
             'Vui lòng chọn một phương thức thanh toán online.',
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
 
-    /* ========================================================
-       SHOWTIME + SEATS
-       ======================================================== */
+    const showtimeId = String(
+      body.showtimeId ?? '',
+    ).trim();
 
-    const showtimeId =
-      String(
-        body.showtimeId ?? '',
-      ).trim();
-
-    const selectedSeatCodes =
-      String(body.seats ?? '')
-        .split(',')
-        .map((seatCode) =>
-          seatCode.trim(),
-        )
-        .filter(Boolean);
+    const selectedSeatCodes = String(
+      body.seats ?? '',
+    )
+      .split(',')
+      .map((seatCode) => seatCode.trim())
+      .filter(Boolean);
 
     const uniqueSeatCodes = [
-      ...new Set(
-        selectedSeatCodes,
-      ),
+      ...new Set(selectedSeatCodes),
     ];
 
     if (
@@ -270,15 +190,9 @@ export async function POST(
           message:
             'Vui lòng chọn suất chiếu và ghế trước khi thanh toán.',
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
-
-    /* ========================================================
-       SHOWTIME
-       ======================================================== */
 
     const showtime =
       await prisma.showtime.findUnique({
@@ -304,38 +218,25 @@ export async function POST(
           message:
             'Không tìm thấy suất chiếu tương ứng.',
         },
-        {
-          status: 404,
-        },
+        { status: 404 },
       );
     }
 
     const now = new Date();
 
-    if (
-      showtime.startTime <= now
-    ) {
+    if (showtime.startTime <= now) {
       return NextResponse.json(
         {
           message:
             'Suất chiếu đã bắt đầu. Không thể đặt vé.',
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
 
-    /* ========================================================
-       GHẾ
-       ======================================================== */
-
     const selectedSeats =
-      showtime.hall.seats.filter(
-        (seat) =>
-          uniqueSeatCodes.includes(
-            seat.code,
-          ),
+      showtime.hall.seats.filter((seat) =>
+        uniqueSeatCodes.includes(seat.code),
       );
 
     if (
@@ -347,62 +248,42 @@ export async function POST(
           message:
             'Có ghế không tồn tại trong phòng chiếu này.',
         },
-        {
-          status: 400,
-        },
+        { status: 400 },
       );
     }
 
     const inactiveSeats =
       selectedSeats.filter(
-        (seat) =>
-          !seat.isActive,
+        (seat) => !seat.isActive,
       );
 
-    if (
-      inactiveSeats.length > 0
-    ) {
+    if (inactiveSeats.length > 0) {
       return NextResponse.json(
         {
           message:
             `Ghế ${inactiveSeats
-              .map(
-                (seat) =>
-                  seat.code,
-              )
+              .map((seat) => seat.code)
               .join(', ')} đang bị khóa bởi quản trị viên.`,
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
-
-    /* ========================================================
-       XÓA HOLD HẾT HẠN
-       ======================================================== */
 
     await prisma.seatHold.deleteMany({
       where: {
         showtimeId,
-
         expiresAt: {
           lte: now,
         },
       },
     });
 
-    /* ========================================================
-       GHẾ ĐÃ BÁN
-       ======================================================== */
-
     const occupiedTickets =
       await prisma.ticket.findMany({
         where: {
           seatId: {
             in: selectedSeats.map(
-              (seat) =>
-                seat.id,
+              (seat) => seat.id,
             ),
           },
 
@@ -410,8 +291,7 @@ export async function POST(
             showtimeId,
 
             status: {
-              not:
-                BookingStatus.CANCELED,
+              not: BookingStatus.CANCELED,
             },
           },
         },
@@ -421,40 +301,27 @@ export async function POST(
         },
       });
 
-    if (
-      occupiedTickets.length > 0
-    ) {
+    if (occupiedTickets.length > 0) {
       return NextResponse.json(
         {
           message:
             `Ghế ${occupiedTickets
-              .map(
-                (ticket) =>
-                  ticket.seatCode,
-              )
+              .map((ticket) => ticket.seatCode)
               .join(', ')} đã được đặt.`,
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
-
-    /* ========================================================
-       LẤY HOLD ĐÚNG GHẾ
-       ======================================================== */
 
     const myHolds =
       await prisma.seatHold.findMany({
         where: {
           showtimeId,
-
           userId,
 
           seatId: {
             in: selectedSeats.map(
-              (seat) =>
-                seat.id,
+              (seat) => seat.id,
             ),
           },
 
@@ -472,47 +339,30 @@ export async function POST(
         },
       });
 
-    const heldSeatIds =
-      new Set(
-        myHolds.map(
-          (hold) =>
-            hold.seatId,
-        ),
-      );
+    const heldSeatIds = new Set(
+      myHolds.map(
+        (hold) => hold.seatId,
+      ),
+    );
 
     const missingHeldSeats =
       selectedSeats.filter(
         (seat) =>
-          !heldSeatIds.has(
-            seat.id,
-          ),
+          !heldSeatIds.has(seat.id),
       );
 
-    if (
-      missingHeldSeats.length > 0
-    ) {
+    if (missingHeldSeats.length > 0) {
       return NextResponse.json(
         {
           message:
             `Ghế ${missingHeldSeats
-              .map(
-                (seat) =>
-                  seat.code,
-              )
+              .map((seat) => seat.code)
               .join(', ')} không còn được bạn giữ. Vui lòng quay lại chọn ghế.`,
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
-    /*
-     * Đảm bảo không có hold dư.
-     *
-     * Booking chỉ được chứa đúng các ghế
-     * mà frontend gửi lên.
-     */
     if (
       myHolds.length !==
       selectedSeats.length
@@ -522,105 +372,67 @@ export async function POST(
           message:
             'Thông tin ghế không hợp lệ. Vui lòng chọn lại ghế.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
-    /* ========================================================
-       TÍNH GIÁ
-       ======================================================== */
+    const getSeatPrice = (
+      seatType: string,
+    ): number => {
+      switch (seatType.toUpperCase()) {
+        case 'VIP':
+          return showtime.vipPrice;
 
-    const getSeatPrice =
-      (seatType: string): number => {
-        switch (
-          seatType.toUpperCase()
-        ) {
-          case 'VIP':
-            return showtime.vipPrice;
+        case 'COUPLE':
+          return showtime.couplePrice;
 
-          case 'COUPLE':
-            return showtime.couplePrice;
-
-          case 'STANDARD':
-          default:
-            return showtime.standardPrice;
-        }
-      };
+        case 'STANDARD':
+        default:
+          return showtime.standardPrice;
+      }
+    };
 
     const subtotal =
       selectedSeats.reduce(
-        (
-          total,
-          seat,
-        ) =>
+        (total, seat) =>
           total +
-          getSeatPrice(
-            String(
-              seat.type,
-            ),
-          ),
+          getSeatPrice(String(seat.type)),
         0,
       );
 
     const bookingFee = 0;
-
-    const totalPrice =
-      subtotal + bookingFee;
-
-    /* ========================================================
-       BOOKING CODE
-       ======================================================== */
+    const totalPrice = subtotal + bookingFee;
 
     const bookingCode =
       `BK${Date.now()
         .toString()
         .slice(-8)}${Math.floor(
-        Math.random() * 900 +
-          100,
+        Math.random() * 900 + 100,
       )}`;
 
-    /* ========================================================
-       CUSTOMER
-       ======================================================== */
-
     const customerName =
-      user.name ||
-      'Khách hàng';
+      user.name || 'Khách hàng';
 
     const customerEmail =
-      user.email ||
-      '';
+      user.email || '';
 
     const customerPhone =
-      user.phone ||
-      '';
-
-    /* ========================================================
-       TRANSACTION
-       ======================================================== */
+      user.phone || '';
 
     const booking =
       await prisma.$transaction(
         async (tx) => {
-          /*
-           * Lấy hold mới nhất trong transaction.
-           */
           const latestHolds =
             await tx.seatHold.findMany({
               where: {
                 id: {
                   in: myHolds.map(
-                    (hold) =>
-                      hold.id,
+                    (hold) => hold.id,
                   ),
                 },
 
                 showtimeId,
-
                 userId,
-
                 bookingId: null,
 
                 expiresAt: {
@@ -634,9 +446,6 @@ export async function POST(
               },
             });
 
-          /*
-           * Phải còn đủ tất cả hold.
-           */
           if (
             latestHolds.length !==
             selectedSeats.length
@@ -646,16 +455,12 @@ export async function POST(
             );
           }
 
-          /*
-           * Kiểm tra ghế bán lần cuối.
-           */
           const latestOccupiedTickets =
             await tx.ticket.findMany({
               where: {
                 seatId: {
                   in: selectedSeats.map(
-                    (seat) =>
-                      seat.id,
+                    (seat) => seat.id,
                   ),
                 },
 
@@ -675,45 +480,33 @@ export async function POST(
             });
 
           if (
-            latestOccupiedTickets.length >
-            0
+            latestOccupiedTickets.length > 0
           ) {
             throw new Error(
               `SEAT_ALREADY_SOLD:${latestOccupiedTickets
                 .map(
-                  (ticket) =>
-                    ticket.seatCode,
+                  (ticket) => ticket.seatCode,
                 )
                 .join(',')}`,
             );
           }
 
-          /*
-           * Tạo booking.
-           */
           const createdBooking =
             await tx.booking.create({
               data: {
                 bookingCode,
-
                 userId,
-
                 showtimeId,
 
                 customerName,
-
                 customerPhone,
-
                 customerEmail,
 
                 note: body.note
-                  ? String(
-                      body.note,
-                    )
+                  ? String(body.note)
                   : null,
 
                 paymentMethod,
-
                 totalPrice,
 
                 status:
@@ -724,26 +517,17 @@ export async function POST(
               },
             });
 
-          /*
-           * QUAN TRỌNG:
-           *
-           * Gắn CHÍNH XÁC các SeatHold
-           * vào Booking này.
-           */
           const updatedHolds =
             await tx.seatHold.updateMany({
               where: {
                 id: {
                   in: latestHolds.map(
-                    (hold) =>
-                      hold.id,
+                    (hold) => hold.id,
                   ),
                 },
 
                 bookingId: null,
-
                 userId,
-
                 showtimeId,
               },
 
@@ -762,9 +546,6 @@ export async function POST(
             );
           }
 
-          /*
-           * Tạo payment.
-           */
           await tx.payment.create({
             data: {
               bookingId:
@@ -773,11 +554,9 @@ export async function POST(
               provider:
                 paymentMethod,
 
-              amount:
-                totalPrice,
+              amount: totalPrice,
 
-              status:
-                'PENDING',
+              status: 'PENDING',
             },
           });
 
@@ -793,20 +572,16 @@ export async function POST(
         redirectTo:
           `/thanh-toan/${booking.id}`,
 
-        bookingId:
-          booking.id,
+        bookingId: booking.id,
 
         bookingCode:
           booking.bookingCode,
 
         paymentMethod,
 
-        amount:
-          totalPrice,
+        amount: totalPrice,
       },
-      {
-        status: 201,
-      },
+      { status: 201 },
     );
   } catch (error) {
     console.error(
@@ -831,9 +606,7 @@ export async function POST(
           message:
             `Ghế ${seats} vừa được người khác đặt. Vui lòng chọn ghế khác.`,
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -847,9 +620,7 @@ export async function POST(
           message:
             'Thời gian giữ ghế đã hết. Vui lòng quay lại chọn ghế.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -863,9 +634,7 @@ export async function POST(
           message:
             'Không thể xác nhận ghế cho đơn đặt vé. Vui lòng chọn lại ghế.',
         },
-        {
-          status: 409,
-        },
+        { status: 409 },
       );
     }
 
@@ -874,9 +643,7 @@ export async function POST(
         message:
           'Không thể tạo đơn đặt vé. Vui lòng thử lại.',
       },
-      {
-        status: 500,
-      },
+      { status: 500 },
     );
   }
 }
