@@ -19,13 +19,7 @@ type OnlinePaymentMethod =
   (typeof ONLINE_PAYMENT_METHODS)[number];
 
 /* ============================================================
-   GET - LẤY DANH SÁCH ĐƠN ĐẶT VÉ
-
-   ADMIN:
-   - Xem tất cả đơn
-
-   CUSTOMER:
-   - Chỉ xem đơn của chính mình
+   GET
    ============================================================ */
 
 export async function GET() {
@@ -33,10 +27,9 @@ export async function GET() {
     const session =
       await getServerSession(authOptions);
 
-    const userId =
-      session?.user?.id ?? null;
+    const user = session?.user;
 
-    if (!userId) {
+    if (!user?.id) {
       return NextResponse.json(
         {
           message:
@@ -48,8 +41,10 @@ export async function GET() {
       );
     }
 
+    const userId = user.id;
+
     const isAdmin =
-      session.user?.role === 'ADMIN';
+      user.role === 'ADMIN';
 
     const bookings =
       await prisma.booking.findMany({
@@ -82,81 +77,82 @@ export async function GET() {
         },
       });
 
-    const result = bookings.map(
-      (booking) => ({
-        id: booking.id,
+    const result =
+      bookings.map(
+        (booking) => ({
+          id: booking.id,
 
-        bookingCode:
-          booking.bookingCode,
+          bookingCode:
+            booking.bookingCode,
 
-        customerName:
-          booking.customerName,
+          customerName:
+            booking.customerName,
 
-        customerEmail:
-          booking.customerEmail,
+          customerEmail:
+            booking.customerEmail,
 
-        customerPhone:
-          booking.customerPhone,
+          customerPhone:
+            booking.customerPhone,
 
-        status:
-          booking.status,
+          status:
+            booking.status,
 
-        paymentStatus:
-          booking.paymentStatus,
+          paymentStatus:
+            booking.paymentStatus,
 
-        paymentMethod:
-          booking.paymentMethod,
+          paymentMethod:
+            booking.paymentMethod,
 
-        totalPrice:
-          booking.totalPrice,
+          totalPrice:
+            booking.totalPrice,
 
-        createdAt:
-          booking.createdAt,
+          createdAt:
+            booking.createdAt,
 
-        movieTitle:
-          booking.showtime.movie.title,
+          movieTitle:
+            booking.showtime.movie.title,
 
-        showtimeLabel:
-          `${booking.showtime.movie.title} · ` +
-          `${booking.showtime.hall.cinema.name} · ` +
-          `${booking.showtime.hall.name} · ` +
-          `${new Date(
-            booking.showtime.startTime,
-          ).toLocaleString(
-            'vi-VN',
-          )}`,
+          showtimeLabel:
+            `${booking.showtime.movie.title} · ` +
+            `${booking.showtime.hall.cinema.name} · ` +
+            `${booking.showtime.hall.name} · ` +
+            `${new Date(
+              booking.showtime.startTime,
+            ).toLocaleString(
+              'vi-VN',
+            )}`,
 
-        seats:
-          booking.tickets.map(
-            (ticket) =>
-              ticket.seatCode,
-          ),
+          seats:
+            booking.tickets.map(
+              (ticket) =>
+                ticket.seatCode,
+            ),
 
-        payment:
-          booking.payment
-            ? {
-                id:
-                  booking.payment.id,
+          payment:
+            booking.payment
+              ? {
+                  id:
+                    booking.payment.id,
 
-                provider:
-                  booking.payment.provider,
+                  provider:
+                    booking.payment.provider,
 
-                amount:
-                  booking.payment.amount,
+                  amount:
+                    booking.payment.amount,
 
-                status:
-                  booking.payment.status,
+                  status:
+                    booking.payment.status,
 
-                transactionCode:
-                  booking.payment
-                    .transactionCode,
+                  transactionCode:
+                    booking.payment
+                      .transactionCode,
 
-                paidAt:
-                  booking.payment.paidAt,
-              }
-            : null,
-      }),
-    );
+                  paidAt:
+                    booking.payment.paidAt,
+                }
+              : null,
+        }),
+      );
 
     return NextResponse.json(
       result,
@@ -183,40 +179,19 @@ export async function GET() {
 }
 
 /* ============================================================
-   POST - TẠO ĐƠN ĐẶT VÉ
-
-   LƯU Ý:
-
-   Bước này CHƯA thanh toán.
-
-   Booking:
-   PENDING
-
-   Payment:
-   PENDING
-
-   Ticket:
-   CHƯA tạo
-
-   SeatHold:
-   VẪN giữ nguyên
+   POST - TẠO BOOKING
    ============================================================ */
 
 export async function POST(
   request: Request,
 ) {
   try {
-    /* ==========================================================
-       KIỂM TRA ĐĂNG NHẬP
-       ========================================================== */
-
     const session =
       await getServerSession(authOptions);
 
-    const userId =
-      session?.user?.id ?? null;
+    const user = session?.user;
 
-    if (!userId) {
+    if (!user?.id) {
       return NextResponse.json(
         {
           message:
@@ -228,9 +203,7 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       ĐỌC REQUEST
-       ========================================================== */
+    const userId = user.id;
 
     const body =
       (await request.json()) as {
@@ -240,9 +213,9 @@ export async function POST(
         note?: string;
       };
 
-    /* ==========================================================
-       PHƯƠNG THỨC THANH TOÁN
-       ========================================================== */
+    /* ========================================================
+       PAYMENT METHOD
+       ======================================================== */
 
     const paymentMethod =
       String(
@@ -265,9 +238,9 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       SHOWTIME + GHẾ
-       ========================================================== */
+    /* ========================================================
+       SHOWTIME + SEATS
+       ======================================================== */
 
     const showtimeId =
       String(
@@ -303,9 +276,9 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       LẤY SHOWTIME
-       ========================================================== */
+    /* ========================================================
+       SHOWTIME
+       ======================================================== */
 
     const showtime =
       await prisma.showtime.findUnique({
@@ -337,12 +310,7 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       KIỂM TRA THỜI GIAN
-       ========================================================== */
-
-    const now =
-      new Date();
+    const now = new Date();
 
     if (
       showtime.startTime <= now
@@ -358,9 +326,9 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       LẤY GHẾ
-       ========================================================== */
+    /* ========================================================
+       GHẾ
+       ======================================================== */
 
     const selectedSeats =
       showtime.hall.seats.filter(
@@ -384,10 +352,6 @@ export async function POST(
         },
       );
     }
-
-    /* ==========================================================
-       KIỂM TRA GHẾ ACTIVE
-       ========================================================== */
 
     const inactiveSeats =
       selectedSeats.filter(
@@ -414,9 +378,9 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
+    /* ========================================================
        XÓA HOLD HẾT HẠN
-       ========================================================== */
+       ======================================================== */
 
     await prisma.seatHold.deleteMany({
       where: {
@@ -428,9 +392,9 @@ export async function POST(
       },
     });
 
-    /* ==========================================================
-       KIỂM TRA GHẾ ĐÃ BÁN
-       ========================================================== */
+    /* ========================================================
+       GHẾ ĐÃ BÁN
+       ======================================================== */
 
     const occupiedTickets =
       await prisma.ticket.findMany({
@@ -476,11 +440,9 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       KIỂM TRA USER ĐANG GIỮ GHẾ
-
-       Người dùng phải giữ tất cả ghế đã chọn.
-       ========================================================== */
+    /* ========================================================
+       LẤY HOLD ĐÚNG GHẾ
+       ======================================================== */
 
     const myHolds =
       await prisma.seatHold.findMany({
@@ -496,12 +458,15 @@ export async function POST(
             ),
           },
 
+          bookingId: null,
+
           expiresAt: {
             gt: now,
           },
         },
 
         select: {
+          id: true,
           seatId: true,
           expiresAt: true,
         },
@@ -542,30 +507,47 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       TÍNH GIÁ GHẾ
+    /*
+     * Đảm bảo không có hold dư.
+     *
+     * Booking chỉ được chứa đúng các ghế
+     * mà frontend gửi lên.
+     */
+    if (
+      myHolds.length !==
+      selectedSeats.length
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Thông tin ghế không hợp lệ. Vui lòng chọn lại ghế.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
 
-       Giá LUÔN lấy từ database Showtime.
-       Không lấy giá từ frontend.
-       ========================================================== */
+    /* ========================================================
+       TÍNH GIÁ
+       ======================================================== */
 
-    const getSeatPrice = (
-      seatType: string,
-    ): number => {
-      switch (
-        seatType.toUpperCase()
-      ) {
-        case 'VIP':
-          return showtime.vipPrice;
+    const getSeatPrice =
+      (seatType: string): number => {
+        switch (
+          seatType.toUpperCase()
+        ) {
+          case 'VIP':
+            return showtime.vipPrice;
 
-        case 'COUPLE':
-          return showtime.couplePrice;
+          case 'COUPLE':
+            return showtime.couplePrice;
 
-        case 'STANDARD':
-        default:
-          return showtime.standardPrice;
-      }
-    };
+          case 'STANDARD':
+          default:
+            return showtime.standardPrice;
+        }
+      };
 
     const subtotal =
       selectedSeats.reduce(
@@ -582,21 +564,14 @@ export async function POST(
         0,
       );
 
-    /* ==========================================================
-       PHÍ DỊCH VỤ
-
-       Hiện tại project của bạn đang để 0đ.
-       Không nhận bookingFee từ frontend.
-       ========================================================== */
-
     const bookingFee = 0;
 
     const totalPrice =
       subtotal + bookingFee;
 
-    /* ==========================================================
+    /* ========================================================
        BOOKING CODE
-       ========================================================== */
+       ======================================================== */
 
     const bookingCode =
       `BK${Date.now()
@@ -606,41 +581,74 @@ export async function POST(
           100,
       )}`;
 
-    /* ==========================================================
-       THÔNG TIN USER
-       ========================================================== */
+    /* ========================================================
+       CUSTOMER
+       ======================================================== */
 
     const customerName =
-      session.user?.name ||
+      user.name ||
       'Khách hàng';
 
     const customerEmail =
-      session.user?.email ||
+      user.email ||
       '';
 
     const customerPhone =
-      session.user?.phone ||
+      user.phone ||
       '';
 
-    /* ==========================================================
+    /* ========================================================
        TRANSACTION
-
-       Ở đây:
-       - KHÔNG tạo Ticket
-       - KHÔNG xóa SeatHold
-
-       Chỉ tạo:
-       - Booking PENDING
-       - Payment PENDING
-       ========================================================== */
+       ======================================================== */
 
     const booking =
       await prisma.$transaction(
         async (tx) => {
-          /* ----------------------------------------------------
-             KIỂM TRA LẠI GHẾ ĐÃ BÁN
-             ---------------------------------------------------- */
+          /*
+           * Lấy hold mới nhất trong transaction.
+           */
+          const latestHolds =
+            await tx.seatHold.findMany({
+              where: {
+                id: {
+                  in: myHolds.map(
+                    (hold) =>
+                      hold.id,
+                  ),
+                },
 
+                showtimeId,
+
+                userId,
+
+                bookingId: null,
+
+                expiresAt: {
+                  gt: new Date(),
+                },
+              },
+
+              select: {
+                id: true,
+                seatId: true,
+              },
+            });
+
+          /*
+           * Phải còn đủ tất cả hold.
+           */
+          if (
+            latestHolds.length !==
+            selectedSeats.length
+          ) {
+            throw new Error(
+              'SEAT_HOLD_EXPIRED',
+            );
+          }
+
+          /*
+           * Kiểm tra ghế bán lần cuối.
+           */
           const latestOccupiedTickets =
             await tx.ticket.findMany({
               where: {
@@ -680,47 +688,9 @@ export async function POST(
             );
           }
 
-          /* ----------------------------------------------------
-             KIỂM TRA HOLD LẦN CUỐI TRONG TRANSACTION
-             ---------------------------------------------------- */
-
-          const latestHolds =
-            await tx.seatHold.findMany({
-              where: {
-                showtimeId,
-
-                userId,
-
-                seatId: {
-                  in: selectedSeats.map(
-                    (seat) =>
-                      seat.id,
-                  ),
-                },
-
-                expiresAt: {
-                  gt: new Date(),
-                },
-              },
-
-              select: {
-                seatId: true,
-              },
-            });
-
-          if (
-            latestHolds.length !==
-            selectedSeats.length
-          ) {
-            throw new Error(
-              'SEAT_HOLD_EXPIRED',
-            );
-          }
-
-          /* ----------------------------------------------------
-             TẠO BOOKING
-             ---------------------------------------------------- */
-
+          /*
+           * Tạo booking.
+           */
           const createdBooking =
             await tx.booking.create({
               data: {
@@ -754,10 +724,47 @@ export async function POST(
               },
             });
 
-          /* ----------------------------------------------------
-             TẠO PAYMENT
-             ---------------------------------------------------- */
+          /*
+           * QUAN TRỌNG:
+           *
+           * Gắn CHÍNH XÁC các SeatHold
+           * vào Booking này.
+           */
+          const updatedHolds =
+            await tx.seatHold.updateMany({
+              where: {
+                id: {
+                  in: latestHolds.map(
+                    (hold) =>
+                      hold.id,
+                  ),
+                },
 
+                bookingId: null,
+
+                userId,
+
+                showtimeId,
+              },
+
+              data: {
+                bookingId:
+                  createdBooking.id,
+              },
+            });
+
+          if (
+            updatedHolds.count !==
+            latestHolds.length
+          ) {
+            throw new Error(
+              'SEAT_HOLD_ASSIGN_FAILED',
+            );
+          }
+
+          /*
+           * Tạo payment.
+           */
           await tx.payment.create({
             data: {
               bookingId:
@@ -774,24 +781,9 @@ export async function POST(
             },
           });
 
-          /*
-           * QUAN TRỌNG:
-           *
-           * KHÔNG tạo Ticket ở đây.
-           *
-           * KHÔNG xóa SeatHold ở đây.
-           *
-           * Hai việc này chỉ xảy ra sau khi
-           * thanh toán được xác nhận thành công.
-           */
-
           return createdBooking;
         },
       );
-
-    /* ==========================================================
-       RESPONSE
-       ========================================================== */
 
     return NextResponse.json(
       {
@@ -822,10 +814,6 @@ export async function POST(
       error,
     );
 
-    /* ==========================================================
-       GHẾ ĐÃ BỊ ĐẶT
-       ========================================================== */
-
     if (
       error instanceof Error &&
       error.message.startsWith(
@@ -849,10 +837,6 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       HOLD HẾT HẠN
-       ========================================================== */
-
     if (
       error instanceof Error &&
       error.message ===
@@ -869,9 +853,21 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       LỖI CHUNG
-       ========================================================== */
+    if (
+      error instanceof Error &&
+      error.message ===
+        'SEAT_HOLD_ASSIGN_FAILED'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Không thể xác nhận ghế cho đơn đặt vé. Vui lòng chọn lại ghế.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
 
     return NextResponse.json(
       {

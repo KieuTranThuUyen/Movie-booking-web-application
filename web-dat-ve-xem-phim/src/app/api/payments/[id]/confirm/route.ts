@@ -16,25 +16,7 @@ type RouteContext = {
 };
 
 /* ============================================================
-   POST - XÁC NHẬN THANH TOÁN DEMO
-
-   Flow:
-
-   Booking PENDING
-       +
-   Payment PENDING
-       +
-   SeatHold còn hạn
-       ↓
-   kiểm tra lại
-       ↓
-   tạo Ticket
-       ↓
-   Payment PAID
-       ↓
-   Booking CONFIRMED
-       ↓
-   xóa SeatHold
+   POST - CONFIRM DEMO PAYMENT
    ============================================================ */
 
 export async function POST(
@@ -42,14 +24,8 @@ export async function POST(
   context: RouteContext,
 ) {
   try {
-    /* ==========================================================
-       KIỂM TRA ĐĂNG NHẬP
-       ========================================================== */
-
     const session =
-      await getServerSession(
-        authOptions,
-      );
+      await getServerSession(authOptions);
 
     const userId =
       session?.user?.id;
@@ -66,10 +42,6 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       LẤY BOOKING ID
-       ========================================================== */
-
     const { id } =
       await context.params;
 
@@ -85,420 +57,42 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       LẤY BOOKING
-       ========================================================== */
-
-    const booking =
-      await prisma.booking.findUnique({
-        where: {
-          id,
-        },
-
-        include: {
-          payment: true,
-
-          tickets: true,
-
-          showtime: {
-            include: {
-              movie: true,
-
-              hall: {
-                include: {
-                  seats: true,
-                  cinema: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-    if (!booking) {
-      return NextResponse.json(
-        {
-          message:
-            'Không tìm thấy đơn đặt vé.',
-        },
-        {
-          status: 404,
-        },
-      );
-    }
-
-    /* ==========================================================
-       KIỂM TRA QUYỀN
-
-       Customer chỉ được thanh toán đơn của mình.
-       ========================================================== */
-
-    if (
-      booking.userId !== userId
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Bạn không có quyền thanh toán đơn này.',
-        },
-        {
-          status: 403,
-        },
-      );
-    }
-
-    /* ==========================================================
-       ĐÃ THANH TOÁN
-
-       Cho phép gọi API nhiều lần mà không tạo Ticket trùng.
-       ========================================================== */
-
-    if (
-      booking.paymentStatus ===
-        PaymentStatus.PAID &&
-      booking.status ===
-        BookingStatus.CONFIRMED
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Đơn vé đã được thanh toán.',
-          bookingId:
-            booking.id,
-          bookingCode:
-            booking.bookingCode,
-          status:
-            booking.status,
-          paymentStatus:
-            booking.paymentStatus,
-          redirectTo:
-            `/ve/${booking.id}`,
-        },
-        {
-          status: 200,
-        },
-      );
-    }
-
-    /* ==========================================================
-       KIỂM TRA BOOKING STATUS
-       ========================================================== */
-
-    if (
-      booking.status ===
-      BookingStatus.CANCELED
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Đơn đặt vé đã bị hủy.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
-       KIỂM TRA PAYMENT
-       ========================================================== */
-
-    if (!booking.payment) {
-      return NextResponse.json(
-        {
-          message:
-            'Đơn đặt vé chưa có giao dịch thanh toán.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    if (
-      booking.payment.status !==
-      'PENDING'
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Giao dịch thanh toán không còn ở trạng thái chờ xử lý.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
-       KIỂM TRA SỐ TIỀN
-
-       Payment.amount phải đúng Booking.totalPrice.
-       ========================================================== */
-
-    if (
-      booking.payment.amount !==
-      booking.totalPrice
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Số tiền thanh toán không hợp lệ.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
-       KIỂM TRA SHOWTIME
-       ========================================================== */
-
-    const now =
-      new Date();
-
-    if (
-      booking.showtime.startTime <=
-      now
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Suất chiếu đã bắt đầu. Không thể thanh toán.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
-       LẤY GHẾ TỪ SEAT HOLD
-
-       Đây là nguồn xác nhận ghế trong lúc thanh toán.
-       ========================================================== */
-
-    const seatHolds =
-      await prisma.seatHold.findMany({
-        where: {
-          showtimeId:
-            booking.showtimeId,
-
-          userId,
-
-          expiresAt: {
-            gt: now,
-          },
-        },
-
-        include: {
-          seat: true,
-        },
-      });
-
-    if (
-      seatHolds.length === 0
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Thời gian giữ ghế đã hết. Vui lòng quay lại chọn ghế.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
-       XÁC ĐỊNH GHẾ CỦA BOOKING
-
-       Booking chưa có Ticket vì Ticket chỉ được tạo
-       sau khi thanh toán.
-
-       Vì vậy sử dụng SeatHold của user + showtime.
-       ========================================================== */
-
-    const heldSeatIds =
-      seatHolds.map(
-        (hold) =>
-          hold.seatId,
-      );
-
-    /* ==========================================================
-       KIỂM TRA GHẾ CÒN HOẠT ĐỘNG
-       ========================================================== */
-
-    const inactiveHeldSeats =
-      seatHolds.filter(
-        (hold) =>
-          !hold.seat.isActive,
-      );
-
-    if (
-      inactiveHeldSeats.length >
-      0
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            `Ghế ${inactiveHeldSeats
-              .map(
-                (hold) =>
-                  hold.seat.code,
-              )
-              .join(', ')} hiện không thể sử dụng.`,
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
-       KIỂM TRA GHẾ ĐÃ BỊ BÁN
-
-       Kiểm tra lần cuối trước transaction.
-       ========================================================== */
-
-    const occupiedTickets =
-      await prisma.ticket.findMany({
-        where: {
-          seatId: {
-            in: heldSeatIds,
-          },
-
-          booking: {
-            showtimeId:
-              booking.showtimeId,
-
-            status: {
-              not:
-                BookingStatus.CANCELED,
-            },
-          },
-        },
-
-        select: {
-          seatCode: true,
-        },
-      });
-
-    if (
-      occupiedTickets.length >
-      0
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            `Ghế ${occupiedTickets
-              .map(
-                (ticket) =>
-                  ticket.seatCode,
-              )
-              .join(', ')} đã được người khác đặt.`,
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
-       TÍNH LẠI GIÁ
-
-       Không tin giá từ frontend.
-       ========================================================== */
-
-    const getSeatPrice = (
-      seatType: string,
-    ): number => {
-      switch (
-        seatType.toUpperCase()
-      ) {
-        case 'VIP':
-          return booking.showtime
-            .vipPrice;
-
-        case 'COUPLE':
-          return booking.showtime
-            .couplePrice;
-
-        case 'STANDARD':
-        default:
-          return booking.showtime
-            .standardPrice;
-      }
-    };
-
-    const calculatedSubtotal =
-      seatHolds.reduce(
-        (
-          total,
-          hold,
-        ) =>
-          total +
-          getSeatPrice(
-            String(
-              hold.seat.type,
-            ),
-          ),
-        0,
-      );
-
-    const bookingFee = 0;
-
-    const calculatedTotal =
-      calculatedSubtotal +
-      bookingFee;
-
-    /* ==========================================================
-       KIỂM TRA TOTAL
-       ========================================================== */
-
-    if (
-      calculatedTotal !==
-      booking.totalPrice
-    ) {
-      return NextResponse.json(
-        {
-          message:
-            'Tổng tiền đơn hàng không khớp với giá hiện tại. Vui lòng tạo lại đơn.',
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    /* ==========================================================
+    /* ========================================================
        TRANSACTION
-
-       Đây là bước hoàn tất thanh toán.
-       ========================================================== */
+       ======================================================== */
 
     const result =
       await prisma.$transaction(
         async (tx) => {
-          /* ----------------------------------------------------
-             LẤY LẠI BOOKING
-             ---------------------------------------------------- */
+          /* ==================================================
+             BOOKING
+             ================================================== */
 
-          const latestBooking =
+          const booking =
             await tx.booking.findUnique({
               where: {
-                id: booking.id,
+                id,
               },
 
               include: {
                 payment: true,
 
+                tickets: true,
+
+                seatHolds: {
+                  include: {
+                    seat: true,
+                  },
+                },
+
                 showtime: {
                   include: {
+                    movie: true,
+
                     hall: {
                       include: {
                         seats: true,
+                        cinema: true,
                       },
                     },
                   },
@@ -506,27 +100,47 @@ export async function POST(
               },
             });
 
-          if (!latestBooking) {
+          if (!booking) {
             throw new Error(
               'BOOKING_NOT_FOUND',
             );
           }
 
-          /* ----------------------------------------------------
-             KIỂM TRA LẠI STATUS
-             ---------------------------------------------------- */
+          /* ==================================================
+             QUYỀN
+             ================================================== */
 
           if (
-            latestBooking.paymentStatus ===
-              PaymentStatus.PAID &&
-            latestBooking.status ===
-              BookingStatus.CONFIRMED
+            booking.userId !==
+            userId
           ) {
-            return latestBooking;
+            throw new Error(
+              'FORBIDDEN',
+            );
           }
 
+          /* ==================================================
+             IDEMPOTENCY
+             ================================================== */
+
           if (
-            latestBooking.status ===
+            booking.paymentStatus ===
+              PaymentStatus.PAID &&
+            booking.status ===
+              BookingStatus.CONFIRMED
+          ) {
+            return {
+              booking,
+              alreadyPaid: true,
+            };
+          }
+
+          /* ==================================================
+             BOOKING STATUS
+             ================================================== */
+
+          if (
+            booking.status ===
             BookingStatus.CANCELED
           ) {
             throw new Error(
@@ -535,15 +149,26 @@ export async function POST(
           }
 
           if (
-            !latestBooking.payment
+            booking.status !==
+            BookingStatus.PENDING
           ) {
+            throw new Error(
+              'BOOKING_NOT_PENDING',
+            );
+          }
+
+          /* ==================================================
+             PAYMENT
+             ================================================== */
+
+          if (!booking.payment) {
             throw new Error(
               'PAYMENT_NOT_FOUND',
             );
           }
 
           if (
-            latestBooking.payment.status !==
+            booking.payment.status !==
             'PENDING'
           ) {
             throw new Error(
@@ -551,46 +176,160 @@ export async function POST(
             );
           }
 
-          /* ----------------------------------------------------
-             KIỂM TRA HOLD LẠI TRONG TRANSACTION
-             ---------------------------------------------------- */
+          if (
+            booking.payment.amount !==
+            booking.totalPrice
+          ) {
+            throw new Error(
+              'PAYMENT_AMOUNT_INVALID',
+            );
+          }
 
-          const latestHolds =
+          /* ==================================================
+             SHOWTIME
+             ================================================== */
+
+          const now =
+            new Date();
+
+          if (
+            booking.showtime.startTime <=
+            now
+          ) {
+            throw new Error(
+              'SHOWTIME_STARTED',
+            );
+          }
+
+          /* ==================================================
+             SEAT HOLD
+
+             QUAN TRỌNG:
+             Chỉ lấy SeatHold thuộc booking này.
+             ================================================== */
+
+          const seatHolds =
             await tx.seatHold.findMany({
               where: {
+                bookingId:
+                  booking.id,
+
                 showtimeId:
-                  latestBooking.showtimeId,
+                  booking.showtimeId,
 
                 userId,
 
                 expiresAt: {
-                  gt: new Date(),
+                  gt: now,
                 },
               },
 
               include: {
                 seat: true,
               },
+
+              orderBy: {
+                seatId: 'asc',
+              },
             });
 
           if (
-            latestHolds.length !==
-            seatHolds.length
+            seatHolds.length === 0
           ) {
             throw new Error(
               'SEAT_HOLD_EXPIRED',
             );
           }
 
-          /* ----------------------------------------------------
-             KIỂM TRA GHẾ ĐÃ BÁN LẠI
-             ---------------------------------------------------- */
+          /* ==================================================
+             GHẾ ACTIVE
+             ================================================== */
 
-          const latestOccupiedTickets =
+          const inactiveSeats =
+            seatHolds.filter(
+              (hold) =>
+                !hold.seat.isActive,
+            );
+
+          if (
+            inactiveSeats.length > 0
+          ) {
+            throw new Error(
+              `SEAT_INACTIVE:${inactiveSeats
+                .map(
+                  (hold) =>
+                    hold.seat.code,
+                )
+                .join(',')}`,
+            );
+          }
+
+          /* ==================================================
+             TÍNH GIÁ
+             ================================================== */
+
+          const getSeatPrice =
+            (seatType: string) => {
+              switch (
+                seatType.toUpperCase()
+              ) {
+                case 'VIP':
+                  return booking
+                    .showtime
+                    .vipPrice;
+
+                case 'COUPLE':
+                  return booking
+                    .showtime
+                    .couplePrice;
+
+                case 'STANDARD':
+                default:
+                  return booking
+                    .showtime
+                    .standardPrice;
+              }
+            };
+
+          const calculatedSubtotal =
+            seatHolds.reduce(
+              (
+                total,
+                hold,
+              ) =>
+                total +
+                getSeatPrice(
+                  String(
+                    hold.seat.type,
+                  ),
+                ),
+              0,
+            );
+
+          const bookingFee = 0;
+
+          const calculatedTotal =
+            calculatedSubtotal +
+            bookingFee;
+
+          if (
+            calculatedTotal !==
+            booking.totalPrice
+          ) {
+            throw new Error(
+              'TOTAL_INVALID',
+            );
+          }
+
+          /* ==================================================
+             GHẾ ĐÃ BÁN
+             ================================================== */
+
+          const occupiedTickets =
             await tx.ticket.findMany({
               where: {
                 seatId: {
-                  in: latestHolds.map(
+                  in: seatHolds.map(
                     (hold) =>
                       hold.seatId,
                   ),
@@ -598,7 +337,7 @@ export async function POST(
 
                 booking: {
                   showtimeId:
-                    latestBooking.showtimeId,
+                    booking.showtimeId,
 
                   status: {
                     not:
@@ -613,11 +352,10 @@ export async function POST(
             });
 
           if (
-            latestOccupiedTickets.length >
-            0
+            occupiedTickets.length > 0
           ) {
             throw new Error(
-              `SEAT_ALREADY_SOLD:${latestOccupiedTickets
+              `SEAT_ALREADY_SOLD:${occupiedTickets
                 .map(
                   (ticket) =>
                     ticket.seatCode,
@@ -626,44 +364,59 @@ export async function POST(
             );
           }
 
-          /* ----------------------------------------------------
+          /* ==================================================
+             TICKET ĐÃ TỒN TẠI
+             ================================================== */
+
+          if (
+            booking.tickets.length > 0
+          ) {
+            throw new Error(
+              'TICKETS_ALREADY_EXIST',
+            );
+          }
+
+          /* ==================================================
              TẠO TICKET
-             ---------------------------------------------------- */
+             ================================================== */
 
           await tx.ticket.createMany({
-            data: latestHolds.map(
-              (hold) => ({
-                bookingId:
-                  latestBooking.id,
-
-                seatId:
-                  hold.seatId,
-
-                seatCode:
-                  hold.seat.code,
-
-                price:
+            data: seatHolds.map(
+              (hold) => {
+                const price =
                   getSeatPrice(
                     String(
                       hold.seat.type,
                     ),
-                  ),
+                  );
 
-                qrCode:
-                  `${latestBooking.bookingCode}-${hold.seat.code}`,
-              }),
+                return {
+                  bookingId:
+                    booking.id,
+
+                  seatId:
+                    hold.seatId,
+
+                  seatCode:
+                    hold.seat.code,
+
+                  price,
+
+                  qrCode:
+                    `${booking.bookingCode}-${hold.seat.code}`,
+                };
+              },
             ),
           });
 
-          /* ----------------------------------------------------
+          /* ==================================================
              PAYMENT -> PAID
-             ---------------------------------------------------- */
+             ================================================== */
 
           await tx.payment.update({
             where: {
               id:
-                latestBooking
-                  .payment.id,
+                booking.payment.id,
             },
 
             data: {
@@ -678,15 +431,15 @@ export async function POST(
             },
           });
 
-          /* ----------------------------------------------------
+          /* ==================================================
              BOOKING -> CONFIRMED
-             ---------------------------------------------------- */
+             ================================================== */
 
           const updatedBooking =
             await tx.booking.update({
               where: {
                 id:
-                  latestBooking.id,
+                  booking.id,
               },
 
               data: {
@@ -698,33 +451,64 @@ export async function POST(
               },
             });
 
-          /* ----------------------------------------------------
-             XÓA SEAT HOLD
-             ---------------------------------------------------- */
+          /* ==================================================
+             XÓA HOLD
+             ================================================== */
 
           await tx.seatHold.deleteMany({
             where: {
-              showtimeId:
-                latestBooking.showtimeId,
-
-              userId,
-
-              seatId: {
-                in: latestHolds.map(
-                  (hold) =>
-                    hold.seatId,
-                ),
-              },
+              bookingId:
+                booking.id,
             },
           });
 
-          return updatedBooking;
+          return {
+            booking:
+              updatedBooking,
+
+            alreadyPaid: false,
+          };
         },
       );
 
-    /* ==========================================================
+    /* ========================================================
+       ALREADY PAID
+       ======================================================== */
+
+    if (
+      result.alreadyPaid
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Đơn vé đã được thanh toán.',
+
+          bookingId:
+            result.booking.id,
+
+          bookingCode:
+            result.booking
+              .bookingCode,
+
+          status:
+            result.booking.status,
+
+          paymentStatus:
+            result.booking
+              .paymentStatus,
+
+          redirectTo:
+            `/ve/${result.booking.id}`,
+        },
+        {
+          status: 200,
+        },
+      );
+    }
+
+    /* ========================================================
        SUCCESS
-       ========================================================== */
+       ======================================================== */
 
     return NextResponse.json(
       {
@@ -732,19 +516,21 @@ export async function POST(
           'Thanh toán Demo thành công.',
 
         bookingId:
-          result.id,
+          result.booking.id,
 
         bookingCode:
-          result.bookingCode,
+          result.booking
+            .bookingCode,
 
         status:
-          result.status,
+          result.booking.status,
 
         paymentStatus:
-          result.paymentStatus,
+          result.booking
+            .paymentStatus,
 
         redirectTo:
-          `/ve/${result.id}`,
+          `/ve/${result.booking.id}`,
       },
       {
         status: 200,
@@ -755,10 +541,6 @@ export async function POST(
       'POST /api/payments/[id]/confirm error:',
       error,
     );
-
-    /* ==========================================================
-       BOOKING NOT FOUND
-       ========================================================== */
 
     if (
       error instanceof Error &&
@@ -776,9 +558,21 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       BOOKING CANCELED
-       ========================================================== */
+    if (
+      error instanceof Error &&
+      error.message ===
+        'FORBIDDEN'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Bạn không có quyền thanh toán đơn này.',
+        },
+        {
+          status: 403,
+        },
+      );
+    }
 
     if (
       error instanceof Error &&
@@ -796,9 +590,21 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       PAYMENT
-       ========================================================== */
+    if (
+      error instanceof Error &&
+      error.message ===
+        'BOOKING_NOT_PENDING'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Đơn đặt vé không còn ở trạng thái chờ thanh toán.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
 
     if (
       error instanceof Error &&
@@ -832,9 +638,37 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       SEAT HOLD
-       ========================================================== */
+    if (
+      error instanceof Error &&
+      error.message ===
+        'PAYMENT_AMOUNT_INVALID'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Số tiền thanh toán không hợp lệ.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        'SHOWTIME_STARTED'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Suất chiếu đã bắt đầu. Không thể thanh toán.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
 
     if (
       error instanceof Error &&
@@ -852,9 +686,28 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       SEAT SOLD
-       ========================================================== */
+    if (
+      error instanceof Error &&
+      error.message.startsWith(
+        'SEAT_INACTIVE:',
+      )
+    ) {
+      const seats =
+        error.message.replace(
+          'SEAT_INACTIVE:',
+          '',
+        );
+
+      return NextResponse.json(
+        {
+          message:
+            `Ghế ${seats} hiện không thể sử dụng.`,
+        },
+        {
+          status: 409,
+        },
+      );
+    }
 
     if (
       error instanceof Error &&
@@ -879,9 +732,37 @@ export async function POST(
       );
     }
 
-    /* ==========================================================
-       LỖI CHUNG
-       ========================================================== */
+    if (
+      error instanceof Error &&
+      error.message ===
+        'TICKETS_ALREADY_EXIST'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Vé của đơn hàng đã tồn tại. Không thể tạo vé trùng.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        'TOTAL_INVALID'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Tổng tiền đơn hàng không hợp lệ. Vui lòng tạo lại đơn.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
 
     return NextResponse.json(
       {
