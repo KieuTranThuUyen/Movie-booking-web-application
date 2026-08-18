@@ -12,7 +12,8 @@ export function PaymentConfirmButton({
   bookingId,
   isPaid,
 }: PaymentConfirmButtonProps) {
-  const router = useRouter();
+  const router =
+    useRouter();
 
   const [loading, setLoading] =
     useState(false);
@@ -20,50 +21,80 @@ export function PaymentConfirmButton({
   const [message, setMessage] =
     useState('');
 
-  const handleConfirm = async () => {
-    setLoading(true);
-    setMessage('');
+  /* ==========================================================
+     XÁC NHẬN THANH TOÁN
+     ========================================================== */
 
-    try {
-      const response = await fetch(
-        `/api/payments/${bookingId}/confirm`,
-        {
-          method: 'POST',
-        }
-      );
-
-      const data =
-        (await response.json()) as {
-          message?: string;
-        };
-
-      if (!response.ok) {
-        setMessage(
-          data.message ||
-            'Không thể xác nhận thanh toán.'
-        );
-
+  const handleConfirm =
+    async () => {
+      if (loading) {
         return;
       }
 
-      router.push(
-        `/don-hang?booking=${bookingId}`
-      );
+      setLoading(true);
+      setMessage('');
 
-      router.refresh();
-    } catch (error) {
-      console.error(
-        'Confirm payment error:',
-        error
-      );
+      try {
+        const response =
+          await fetch(
+            `/api/payments/${bookingId}/confirm`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type':
+                  'application/json',
+              },
+            },
+          );
 
-      setMessage(
-        'Không thể kết nối hệ thống thanh toán.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        const data =
+          (await response.json()) as {
+            message?: string;
+            redirectTo?: string;
+            bookingId?: string;
+          };
+
+        if (!response.ok) {
+          setMessage(
+            data.message ||
+              'Không thể xác nhận thanh toán.',
+          );
+
+          return;
+        }
+
+        /* ======================================================
+           SAU KHI THANH TOÁN THÀNH CÔNG
+
+           Đi thẳng đến vé điện tử.
+           ====================================================== */
+
+        const target =
+          data.redirectTo ||
+          `/ve/${data.bookingId || bookingId}`;
+
+        router.push(
+          target,
+        );
+
+        router.refresh();
+      } catch (error) {
+        console.error(
+          'Confirm payment error:',
+          error,
+        );
+
+        setMessage(
+          'Không thể kết nối hệ thống thanh toán.',
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  /* ==========================================================
+     ĐÃ THANH TOÁN
+     ========================================================== */
 
   if (isPaid) {
     return (
@@ -80,20 +111,23 @@ export function PaymentConfirmButton({
           type="button"
           onClick={() =>
             router.push(
-              `/don-hang?booking=${bookingId}`
+              `/ve/${bookingId}`,
             )
           }
-          className="mt-4 rounded-xl bg-white px-5 py-3 font-semibold text-slate-950"
+          className="mt-4 rounded-xl bg-white px-5 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
         >
-          Xem vé
+          Xem vé điện tử
         </button>
       </div>
     );
   }
 
+  /* ==========================================================
+     CHƯA THANH TOÁN
+     ========================================================== */
+
   return (
     <div className="mt-6">
-
       {message && (
         <div className="mb-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
           {message}
@@ -102,18 +136,20 @@ export function PaymentConfirmButton({
 
       <button
         type="button"
-        onClick={handleConfirm}
+        onClick={
+          handleConfirm
+        }
         disabled={loading}
         className="w-full rounded-2xl bg-emerald-400 px-5 py-4 font-bold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading
-          ? 'Đang xác nhận...'
-          : '✓ Xác nhận thanh toán'}
+          ? 'Đang xử lý thanh toán...'
+          : '✓ Xác nhận thanh toán Demo'}
       </button>
 
-      <p className="mt-3 text-center text-xs text-slate-500">
-        Demo: Sau khi thanh toán, nhấn nút
-        để xác nhận giao dịch.
+      <p className="mt-3 text-center text-xs leading-5 text-slate-500">
+        Đây là thanh toán mô phỏng phục vụ
+        kiểm thử quy trình đặt vé.
       </p>
     </div>
   );

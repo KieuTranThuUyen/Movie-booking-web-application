@@ -18,26 +18,20 @@ const ONLINE_PAYMENT_METHODS = [
 type OnlinePaymentMethod =
   (typeof ONLINE_PAYMENT_METHODS)[number];
 
-// ============================================================
-// GET - LẤY DANH SÁCH ĐƠN ĐẶT VÉ
-//
-// ADMIN:
-//   -> xem tất cả
-//
-// CUSTOMER:
-//   -> chỉ xem đơn của chính mình
-// ============================================================
+/* ============================================================
+   GET - LẤY DANH SÁCH ĐƠN ĐẶT VÉ
+
+   ADMIN:
+   - Xem tất cả đơn
+
+   CUSTOMER:
+   - Chỉ xem đơn của chính mình
+   ============================================================ */
 
 export async function GET() {
   try {
-    // ==========================================================
-    // KIỂM TRA ĐĂNG NHẬP
-    // ==========================================================
-
     const session =
-      await getServerSession(
-        authOptions,
-      );
+      await getServerSession(authOptions);
 
     const userId =
       session?.user?.id ?? null;
@@ -54,20 +48,8 @@ export async function GET() {
       );
     }
 
-    // ==========================================================
-    // XÁC ĐỊNH QUYỀN
-    // ==========================================================
-
     const isAdmin =
-      session.user?.role ===
-      'ADMIN';
-
-    // ==========================================================
-    // ĐIỀU KIỆN LẤY BOOKING
-    //
-    // ADMIN -> không giới hạn user
-    // CUSTOMER -> chỉ userId hiện tại
-    // ==========================================================
+      session.user?.role === 'ADMIN';
 
     const bookings =
       await prisma.booking.findMany({
@@ -95,12 +77,10 @@ export async function GET() {
           },
 
           tickets: true,
+
+          payment: true,
         },
       });
-
-    // ==========================================================
-    // FORMAT KẾT QUẢ
-    // ==========================================================
 
     const result = bookings.map(
       (booking) => ({
@@ -151,6 +131,30 @@ export async function GET() {
             (ticket) =>
               ticket.seatCode,
           ),
+
+        payment:
+          booking.payment
+            ? {
+                id:
+                  booking.payment.id,
+
+                provider:
+                  booking.payment.provider,
+
+                amount:
+                  booking.payment.amount,
+
+                status:
+                  booking.payment.status,
+
+                transactionCode:
+                  booking.payment
+                    .transactionCode,
+
+                paidAt:
+                  booking.payment.paidAt,
+              }
+            : null,
       }),
     );
 
@@ -178,22 +182,36 @@ export async function GET() {
   }
 }
 
-// ============================================================
-// POST - TẠO ĐƠN ĐẶT VÉ
-// ============================================================
+/* ============================================================
+   POST - TẠO ĐƠN ĐẶT VÉ
+
+   LƯU Ý:
+
+   Bước này CHƯA thanh toán.
+
+   Booking:
+   PENDING
+
+   Payment:
+   PENDING
+
+   Ticket:
+   CHƯA tạo
+
+   SeatHold:
+   VẪN giữ nguyên
+   ============================================================ */
 
 export async function POST(
   request: Request,
 ) {
   try {
-    // ==========================================================
-    // KIỂM TRA ĐĂNG NHẬP
-    // ==========================================================
+    /* ==========================================================
+       KIỂM TRA ĐĂNG NHẬP
+       ========================================================== */
 
     const session =
-      await getServerSession(
-        authOptions,
-      );
+      await getServerSession(authOptions);
 
     const userId =
       session?.user?.id ?? null;
@@ -210,22 +228,21 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // ĐỌC REQUEST
-    // ==========================================================
+    /* ==========================================================
+       ĐỌC REQUEST
+       ========================================================== */
 
     const body =
       (await request.json()) as {
         paymentMethod?: string;
         showtimeId?: string;
         seats?: string;
-        bookingFee?: number;
         note?: string;
       };
 
-    // ==========================================================
-    // KIỂM TRA PHƯƠNG THỨC THANH TOÁN
-    // ==========================================================
+    /* ==========================================================
+       PHƯƠNG THỨC THANH TOÁN
+       ========================================================== */
 
     const paymentMethod =
       String(
@@ -248,14 +265,14 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // KIỂM TRA SUẤT CHIẾU + GHẾ
-    // ==========================================================
+    /* ==========================================================
+       SHOWTIME + GHẾ
+       ========================================================== */
 
     const showtimeId =
       String(
         body.showtimeId ?? '',
-      );
+      ).trim();
 
     const selectedSeatCodes =
       String(body.seats ?? '')
@@ -286,9 +303,9 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // LẤY SUẤT CHIẾU
-    // ==========================================================
+    /* ==========================================================
+       LẤY SHOWTIME
+       ========================================================== */
 
     const showtime =
       await prisma.showtime.findUnique({
@@ -320,18 +337,20 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // KIỂM TRA THỜI GIAN
-    // ==========================================================
+    /* ==========================================================
+       KIỂM TRA THỜI GIAN
+       ========================================================== */
+
+    const now =
+      new Date();
 
     if (
-      showtime.startTime <=
-      new Date()
+      showtime.startTime <= now
     ) {
       return NextResponse.json(
         {
           message:
-            'Suất chiếu đã bắt đầu. Không thể thanh toán.',
+            'Suất chiếu đã bắt đầu. Không thể đặt vé.',
         },
         {
           status: 400,
@@ -339,9 +358,9 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // LẤY GHẾ
-    // ==========================================================
+    /* ==========================================================
+       LẤY GHẾ
+       ========================================================== */
 
     const selectedSeats =
       showtime.hall.seats.filter(
@@ -366,13 +385,14 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // KIỂM TRA GHẾ ACTIVE
-    // ==========================================================
+    /* ==========================================================
+       KIỂM TRA GHẾ ACTIVE
+       ========================================================== */
 
     const inactiveSeats =
       selectedSeats.filter(
-        (seat) => !seat.isActive,
+        (seat) =>
+          !seat.isActive,
       );
 
     if (
@@ -386,9 +406,7 @@ export async function POST(
                 (seat) =>
                   seat.code,
               )
-              .join(
-                ', ',
-              )} đang bị khóa bởi quản trị viên.`,
+              .join(', ')} đang bị khóa bởi quản trị viên.`,
         },
         {
           status: 409,
@@ -396,12 +414,9 @@ export async function POST(
       );
     }
 
-    const now =
-      new Date();
-
-    // ==========================================================
-    // XÓA HOLD HẾT HẠN
-    // ==========================================================
+    /* ==========================================================
+       XÓA HOLD HẾT HẠN
+       ========================================================== */
 
     await prisma.seatHold.deleteMany({
       where: {
@@ -413,9 +428,9 @@ export async function POST(
       },
     });
 
-    // ==========================================================
-    // KIỂM TRA GHẾ ĐÃ BÁN
-    // ==========================================================
+    /* ==========================================================
+       KIỂM TRA GHẾ ĐÃ BÁN
+       ========================================================== */
 
     const occupiedTickets =
       await prisma.ticket.findMany({
@@ -453,9 +468,7 @@ export async function POST(
                 (ticket) =>
                   ticket.seatCode,
               )
-              .join(
-                ', ',
-              )} đã được đặt.`,
+              .join(', ')} đã được đặt.`,
         },
         {
           status: 409,
@@ -463,9 +476,11 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // KIỂM TRA USER ĐANG GIỮ GHẾ
-    // ==========================================================
+    /* ==========================================================
+       KIỂM TRA USER ĐANG GIỮ GHẾ
+
+       Người dùng phải giữ tất cả ghế đã chọn.
+       ========================================================== */
 
     const myHolds =
       await prisma.seatHold.findMany({
@@ -519,9 +534,7 @@ export async function POST(
                 (seat) =>
                   seat.code,
               )
-              .join(
-                ', ',
-              )} không còn được bạn giữ. Vui lòng quay lại chọn ghế.`,
+              .join(', ')} không còn được bạn giữ. Vui lòng quay lại chọn ghế.`,
         },
         {
           status: 409,
@@ -529,9 +542,12 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // LẤY GIÁ GHẾ THEO SUẤT CHIẾU
-    // ==========================================================
+    /* ==========================================================
+       TÍNH GIÁ GHẾ
+
+       Giá LUÔN lấy từ database Showtime.
+       Không lấy giá từ frontend.
+       ========================================================== */
 
     const getSeatPrice = (
       seatType: string,
@@ -551,13 +567,12 @@ export async function POST(
       }
     };
 
-    // ==========================================================
-    // TÍNH TIỀN
-    // ==========================================================
-
     const subtotal =
       selectedSeats.reduce(
-        (total, seat) =>
+        (
+          total,
+          seat,
+        ) =>
           total +
           getSeatPrice(
             String(
@@ -567,27 +582,21 @@ export async function POST(
         0,
       );
 
-    const bookingFeeRaw =
-      Number(
-        body.bookingFee ?? 0,
-      );
+    /* ==========================================================
+       PHÍ DỊCH VỤ
 
-    const bookingFee =
-      Number.isFinite(
-        bookingFeeRaw,
-      ) &&
-      bookingFeeRaw >= 0
-        ? Math.round(
-            bookingFeeRaw,
-          )
-        : 0;
+       Hiện tại project của bạn đang để 0đ.
+       Không nhận bookingFee từ frontend.
+       ========================================================== */
+
+    const bookingFee = 0;
 
     const totalPrice =
       subtotal + bookingFee;
 
-    // ==========================================================
-    // TẠO BOOKING CODE
-    // ==========================================================
+    /* ==========================================================
+       BOOKING CODE
+       ========================================================== */
 
     const bookingCode =
       `BK${Date.now()
@@ -597,9 +606,9 @@ export async function POST(
           100,
       )}`;
 
-    // ==========================================================
-    // THÔNG TIN USER
-    // ==========================================================
+    /* ==========================================================
+       THÔNG TIN USER
+       ========================================================== */
 
     const customerName =
       session.user?.name ||
@@ -613,16 +622,24 @@ export async function POST(
       session.user?.phone ||
       '';
 
-    // ==========================================================
-    // TRANSACTION
-    // ==========================================================
+    /* ==========================================================
+       TRANSACTION
+
+       Ở đây:
+       - KHÔNG tạo Ticket
+       - KHÔNG xóa SeatHold
+
+       Chỉ tạo:
+       - Booking PENDING
+       - Payment PENDING
+       ========================================================== */
 
     const booking =
       await prisma.$transaction(
         async (tx) => {
-          // ------------------------------------------------------
-          // KIỂM TRA GHẾ LẦN CUỐI
-          // ------------------------------------------------------
+          /* ----------------------------------------------------
+             KIỂM TRA LẠI GHẾ ĐÃ BÁN
+             ---------------------------------------------------- */
 
           const latestOccupiedTickets =
             await tx.ticket.findMany({
@@ -663,9 +680,46 @@ export async function POST(
             );
           }
 
-          // ------------------------------------------------------
-          // TẠO BOOKING
-          // ------------------------------------------------------
+          /* ----------------------------------------------------
+             KIỂM TRA HOLD LẦN CUỐI TRONG TRANSACTION
+             ---------------------------------------------------- */
+
+          const latestHolds =
+            await tx.seatHold.findMany({
+              where: {
+                showtimeId,
+
+                userId,
+
+                seatId: {
+                  in: selectedSeats.map(
+                    (seat) =>
+                      seat.id,
+                  ),
+                },
+
+                expiresAt: {
+                  gt: new Date(),
+                },
+              },
+
+              select: {
+                seatId: true,
+              },
+            });
+
+          if (
+            latestHolds.length !==
+            selectedSeats.length
+          ) {
+            throw new Error(
+              'SEAT_HOLD_EXPIRED',
+            );
+          }
+
+          /* ----------------------------------------------------
+             TẠO BOOKING
+             ---------------------------------------------------- */
 
           const createdBooking =
             await tx.booking.create({
@@ -700,39 +754,9 @@ export async function POST(
               },
             });
 
-          // ------------------------------------------------------
-          // TẠO TICKET
-          // ------------------------------------------------------
-
-          await tx.ticket.createMany({
-            data: selectedSeats.map(
-              (seat) => ({
-                bookingId:
-                  createdBooking.id,
-
-                seatId:
-                  seat.id,
-
-                seatCode:
-                  seat.code,
-
-                // Giá lấy từ Showtime
-                price:
-                  getSeatPrice(
-                    String(
-                      seat.type,
-                    ),
-                  ),
-
-                qrCode:
-                  `${createdBooking.bookingCode}-${seat.code}`,
-              }),
-            ),
-          });
-
-          // ------------------------------------------------------
-          // TẠO PAYMENT
-          // ------------------------------------------------------
+          /* ----------------------------------------------------
+             TẠO PAYMENT
+             ---------------------------------------------------- */
 
           await tx.payment.create({
             data: {
@@ -750,32 +774,24 @@ export async function POST(
             },
           });
 
-          // ------------------------------------------------------
-          // XÓA HOLD
-          // ------------------------------------------------------
-
-          await tx.seatHold.deleteMany({
-            where: {
-              showtimeId,
-
-              userId,
-
-              seatId: {
-                in: selectedSeats.map(
-                  (seat) =>
-                    seat.id,
-                ),
-              },
-            },
-          });
+          /*
+           * QUAN TRỌNG:
+           *
+           * KHÔNG tạo Ticket ở đây.
+           *
+           * KHÔNG xóa SeatHold ở đây.
+           *
+           * Hai việc này chỉ xảy ra sau khi
+           * thanh toán được xác nhận thành công.
+           */
 
           return createdBooking;
         },
       );
 
-    // ==========================================================
-    // TRẢ KẾT QUẢ
-    // ==========================================================
+    /* ==========================================================
+       RESPONSE
+       ========================================================== */
 
     return NextResponse.json(
       {
@@ -806,9 +822,9 @@ export async function POST(
       error,
     );
 
-    // ==========================================================
-    // GHẾ VỪA BỊ NGƯỜI KHÁC ĐẶT
-    // ==========================================================
+    /* ==========================================================
+       GHẾ ĐÃ BỊ ĐẶT
+       ========================================================== */
 
     if (
       error instanceof Error &&
@@ -833,9 +849,29 @@ export async function POST(
       );
     }
 
-    // ==========================================================
-    // LỖI CHUNG
-    // ==========================================================
+    /* ==========================================================
+       HOLD HẾT HẠN
+       ========================================================== */
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        'SEAT_HOLD_EXPIRED'
+    ) {
+      return NextResponse.json(
+        {
+          message:
+            'Thời gian giữ ghế đã hết. Vui lòng quay lại chọn ghế.',
+        },
+        {
+          status: 409,
+        },
+      );
+    }
+
+    /* ==========================================================
+       LỖI CHUNG
+       ========================================================== */
 
     return NextResponse.json(
       {

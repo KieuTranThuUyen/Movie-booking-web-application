@@ -12,105 +12,172 @@ type CheckoutPageProps = {
 export default async function CheckoutPage({
   searchParams,
 }: CheckoutPageProps) {
-  const resolvedSearchParams =
-    await searchParams;
-
-  // ============================================================
-  // SEED MOVIES
-  // ============================================================
+  const resolvedSearchParams = await searchParams;
 
   await ensureMoviesSeeded();
 
-  // ============================================================
-  // LẤY SHOWTIME
-  // ============================================================
+  const showtimeId =
+    resolvedSearchParams.showtime?.trim() ?? '';
 
-  const showtime =
-    resolvedSearchParams.showtime
-      ? await prisma.showtime.findUnique({
-          where: {
-            id: resolvedSearchParams.showtime,
-          },
+  const seats = [
+    ...new Set(
+      (resolvedSearchParams.seats ?? '')
+        .split(',')
+        .map((seat) => seat.trim())
+        .filter(Boolean),
+    ),
+  ];
 
-          include: {
-            movie: true,
+  if (!showtimeId || seats.length === 0) {
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
+          <h1 className="text-2xl font-bold text-white">
+            Không thể tiếp tục thanh toán
+          </h1>
 
-            hall: {
-              include: {
-                cinema: true,
-                seats: true,
-              },
-            },
-          },
-        })
-      : null;
+          <p className="mt-3 text-slate-400">
+            Vui lòng quay lại chọn suất chiếu và ghế.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
-  // ============================================================
-  // LẤY GHẾ
-  // ============================================================
-
-  const seats = (
-    resolvedSearchParams.seats ?? ''
-  )
-    .split(',')
-    .map((seat) => seat.trim())
-    .filter(Boolean);
-
-  // ============================================================
-  // TÍNH TIỀN
-  //
-  // Giá lấy trực tiếp từ Showtime.
-  // Không sử dụng subtotal từ URL.
-  // ============================================================
-
-  let subtotal = 0;
-
-  if (showtime) {
-    const selectedSeats =
-      showtime.hall.seats.filter(
-        (seat) =>
-          seats.includes(
-            seat.code,
-          ),
-      );
-
-    subtotal =
-      selectedSeats.reduce(
-        (total, seat) => {
-          switch (
-            String(
-              seat.type,
-            ).toUpperCase()
-          ) {
-            case 'VIP':
-              return (
-                total +
-                showtime.vipPrice
-              );
-
-            case 'COUPLE':
-              return (
-                total +
-                showtime.couplePrice
-              );
-
-            case 'STANDARD':
-            default:
-              return (
-                total +
-                showtime.standardPrice
-              );
-          }
+  const showtime = await prisma.showtime.findUnique({
+    where: {
+      id: showtimeId,
+    },
+    include: {
+      movie: true,
+      hall: {
+        include: {
+          cinema: true,
+          seats: true,
         },
-        0,
-      );
+      },
+    },
+  });
+
+  if (!showtime) {
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
+          <h1 className="text-2xl font-bold text-white">
+            Không tìm thấy suất chiếu
+          </h1>
+
+          <p className="mt-3 text-slate-400">
+            Suất chiếu không tồn tại hoặc đã bị xóa.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // Không cho thanh toán suất chiếu đã bắt đầu.
+  if (showtime.startTime <= new Date()) {
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
+          <h1 className="text-2xl font-bold text-white">
+            Suất chiếu đã bắt đầu
+          </h1>
+
+          <p className="mt-3 text-slate-400">
+            Không thể đặt vé cho suất chiếu này.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   // ============================================================
-  // PHÍ DỊCH VỤ
+  // KIỂM TRA GHẾ
   // ============================================================
 
+  const selectedSeats = showtime.hall.seats.filter(
+    (seat) => seats.includes(seat.code),
+  );
+
+  // Có mã ghế không tồn tại.
+  if (selectedSeats.length !== seats.length) {
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
+          <h1 className="text-2xl font-bold text-white">
+            Ghế không hợp lệ
+          </h1>
+
+          <p className="mt-3 text-slate-400">
+            Một hoặc nhiều ghế bạn chọn không tồn tại trong
+            phòng chiếu này.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // Không cho thanh toán ghế đã bị khóa.
+  const inactiveSeats = selectedSeats.filter(
+    (seat) => !seat.isActive,
+  );
+
+  if (inactiveSeats.length > 0) {
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
+          <h1 className="text-2xl font-bold text-white">
+            Ghế không khả dụng
+          </h1>
+
+          <p className="mt-3 text-slate-400">
+            Ghế{' '}
+            {inactiveSeats
+              .map((seat) => seat.code)
+              .join(', ')}{' '}
+            hiện đang bị khóa.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // ============================================================
+  // TÍNH GIÁ
+  //
+  // Giá được lấy từ database:
+  // Showtime.standardPrice
+  // Showtime.vipPrice
+  // Showtime.couplePrice
+  //
+  // KHÔNG lấy giá từ URL.
+  // ============================================================
+
+  const getSeatPrice = (seatType: string) => {
+    switch (seatType.toUpperCase()) {
+      case 'VIP':
+        return showtime.vipPrice;
+
+      case 'COUPLE':
+        return showtime.couplePrice;
+
+      case 'STANDARD':
+      default:
+        return showtime.standardPrice;
+    }
+  };
+
+  const subtotal = selectedSeats.reduce(
+    (total, seat) =>
+      total + getSeatPrice(String(seat.type)),
+    0,
+  );
+
+  // Hiện tại hệ thống chưa thu phí dịch vụ.
   const bookingFee = 0;
+
+  const total = subtotal + bookingFee;
 
   // ============================================================
   // RENDER
@@ -126,34 +193,23 @@ export default async function CheckoutPage({
         <h1 className="text-4xl font-bold text-white">
           Hoàn tất đặt vé
         </h1>
+
+        <p className="text-slate-400">
+          Kiểm tra thông tin vé trước khi thanh toán.
+        </p>
       </div>
 
       <div className="mt-10">
-        {showtime ? (
-          <CheckoutForm
-            movieTitle={
-              showtime.movie.title
-            }
-            cinemaName={
-              showtime.hall.cinema.name
-            }
-            hallName={
-              showtime.hall.name
-            }
-            showtimeId={
-              showtime.id
-            }
-            showtimeStart={showtime.startTime.toISOString()}
-            seats={seats}
-            subtotal={subtotal}
-            bookingFee={bookingFee}
-          />
-        ) : (
-          <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 text-slate-300 shadow-glow backdrop-blur-xl">
-            Chưa có thông tin suất chiếu
-            để thanh toán.
-          </div>
-        )}
+        <CheckoutForm
+          movieTitle={showtime.movie.title}
+          cinemaName={showtime.hall.cinema.name}
+          hallName={showtime.hall.name}
+          showtimeId={showtime.id}
+          showtimeStart={showtime.startTime.toISOString()}
+          seats={seats}
+          subtotal={subtotal}
+          bookingFee={bookingFee}
+        />
       </div>
     </main>
   );
