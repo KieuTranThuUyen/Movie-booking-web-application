@@ -30,29 +30,47 @@ type BookingSummary = {
   }[];
 };
 
+/**
+ * Trạng thái đơn:
+ * - PENDING    → Chờ thanh toán
+ * - CONFIRMED  → Đã xác nhận
+ * - CANCELED   → Đã hủy
+ */
 function getBookingStatusLabel(status: string) {
   switch (status) {
     case 'PENDING':
-      return 'Chờ xử lý';
+      return 'Chờ thanh toán';
+
     case 'CONFIRMED':
       return 'Đã xác nhận';
+
     case 'CANCELED':
       return 'Đã hủy';
+
     default:
-      return status;
+      return 'Không xác định';
   }
 }
 
+/**
+ * Trạng thái thanh toán:
+ * - UNPAID    → Chưa thanh toán
+ * - PAID      → Đã thanh toán
+ * - REFUNDED  → Đã hoàn tiền
+ */
 function getPaymentStatusLabel(status: string) {
   switch (status) {
     case 'UNPAID':
       return 'Chưa thanh toán';
+
     case 'PAID':
       return 'Đã thanh toán';
+
     case 'REFUNDED':
       return 'Đã hoàn tiền';
+
     default:
-      return status;
+      return 'Không xác định';
   }
 }
 
@@ -129,6 +147,10 @@ export default async function OrdersPage() {
 
   return (
     <main className="page-shell py-12 lg:py-16">
+      {/* ========================================================
+          HEADER
+      ======================================================== */}
+
       <div className="space-y-3">
         <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
           Đơn vé
@@ -142,6 +164,10 @@ export default async function OrdersPage() {
           Bạn chỉ có thể xem các đơn đặt vé của tài khoản hiện tại.
         </p>
       </div>
+
+      {/* ========================================================
+          DANH SÁCH ĐƠN
+      ======================================================== */}
 
       <div className="mt-10 grid gap-4">
         {bookings.length === 0 ? (
@@ -163,6 +189,10 @@ export default async function OrdersPage() {
               key={booking.id}
               className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl"
             >
+              {/* ==================================================
+                  THÔNG TIN PHIM + TRẠNG THÁI ĐƠN
+              =================================================== */}
+
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-semibold text-white">
@@ -172,19 +202,23 @@ export default async function OrdersPage() {
                   <p className="mt-1 text-sm text-slate-400">
                     {booking.customerName} ·{' '}
                     {new Date(
-                      booking.showtime.startTime
+                      booking.showtime.startTime,
                     ).toLocaleString('vi-VN')}
                   </p>
                 </div>
 
                 <div
                   className={`rounded-full border px-4 py-2 text-sm ${getBookingStatusClass(
-                    booking.status
+                    booking.status,
                   )}`}
                 >
                   {getBookingStatusLabel(booking.status)}
                 </div>
               </div>
+
+              {/* ==================================================
+                  THÔNG TIN ĐƠN
+              =================================================== */}
 
               <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-300">
                 <span className="rounded-full bg-white/5 px-3 py-1">
@@ -193,35 +227,66 @@ export default async function OrdersPage() {
 
                 <span
                   className={`rounded-full px-3 py-1 ${getPaymentStatusClass(
-                    booking.paymentStatus
+                    booking.paymentStatus,
                   )}`}
                 >
                   Thanh toán:{' '}
-                  {getPaymentStatusLabel(booking.paymentStatus)}
+                  {getPaymentStatusLabel(
+                    booking.paymentStatus,
+                  )}
                 </span>
 
                 <span className="rounded-full bg-white/5 px-3 py-1">
                   Tổng tiền:{' '}
-                  {booking.totalPrice.toLocaleString('vi-VN')} đ
+                  {booking.totalPrice.toLocaleString(
+                    'vi-VN',
+                  )}{' '}
+                  đ
                 </span>
 
                 <span className="rounded-full bg-white/5 px-3 py-1">
                   Ghế:{' '}
                   {booking.tickets.length > 0
                     ? booking.tickets
-                        .map((ticket) => ticket.seatCode)
+                        .map(
+                          (ticket) =>
+                            ticket.seatCode,
+                        )
                         .join(', ')
-                    : 'Không có'}
+                    : 'Đang giữ ghế'}
                 </span>
               </div>
 
+              {/* ==================================================
+                  ACTION
+              =================================================== */}
+
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link
-                  href={`/ve/${booking.id}`}
-                  className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
-                >
-                  Xem vé điện tử
-                </Link>
+                {booking.status === 'PENDING' &&
+                booking.paymentStatus === 'UNPAID' ? (
+                  <Link
+                    href={`/thanh-toan/${booking.id}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+                  >
+                    Thanh toán
+                  </Link>
+                ) : null}
+
+                {booking.status === 'CONFIRMED' &&
+                booking.paymentStatus === 'PAID' ? (
+                  <Link
+                    href={`/ve/${booking.id}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
+                  >
+                    Xem vé điện tử
+                  </Link>
+                ) : null}
+
+                {booking.status === 'CANCELED' ? (
+                  <span className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-400">
+                    Đơn đã hủy
+                  </span>
+                ) : null}
               </div>
             </article>
           ))

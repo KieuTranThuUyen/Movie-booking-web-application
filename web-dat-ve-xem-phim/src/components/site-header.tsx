@@ -5,16 +5,34 @@ import { SignOutButton } from '@/components/sign-out-button';
 import { authOptions } from '@/lib/auth';
 
 export async function SiteHeader() {
-  const session =
-    await getServerSession(authOptions);
+  const session = await getServerSession(authOptions);
+
+  /**
+   * Logo:
+   * - ADMIN      → Dashboard quản trị
+   * - CUSTOMER   → Trang chủ
+   * - Guest      → Trang chủ
+   */
+  const logoHref =
+    session?.user?.role === 'ADMIN'
+      ? '/admin'
+      : '/';
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        {/* LOGO */}
+
+        {/* ======================================================
+            LOGO
+        ======================================================= */}
         <Link
-          href="/"
+          href={logoHref}
           className="flex items-center gap-3 font-semibold tracking-wide text-white"
+          aria-label={
+            session?.user?.role === 'ADMIN'
+              ? 'Đi tới trang quản trị'
+              : 'Đi tới trang chủ'
+          }
         >
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-sky-500 text-sm shadow-glow">
             DVX
@@ -31,7 +49,9 @@ export async function SiteHeader() {
           </div>
         </Link>
 
-        {/* SEARCH */}
+        {/* ======================================================
+            SEARCH
+        ======================================================= */}
         <div className="hidden max-w-md flex-1 lg:flex">
           <form
             action="/phim"
@@ -42,6 +62,7 @@ export async function SiteHeader() {
               type="text"
               name="search"
               placeholder="Tìm kiếm phim..."
+              aria-label="Tìm kiếm phim"
               className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-white/20 focus:bg-white/10"
             />
 
@@ -71,26 +92,30 @@ export async function SiteHeader() {
           </form>
         </div>
 
-        {/* ACCOUNT */}
+        {/* ======================================================
+            ACCOUNT
+        ======================================================= */}
         <div className="hidden items-center gap-3 sm:flex">
           {session ? (
             <>
+              {/* Tài khoản */}
               <Link
                 href="/tai-khoan"
                 className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5"
               >
                 {session.user.role === 'ADMIN'
                   ? 'Administrator'
-                  : session.user.name ??
-                    'Tài khoản'}
+                  : session.user.name ?? 'Tài khoản'}
               </Link>
 
+              {/* Đăng xuất */}
               <SignOutButton
                 className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
               />
             </>
           ) : (
             <>
+              {/* Đăng nhập */}
               <Link
                 href="/dang-nhap"
                 className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5"
@@ -98,6 +123,7 @@ export async function SiteHeader() {
                 Đăng nhập
               </Link>
 
+              {/* Đăng ký */}
               <Link
                 href="/dang-ky"
                 className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
