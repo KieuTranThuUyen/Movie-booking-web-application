@@ -1,7 +1,53 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
 
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { ensureMoviesSeeded } from '@/lib/seed-movies';
+
+const ALLOWED_LANGUAGES = [
+  'VietSub',
+  'VietDub',
+  'EngSub',
+] as const;
+
+const ALLOWED_FORMATS = [
+  '2D',
+  '3D',
+  'IMAX',
+] as const;
+
+/*
+ * ============================================================
+ * TYPE SESSION
+ * ============================================================
+ *
+ * Không dùng:
+ *
+ * Awaited<ReturnType<typeof getServerSession>>
+ *
+ * vì trong cấu hình NextAuth hiện tại TypeScript có thể
+ * suy luận kết quả của getServerSession thành {}.
+ *
+ * Chỉ cần kiểm tra role của user nên định nghĩa một type
+ * nhỏ cho phần dữ liệu chúng ta thực sự sử dụng.
+ */
+
+type AdminSession = {
+  user?: {
+    role?: string | null;
+  } | null;
+} | null;
+
+/*
+ * ============================================================
+ * KIỂM TRA ADMIN
+ * ============================================================
+ */
+
+function isAdmin(session: AdminSession): boolean {
+  return session?.user?.role === 'ADMIN';
+}
 
 // ============================================================
 // GET - LẤY DANH SÁCH SUẤT CHIẾU
@@ -9,30 +55,58 @@ import { ensureMoviesSeeded } from '@/lib/seed-movies';
 
 export async function GET() {
   try {
+    // ========================================================
+    // KIỂM TRA QUYỀN ADMIN
+    // ========================================================
+
+    const session = await getServerSession(authOptions);
+
+    if (!isAdmin(session)) {
+      return NextResponse.json(
+        {
+          message:
+            'Bạn không có quyền thực hiện thao tác này.',
+        },
+        {
+          status: 403,
+        },
+      );
+    }
+
+    // ========================================================
+    // SEED PHIM
+    // ========================================================
+
     await ensureMoviesSeeded();
 
-    const showtimes = await prisma.showtime.findMany({
-      orderBy: {
-        startTime: 'asc',
-      },
-      include: {
-        movie: {
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-            posterUrl: true,
-            duration: true,
-          },
+    // ========================================================
+    // LẤY DANH SÁCH SUẤT CHIẾU
+    // ========================================================
+
+    const showtimes =
+      await prisma.showtime.findMany({
+        orderBy: {
+          startTime: 'asc',
         },
 
-        hall: {
-          include: {
-            cinema: true,
+        include: {
+          movie: {
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              posterUrl: true,
+              duration: true,
+            },
+          },
+
+          hall: {
+            include: {
+              cinema: true,
+            },
           },
         },
-      },
-    });
+      });
 
     return NextResponse.json(
       {
@@ -67,6 +141,28 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // ========================================================
+    // KIỂM TRA QUYỀN ADMIN
+    // ========================================================
+
+    const session = await getServerSession(authOptions);
+
+    if (!isAdmin(session)) {
+      return NextResponse.json(
+        {
+          message:
+            'Bạn không có quyền tạo suất chiếu.',
+        },
+        {
+          status: 403,
+        },
+      );
+    }
+
+    // ========================================================
+    // ĐỌC REQUEST
+    // ========================================================
+
     const body = (await request.json()) as {
       movieSlug?: string;
       hallId?: string;
@@ -83,14 +179,34 @@ export async function POST(request: Request) {
     };
 
     // ========================================================
+    // CHUẨN HÓA DỮ LIỆU
+    // ========================================================
+
+    const movieSlug = String(
+      body.movieSlug ?? '',
+    ).trim();
+
+    const hallId = String(
+      body.hallId ?? '',
+    ).trim();
+
+    const startTimeString = String(
+      body.startTime ?? '',
+    ).trim();
+
+    const endTimeString = String(
+      body.endTime ?? '',
+    ).trim();
+
+    // ========================================================
     // KIỂM TRA DỮ LIỆU CƠ BẢN
     // ========================================================
 
     if (
-      !body.movieSlug ||
-      !body.hallId ||
-      !body.startTime ||
-      !body.endTime
+      !movieSlug ||
+      !hallId ||
+      !startTimeString ||
+      !endTimeString
     ) {
       return NextResponse.json(
         {
@@ -119,14 +235,21 @@ export async function POST(request: Request) {
       body.couplePrice,
     );
 
-    if (
-      !Number.isInteger(standardPrice) ||
-      standardPrice < 1000
-    ) {
+    const isValidPrice = (
+      price: number,
+    ): boolean => {
+      return (
+        Number.isSafeInteger(price) &&
+        price >= 1000 &&
+        price % 1000 === 0
+      );
+    };
+
+    if (!isValidPrice(standardPrice)) {
       return NextResponse.json(
         {
           message:
-            'Giá ghế thường không hợp lệ.',
+            'Giá ghế thường phải là số nguyên và là bội số của 1.000đ.',
         },
         {
           status: 400,
@@ -134,14 +257,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !Number.isInteger(vipPrice) ||
-      vipPrice < 1000
-    ) {
+    if (!isValidPrice(vipPrice)) {
       return NextResponse.json(
         {
           message:
-            'Giá ghế VIP không hợp lệ.',
+            'Giá ghế VIP phải là số nguyên và là bội số của 1.000đ.',
         },
         {
           status: 400,
@@ -149,14 +269,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !Number.isInteger(couplePrice) ||
-      couplePrice < 1000
-    ) {
+    if (!isValidPrice(couplePrice)) {
       return NextResponse.json(
         {
           message:
-            'Giá ghế đôi không hợp lệ.',
+            'Giá ghế đôi phải là số nguyên và là bội số của 1.000đ.',
         },
         {
           status: 400,
@@ -169,11 +286,11 @@ export async function POST(request: Request) {
     // ========================================================
 
     const startTime = new Date(
-      body.startTime,
+      startTimeString,
     );
 
     const endTime = new Date(
-      body.endTime,
+      endTimeString,
     );
 
     if (
@@ -204,6 +321,72 @@ export async function POST(request: Request) {
     }
 
     // ========================================================
+    // KHÔNG CHO TẠO SUẤT CHIẾU TRONG QUÁ KHỨ
+    // ========================================================
+
+    if (startTime <= new Date()) {
+      return NextResponse.json(
+        {
+          message:
+            'Thời gian bắt đầu phải ở tương lai.',
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    // ========================================================
+    // KIỂM TRA NGÔN NGỮ
+    // ========================================================
+
+    const language = String(
+      body.language ?? 'VietSub',
+    ).trim();
+
+    const isAllowedLanguage =
+      (
+        ALLOWED_LANGUAGES as readonly string[]
+      ).includes(language);
+
+    if (!isAllowedLanguage) {
+      return NextResponse.json(
+        {
+          message:
+            'Ngôn ngữ suất chiếu không hợp lệ.',
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    // ========================================================
+    // KIỂM TRA ĐỊNH DẠNG
+    // ========================================================
+
+    const format = String(
+      body.format ?? '2D',
+    ).trim();
+
+    const isAllowedFormat =
+      (
+        ALLOWED_FORMATS as readonly string[]
+      ).includes(format);
+
+    if (!isAllowedFormat) {
+      return NextResponse.json(
+        {
+          message:
+            'Định dạng suất chiếu không hợp lệ.',
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    // ========================================================
     // SEED PHIM
     // ========================================================
 
@@ -216,7 +399,7 @@ export async function POST(request: Request) {
     const movie =
       await prisma.movie.findUnique({
         where: {
-          slug: body.movieSlug,
+          slug: movieSlug,
         },
       });
 
@@ -239,7 +422,11 @@ export async function POST(request: Request) {
     const hall =
       await prisma.hall.findUnique({
         where: {
-          id: body.hallId,
+          id: hallId,
+        },
+
+        include: {
+          cinema: true,
         },
       });
 
@@ -257,7 +444,12 @@ export async function POST(request: Request) {
 
     // ========================================================
     // KIỂM TRA TRÙNG SUẤT CHIẾU
-    // CÙNG PHÒNG + THỜI GIAN BỊ CHỒNG
+    //
+    // Hai khoảng thời gian giao nhau khi:
+    //
+    // existing.startTime < new.endTime
+    // &&
+    // existing.endTime > new.startTime
     // ========================================================
 
     const overlappingShowtime =
@@ -265,35 +457,49 @@ export async function POST(request: Request) {
         where: {
           hallId: hall.id,
 
-          AND: [
-            {
-              startTime: {
-                lt: endTime,
-              },
-            },
-            {
-              endTime: {
-                gt: startTime,
-              },
-            },
-          ],
+          startTime: {
+            lt: endTime,
+          },
+
+          endTime: {
+            gt: startTime,
+          },
         },
 
         include: {
-          movie: true,
+          movie: {
+            select: {
+              title: true,
+            },
+          },
+        },
+
+        orderBy: {
+          startTime: 'asc',
         },
       });
 
     if (overlappingShowtime) {
+      const existingStart =
+        new Date(
+          overlappingShowtime.startTime,
+        ).toLocaleString('vi-VN');
+
+      const existingEnd =
+        new Date(
+          overlappingShowtime.endTime,
+        ).toLocaleString('vi-VN');
+
       return NextResponse.json(
         {
           message:
-            `Phòng ${hall.name} đã có suất chiếu ` +
-            `${overlappingShowtime.movie.title} ` +
-            `trong khoảng thời gian này.`,
+            `Phòng ${hall.name} tại ${hall.cinema.name} ` +
+            `đã có suất chiếu "${overlappingShowtime.movie.title}" ` +
+            `từ ${existingStart} đến ${existingEnd}. ` +
+            `Vui lòng chọn thời gian khác.`,
         },
         {
-          status: 400,
+          status: 409,
         },
       );
     }
@@ -315,11 +521,8 @@ export async function POST(request: Request) {
           vipPrice,
           couplePrice,
 
-          language:
-            body.language ?? 'VietSub',
-
-          format:
-            body.format ?? '2D',
+          language,
+          format,
         },
 
         include: {

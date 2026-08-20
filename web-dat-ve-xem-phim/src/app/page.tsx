@@ -1,39 +1,45 @@
+import Image from 'next/image';
 import Link from 'next/link';
+
 import { MovieCard } from '@/components/movie-card';
 import { prisma } from '@/lib/prisma';
 
 export default async function HomePage() {
-  const [nowShowing, upcoming, showtimes, heroMovie] =
-    await Promise.all([
-      prisma.movie.findMany({
-        where: {
-          isNowShowing: true,
-        },
-        orderBy: {
-          releaseDate: 'desc',
-        },
-      }),
+  const [
+    nowShowing,
+    upcoming,
+    showtimes,
+    heroMovie,
+  ] = await Promise.all([
+    prisma.movie.findMany({
+      where: {
+        isNowShowing: true,
+      },
+      orderBy: {
+        releaseDate: 'desc',
+      },
+    }),
 
-      prisma.movie.findMany({
-        where: {
-          isComingSoon: true,
-        },
-        orderBy: {
-          releaseDate: 'desc',
-        },
-      }),
+    prisma.movie.findMany({
+      where: {
+        isComingSoon: true,
+      },
+      orderBy: {
+        releaseDate: 'desc',
+      },
+    }),
 
-      prisma.showtime.count(),
+    prisma.showtime.count(),
 
-      prisma.movie.findFirst({
-        where: {
-          isNowShowing: true,
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-      }),
-    ]);
+    prisma.movie.findFirst({
+      where: {
+        isNowShowing: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    }),
+  ]);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -108,9 +114,13 @@ export default async function HomePage() {
         {/* PHIM NỔI BẬT */}
         <div className="rounded-[32px] border border-white/10 bg-white/5 p-5 shadow-glow">
           {heroMovie ? (
-            <img
+            <Image
               src={heroMovie.posterUrl}
               alt={heroMovie.title}
+              width={800}
+              height={1040}
+              unoptimized
+              priority
               className="h-[520px] w-full rounded-[28px] object-cover"
             />
           ) : (

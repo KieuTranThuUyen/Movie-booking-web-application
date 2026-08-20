@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 
@@ -16,7 +17,11 @@ type ShowtimesPageProps = {
 
 const TIME_RANGES: Record<
   string,
-  { label: string; from: number; to: number }
+  {
+    label: string;
+    from: number;
+    to: number;
+  }
 > = {
   early: {
     label: '00:00 - 06:00',
@@ -74,9 +79,14 @@ function getTodayVietnam() {
 }
 
 function getDateRange(date: string) {
-  const start = new Date(`${date}T00:00:00+07:00`);
+  const start = new Date(
+    `${date}T00:00:00+07:00`,
+  );
 
-  const end = new Date(`${date}T00:00:00+07:00`);
+  const end = new Date(
+    `${date}T00:00:00+07:00`,
+  );
+
   end.setUTCDate(end.getUTCDate() + 1);
 
   return {
@@ -107,14 +117,12 @@ export default async function ShowtimesPage({
     },
   };
 
-  // Lọc theo phim
   if (movieSlug) {
     where.movie = {
       slug: movieSlug,
     };
   }
 
-  // Lọc theo thành phố
   if (city) {
     where.hall = {
       cinema: {
@@ -123,14 +131,15 @@ export default async function ShowtimesPage({
     };
   }
 
-  // Lọc theo định dạng
   if (format) {
     where.format = format;
   }
 
-  // Lọc theo ngày
   if (date) {
-    const { start, end } = getDateRange(date);
+    const {
+      start,
+      end,
+    } = getDateRange(date);
 
     where.startTime = {
       gte: date === today ? now : start,
@@ -138,7 +147,11 @@ export default async function ShowtimesPage({
     };
   }
 
-  const [showtimes, cities, movie] = await Promise.all([
+  const [
+    showtimes,
+    cities,
+    movie,
+  ] = await Promise.all([
     prisma.showtime.findMany({
       where,
       orderBy: {
@@ -176,14 +189,19 @@ export default async function ShowtimesPage({
       : Promise.resolve(null),
   ]);
 
-  // Lọc theo khung giờ
   const timeFilteredShowtimes =
     time && TIME_RANGES[time]
       ? showtimes.filter((showtime) => {
-          const hour = getVietnamHour(showtime.startTime);
+          const hour = getVietnamHour(
+            showtime.startTime,
+          );
+
           const range = TIME_RANGES[time];
 
-          return hour >= range.from && hour < range.to;
+          return (
+            hour >= range.from &&
+            hour < range.to
+          );
         })
       : showtimes;
 
@@ -240,7 +258,6 @@ export default async function ShowtimesPage({
           ) : null}
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            {/* NGÀY */}
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-300">
                 Ngày
@@ -255,7 +272,6 @@ export default async function ShowtimesPage({
               />
             </label>
 
-            {/* THÀNH PHỐ */}
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-300">
                 Thành phố
@@ -266,7 +282,9 @@ export default async function ShowtimesPage({
                 defaultValue={city}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-400"
               >
-                <option value="">Tất cả thành phố</option>
+                <option value="">
+                  Tất cả thành phố
+                </option>
 
                 {cities.map((item) => (
                   <option
@@ -279,7 +297,6 @@ export default async function ShowtimesPage({
               </select>
             </label>
 
-            {/* ĐỊNH DẠNG */}
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-300">
                 Định dạng
@@ -297,7 +314,6 @@ export default async function ShowtimesPage({
               </select>
             </label>
 
-            {/* THỜI GIAN */}
             <label className="space-y-2">
               <span className="text-sm font-medium text-slate-300">
                 Thời gian
@@ -308,9 +324,13 @@ export default async function ShowtimesPage({
                 defaultValue={time}
                 className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-sky-400"
               >
-                <option value="">Tất cả khung giờ</option>
+                <option value="">
+                  Tất cả khung giờ
+                </option>
 
-                {Object.entries(TIME_RANGES).map(
+                {Object.entries(
+                  TIME_RANGES,
+                ).map(
                   ([value, item]) => (
                     <option
                       key={value}
@@ -323,7 +343,6 @@ export default async function ShowtimesPage({
               </select>
             </label>
 
-            {/* BUTTON */}
             <div className="flex items-end gap-2">
               <button
                 type="submit"
@@ -387,126 +406,125 @@ export default async function ShowtimesPage({
           </div>
         ) : (
           <div className="mt-5 grid gap-4">
-            {timeFilteredShowtimes.map((showtime) => (
-              <article
-                key={showtime.id}
-                className="overflow-hidden rounded-[28px] border border-white/10 bg-white/5 shadow-glow transition hover:border-white/20"
-              >
-                <div className="flex flex-col gap-5 p-5 md:flex-row md:items-center">
-                  {/* POSTER */}
-                  <img
-                    src={showtime.movie.posterUrl}
-                    alt={showtime.movie.title}
-                    className="h-28 w-20 rounded-2xl object-cover md:h-32 md:w-24"
-                  />
+            {timeFilteredShowtimes.map(
+              (showtime) => (
+                <article
+                  key={showtime.id}
+                  className="overflow-hidden rounded-[28px] border border-white/10 bg-white/5 shadow-glow transition hover:border-white/20"
+                >
+                  <div className="flex flex-col gap-5 p-5 md:flex-row md:items-center">
+                    {/* POSTER */}
+                    <Image
+                      src={showtime.movie.posterUrl}
+                      alt={showtime.movie.title}
+                      width={96}
+                      height={128}
+                      unoptimized
+                      className="h-28 w-20 rounded-2xl object-cover md:h-32 md:w-24"
+                    />
 
-                  {/* THÔNG TIN */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-xl font-semibold text-white">
-                        {showtime.movie.title}
-                      </h3>
+                    {/* THÔNG TIN */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xl font-semibold text-white">
+                          {showtime.movie.title}
+                        </h3>
 
-                      <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-300">
-                        {showtime.format}
-                      </span>
+                        <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-300">
+                          {showtime.format}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-3">
+                        <div>
+                          <span className="text-slate-500">
+                            Rạp:{' '}
+                          </span>
+                          {showtime.hall.cinema.name}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-500">
+                            Thành phố:{' '}
+                          </span>
+                          {showtime.hall.cinema.city}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-500">
+                            Phòng:{' '}
+                          </span>
+                          {showtime.hall.name}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-500">
+                            Ngôn ngữ:{' '}
+                          </span>
+                          {showtime.language}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-500">
+                            Thời gian:{' '}
+                          </span>
+                          {formatDateTime(
+                            showtime.startTime,
+                          )}
+                        </div>
+
+                        <div>
+                          <span className="text-slate-500">
+                            Giá từ:{' '}
+                          </span>
+                          {showtime.standardPrice.toLocaleString(
+                            'vi-VN',
+                          )}{' '}
+                          đ
+                        </div>
+                      </div>
+
+                      {/* BẢNG GIÁ */}
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-emerald-300">
+                          Thường:{' '}
+                          {showtime.standardPrice.toLocaleString(
+                            'vi-VN',
+                          )}{' '}
+                          đ
+                        </span>
+
+                        <span className="rounded-full bg-amber-500/10 px-3 py-1 text-amber-300">
+                          VIP:{' '}
+                          {showtime.vipPrice.toLocaleString(
+                            'vi-VN',
+                          )}{' '}
+                          đ
+                        </span>
+
+                        <span className="rounded-full bg-pink-500/10 px-3 py-1 text-pink-300">
+                          Ghế đôi:{' '}
+                          {showtime.couplePrice.toLocaleString(
+                            'vi-VN',
+                          )}{' '}
+                          đ
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="mt-3 grid gap-2 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-3">
-                      {/* RẠP */}
-                      <div>
-                        <span className="text-slate-500">
-                          Rạp:{' '}
-                        </span>
-                        {showtime.hall.cinema.name}
-                      </div>
-
-                      {/* THÀNH PHỐ */}
-                      <div>
-                        <span className="text-slate-500">
-                          Thành phố:{' '}
-                        </span>
-                        {showtime.hall.cinema.city}
-                      </div>
-
-                      {/* PHÒNG */}
-                      <div>
-                        <span className="text-slate-500">
-                          Phòng:{' '}
-                        </span>
-                        {showtime.hall.name}
-                      </div>
-
-                      {/* NGÔN NGỮ */}
-                      <div>
-                        <span className="text-slate-500">
-                          Ngôn ngữ:{' '}
-                        </span>
-                        {showtime.language}
-                      </div>
-
-                      {/* THỜI GIAN */}
-                      <div>
-                        <span className="text-slate-500">
-                          Thời gian:{' '}
-                        </span>
-                        {formatDateTime(
-                          showtime.startTime,
-                        )}
-                      </div>
-
-                      {/* GIÁ */}
-                      <div>
-                        <span className="text-slate-500">
-                          Giá từ:{' '}
-                        </span>
-                        {showtime.standardPrice.toLocaleString(
-                          'vi-VN',
-                        )}{' '}
-                        đ
-                      </div>
-                    </div>
-
-                    {/* BẢNG GIÁ */}
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-emerald-300">
-                        Thường:{' '}
-                        {showtime.standardPrice.toLocaleString(
-                          'vi-VN',
-                        )}{' '}
-                        đ
-                      </span>
-
-                      <span className="rounded-full bg-amber-500/10 px-3 py-1 text-amber-300">
-                        VIP:{' '}
-                        {showtime.vipPrice.toLocaleString(
-                          'vi-VN',
-                        )}{' '}
-                        đ
-                      </span>
-
-                      <span className="rounded-full bg-pink-500/10 px-3 py-1 text-pink-300">
-                        Ghế đôi:{' '}
-                        {showtime.couplePrice.toLocaleString(
-                          'vi-VN',
-                        )}{' '}
-                        đ
-                      </span>
-                    </div>
+                    {/* CHỌN SUẤT */}
+                    <Link
+                      href={`/dat-ve?showtime=${encodeURIComponent(
+                        showtime.id,
+                      )}`}
+                      className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-6 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
+                    >
+                      Chọn suất này
+                    </Link>
                   </div>
-
-                  {/* CHỌN SUẤT */}
-                  <Link
-                    href={`/dat-ve?showtime=${encodeURIComponent(
-                      showtime.id,
-                    )}`}
-                    className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-6 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
-                  >
-                    Chọn suất này
-                  </Link>
-                </div>
-              </article>
-            ))}
+                </article>
+              ),
+            )}
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 
 type MovieTrailerProps = {
@@ -8,11 +9,14 @@ type MovieTrailerProps = {
   title: string;
 };
 
-function getYoutubeEmbedUrl(url: string): string | null {
+function getYoutubeEmbedUrl(
+  url: string,
+): string | null {
   try {
     const parsedUrl = new URL(url);
 
-    const videoId = parsedUrl.searchParams.get('v');
+    const videoId =
+      parsedUrl.searchParams.get('v');
 
     if (videoId) {
       return `https://www.youtube.com/embed/${videoId}`;
@@ -22,14 +26,17 @@ function getYoutubeEmbedUrl(url: string): string | null {
       parsedUrl.hostname === 'youtu.be' ||
       parsedUrl.hostname === 'www.youtu.be'
     ) {
-      const id = parsedUrl.pathname.substring(1);
+      const id =
+        parsedUrl.pathname.substring(1);
 
       if (id) {
         return `https://www.youtube.com/embed/${id}`;
       }
     }
 
-    if (parsedUrl.pathname.startsWith('/embed/')) {
+    if (
+      parsedUrl.pathname.startsWith('/embed/')
+    ) {
       return url;
     }
 
@@ -44,7 +51,8 @@ export function MovieTrailer({
   trailerUrl,
   title,
 }: MovieTrailerProps) {
-  const [showTrailer, setShowTrailer] = useState(false);
+  const [showTrailer, setShowTrailer] =
+    useState(false);
 
   const embedUrl = trailerUrl
     ? getYoutubeEmbedUrl(trailerUrl)
@@ -64,20 +72,25 @@ export function MovieTrailer({
               allowFullScreen
             />
           ) : (
-            <img
+            <Image
               src={posterUrl}
               alt={`Poster ${title}`}
-              className="absolute inset-0 h-full w-full object-cover"
+              fill
+              unoptimized
+              sizes="(max-width: 768px) 100vw, 480px"
+              className="object-cover"
             />
           )}
         </div>
       </div>
 
-      {/* CHỈ HIỂN THỊ TRAILER */}
+      {/* TRAILER BUTTON */}
       {embedUrl && (
         <button
           type="button"
-          onClick={() => setShowTrailer((value) => !value)}
+          onClick={() =>
+            setShowTrailer((value) => !value)
+          }
           className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
         >
           {showTrailer ? 'Poster' : 'Trailer'}
@@ -86,4 +99,3 @@ export function MovieTrailer({
     </div>
   );
 }
-

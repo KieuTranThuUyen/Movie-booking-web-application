@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 
@@ -13,14 +14,24 @@ export function BookingQR({
   const [qrUrl, setQrUrl] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
+
     QRCode.toDataURL(value, {
       width: 220,
       margin: 2,
     })
-      .then(setQrUrl)
+      .then((url) => {
+        if (!cancelled) {
+          setQrUrl(url);
+        }
+      })
       .catch((error) => {
         console.error('QR error:', error);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [value]);
 
   if (!qrUrl) {
@@ -33,9 +44,12 @@ export function BookingQR({
 
   return (
     <div className="rounded-2xl bg-white p-3">
-      <img
+      <Image
         src={qrUrl}
         alt={`Mã QR ${value}`}
+        width={180}
+        height={180}
+        unoptimized
         className="h-[180px] w-[180px]"
       />
     </div>

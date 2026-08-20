@@ -1,10 +1,11 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth/next';
 
+import { PaymentConfirmButton } from '@/components/payment-confirm-button';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PaymentConfirmButton } from '@/components/payment-confirm-button';
 
 type PaymentPageProps = {
   params: Promise<{
@@ -17,7 +18,8 @@ export default async function PaymentPage({
 }: PaymentPageProps) {
   const { id } = await params;
 
-  const session = await getServerSession(authOptions);
+  const session =
+    await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     redirect(
@@ -27,25 +29,26 @@ export default async function PaymentPage({
     );
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: {
-      id,
-    },
-    include: {
-      showtime: {
-        include: {
-          movie: true,
-          hall: {
-            include: {
-              cinema: true,
+  const booking =
+    await prisma.booking.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        showtime: {
+          include: {
+            movie: true,
+            hall: {
+              include: {
+                cinema: true,
+              },
             },
           },
         },
+        tickets: true,
+        payment: true,
       },
-      tickets: true,
-      payment: true,
-    },
-  });
+    });
 
   if (!booking) {
     notFound();
@@ -72,7 +75,8 @@ export default async function PaymentPage({
     );
   }
 
-  const isPaid = booking.paymentStatus === 'PAID';
+  const isPaid =
+    booking.paymentStatus === 'PAID';
 
   const paymentPending =
     booking.payment?.status === 'PENDING';
@@ -89,7 +93,9 @@ export default async function PaymentPage({
 
   const qrUrl =
     `https://api.qrserver.com/v1/create-qr-code/` +
-    `?size=300x300&data=${encodeURIComponent(qrData)}`;
+    `?size=300x300&data=${encodeURIComponent(
+      qrData,
+    )}`;
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
@@ -129,11 +135,12 @@ export default async function PaymentPage({
             </p>
 
             <div className="mx-auto mt-6 flex w-fit rounded-3xl bg-white p-5">
-              <img
+              <Image
                 src={qrUrl}
                 alt="QR Demo thanh toán"
                 width={300}
                 height={300}
+                unoptimized
                 className="h-[300px] w-[300px]"
               />
             </div>
