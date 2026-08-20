@@ -5,6 +5,8 @@ import {
 } from '@prisma/client';
 
 import { NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import type { NextRequest } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
 
@@ -15,265 +17,207 @@ type RouteContext = {
   }>;
 };
 
+async function isAdmin(request: Request) {
+  const token = await getToken({
+    req: request as NextRequest,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  return token?.role === 'ADMIN';
+}
+
 export async function DELETE(
-  _request: Request,
-  context: RouteContext
+  request: Request,
+  context: RouteContext,
 ) {
+  if (!(await isAdmin(request))) {
+    return NextResponse.json(
+      { message: 'Bạn không có quyền thực hiện thao tác này.' },
+      { status: 403 },
+    );
+  }
+
   try {
-    const { id, ticketId } =
-      await context.params;
+    const { id, ticketId } = await context.params;
 
-    const booking =
-      await prisma.booking.findUnique({
-        where: {
-          id,
-        },
+    if (!id || !ticketId) {
+      return NextResponse.json(
+        { message: 'Thông tin vé không hợp lệ.' },
+        { status: 400 },
+      );
+    }
 
-        include: {
-          showtime: true,
-          tickets: true,
-          payment: true,
-        },
-      });
+    const booking = await prisma.booking.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        showtime: true,
+        tickets: true,
+        payment: true,
+      },
+    });
 
     if (!booking) {
       return NextResponse.json(
-        {
-          message:
-            'Không tìm thấy đơn đặt vé.',
-        },
-        {
-          status: 404,
-        }
+        { message: 'Không tìm thấy đơn đặt vé.' },
+        { status: 404 },
       );
     }
 
     const now = new Date();
 
-    if (
-      booking.showtime.startTime <= now
-    ) {
+    if (booking.showtime.startTime <= now) {
       return NextResponse.json(
         {
           message:
             'Suất chiếu đã bắt đầu hoặc đã kết thúc. Không thể hủy vé.',
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
-    if (
-      booking.status ===
-      BookingStatus.CANCELED
-    ) {
+    if (booking.status === BookingStatus.CANCELED) {
       return NextResponse.json(
-        {
-          message:
-            'Đơn đặt vé này đã bị hủy.',
-        },
-        {
-          status: 400,
-        }
+        { message: 'Đơn đặt vé này đã bị hủy.' },
+        { status: 400 },
       );
     }
 
-    const ticket =
-      booking.tickets.find(
-        (item) =>
-          item.id === ticketId
-      );
+    const ticket = booking.tickets.find(
+      (item) => item.id === ticketId,
+    );
 
     if (!ticket) {
       return NextResponse.json(
-        {
-          message:
-            'Không tìm thấy vé trong đơn đặt vé.',
-        },
-        {
-          status: 404,
-        }
+        { message: 'Không tìm thấy vé trong đơn đặt vé.' },
+        { status: 404 },
       );
     }
 
-    if (
-      ticket.status ===
-      TicketStatus.CANCELED
-    ) {
+    if (ticket.status === TicketStatus.CANCELED) {
       return NextResponse.json(
         {
           message:
             `Vé ghế ${ticket.seatCode} đã được hủy trước đó.`,
         },
-        {
-          status: 400,
-        }
+        { status: 400 },
       );
     }
 
     const remainingActiveTickets =
       booking.tickets.filter(
         (item) =>
-          item.status ===
-            TicketStatus.ACTIVE &&
-          item.id !== ticketId
+          item.status === TicketStatus.ACTIVE &&
+          item.id !== ticketId,
       );
 
-    /*
-     * Chỉ hoàn tiền nếu booking
-     * đã thanh toán.
-     */
     const shouldRefund =
-      booking.paymentStatus ===
-        PaymentStatus.PAID ||
+      booking.paymentStatus === PaymentStatus.PAID ||
       booking.paymentStatus ===
         PaymentStatus.PARTIALLY_REFUNDED;
 
-    const refundAmount =
-      shouldRefund
-        ? ticket.price
-        : 0;
+    const refundAmount = shouldRefund ? ticket.price : 0;
 
     const nextRefundedAmount =
-      booking.refundedAmount +
-      refundAmount;
+      booking.refundedAmount + refundAmount;
 
     const remainingTotalPrice =
       remainingActiveTickets.reduce(
-        (sum, item) =>
-          sum + item.price,
-        0
+        (sum, item) => sum + item.price,
+        0,
       );
 
     const nextBookingStatus =
-      remainingActiveTickets.length ===
-      0
+      remainingActiveTickets.length === 0
         ? BookingStatus.CANCELED
         : booking.status;
 
-    let nextPaymentStatus =
-      booking.paymentStatus;
+    let nextPaymentStatus = booking.paymentStatus;
 
     if (shouldRefund) {
       nextPaymentStatus =
-        remainingActiveTickets.length ===
-        0
+        remainingActiveTickets.length === 0
           ? PaymentStatus.REFUNDED
           : PaymentStatus.PARTIALLY_REFUNDED;
     }
 
-    const updated =
-      await prisma.$transaction(
-        async (tx) => {
-          /*
-           * KHÔNG DELETE.
-           */
-          await tx.ticket.update({
-            where: {
-              id: ticketId,
-            },
+    const updated = await prisma.$transaction(
+      async (tx) => {
+        await tx.ticket.update({
+          where: {
+            id: ticketId,
+          },
+          data: {
+            status: TicketStatus.CANCELED,
+            canceledAt: now,
+          },
+        });
 
-            data: {
-              status:
-                TicketStatus.CANCELED,
-
-              canceledAt: now,
-            },
-          });
-
-          const updatedBooking =
-            await tx.booking.update({
-              where: {
-                id,
-              },
-
-              data: {
-                status:
-                  nextBookingStatus,
-
-                totalPrice:
-                  remainingTotalPrice,
-
-                refundedAmount:
-                  nextRefundedAmount,
-
-                paymentStatus:
-                  nextPaymentStatus,
-
-                ...(booking.payment &&
-                refundAmount > 0
-                  ? {
-                      payment: {
-                        update: {
-                          status:
-                            nextPaymentStatus ===
-                            PaymentStatus.REFUNDED
-                              ? 'REFUNDED'
-                              : 'PARTIALLY_REFUNDED',
-
-                          paidAt:
-                            nextPaymentStatus ===
-                            PaymentStatus.REFUNDED
-                              ? null
-                              : booking
-                                  .payment
-                                  .paidAt,
-                        },
-                      },
-                    }
-                  : {}),
-              },
-
-              include: {
-                showtime: {
-                  include: {
-                    movie: true,
-
-                    hall: {
-                      include: {
-                        cinema: true,
-                      },
+        const updatedBooking = await tx.booking.update({
+          where: {
+            id,
+          },
+          data: {
+            status: nextBookingStatus,
+            totalPrice: remainingTotalPrice,
+            refundedAmount: nextRefundedAmount,
+            paymentStatus: nextPaymentStatus,
+            ...(booking.payment && refundAmount > 0
+              ? {
+                  payment: {
+                    update: {
+                      status:
+                        nextPaymentStatus ===
+                        PaymentStatus.REFUNDED
+                          ? 'REFUNDED'
+                          : 'PARTIALLY_REFUNDED',
+                      paidAt:
+                        nextPaymentStatus ===
+                        PaymentStatus.REFUNDED
+                          ? null
+                          : booking.payment.paidAt,
                     },
                   },
-                },
-
-                tickets: {
-                  orderBy: {
-                    seatCode: 'asc',
+                }
+              : {}),
+          },
+          include: {
+            showtime: {
+              include: {
+                movie: true,
+                hall: {
+                  include: {
+                    cinema: true,
                   },
                 },
               },
-            });
+            },
+            tickets: {
+              orderBy: {
+                seatCode: 'asc',
+              },
+            },
+          },
+        });
 
-          return updatedBooking;
-        }
-      );
+        return updatedBooking;
+      },
+    );
 
     return NextResponse.json({
       message:
         refundAmount > 0
           ? `Đã hủy vé ghế ${ticket.seatCode} và hoàn ${refundAmount.toLocaleString(
-              'vi-VN'
+              'vi-VN',
             )} đ.`
           : `Đã hủy vé ghế ${ticket.seatCode}.`,
-
       booking: updated,
     });
-  } catch (error) {
-    console.error(
-      'DELETE ticket error:',
-      error
-    );
-
+  } catch {
     return NextResponse.json(
-      {
-        message:
-          'Có lỗi xảy ra khi hủy vé.',
-      },
-      {
-        status: 500,
-      }
+      { message: 'Có lỗi xảy ra khi hủy vé.' },
+      { status: 500 },
     );
   }
 }

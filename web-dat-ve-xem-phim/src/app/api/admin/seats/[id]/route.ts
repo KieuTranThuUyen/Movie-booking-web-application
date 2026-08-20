@@ -1,105 +1,120 @@
 import { NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
+import type { NextRequest } from 'next/server';
+
 import { prisma } from '@/lib/prisma';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+async function isAdmin(request: Request) {
+  const token = await getToken({
+    req: request as NextRequest,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  return token?.role === 'ADMIN';
+}
+
 export async function PATCH(
   request: Request,
-  context: RouteContext
+  context: RouteContext,
 ) {
-  const params = await context.params;
-
-  const body = (await request.json()) as {
-    isActive?: boolean;
-    type?: string;
-  };
+  if (!(await isAdmin(request))) {
+    return NextResponse.json(
+      { message: 'Bạn không có quyền thực hiện thao tác này.' },
+      { status: 403 },
+    );
+  }
 
   try {
-    // Tìm ghế
+    const { id } = await context.params;
+
+    const body = (await request.json()) as {
+      isActive?: boolean;
+      type?: string;
+    };
+
     const seat = await prisma.seat.findUnique({
       where: {
-        id: params.id
-      }
+        id,
+      },
     });
 
     if (!seat) {
       return NextResponse.json(
-        {
-          message: 'Không tìm thấy ghế.'
-        },
-        {
-          status: 404
-        }
+        { message: 'Không tìm thấy ghế.' },
+        { status: 404 },
       );
     }
 
-    // ==========================================
-    // ADMIN ĐANG MUỐN TẮT GHẾ
-    // ==========================================
+    if (
+      body.isActive === undefined &&
+      body.type === undefined
+    ) {
+      return NextResponse.json(
+        { message: 'Không có dữ liệu cần cập nhật.' },
+        { status: 400 },
+      );
+    }
+
+    if (
+      body.type !== undefined &&
+      !body.type.trim()
+    ) {
+      return NextResponse.json(
+        { message: 'Loại ghế không được để trống.' },
+        { status: 400 },
+      );
+    }
+
     if (body.isActive === false) {
-      // Kiểm tra xem ghế này có vé nào hay không
       const bookedTicket = await prisma.ticket.findFirst({
         where: {
           seatId: seat.id,
-
+          status: 'ACTIVE',
           booking: {
             status: {
-              in: ['PENDING', 'CONFIRMED']
-            }
-          }
-        }
+              in: ['PENDING', 'CONFIRMED'],
+            },
+          },
+        },
       });
 
-      // Đã có người đặt -> không cho tắt
       if (bookedTicket) {
         return NextResponse.json(
           {
             message:
-              `Không thể tắt ghế ${seat.code} vì ghế đã được đặt ở một suất chiếu.`
+              `Không thể tắt ghế ${seat.code} vì ghế đã được đặt.`,
           },
-          {
-            status: 400
-          }
+          { status: 400 },
         );
       }
     }
 
-    // ==========================================
-    // CHO PHÉP BẬT / TẮT
-    // ==========================================
     const updatedSeat = await prisma.seat.update({
       where: {
-        id: seat.id
+        id: seat.id,
       },
       data: {
         ...(body.isActive !== undefined && {
-          isActive: body.isActive
+          isActive: body.isActive,
         }),
-
         ...(body.type !== undefined && {
-          type: body.type
-        })
-      }
+          type: body.type.trim(),
+        }),
+      },
     });
 
     return NextResponse.json({
-      message: body.isActive === false
-        ? `Đã tắt ghế ${seat.code}.`
-        : `Đã bật ghế ${seat.code}.`,
-      seat: updatedSeat
+      message: 'Cập nhật ghế thành công.',
+      seat: updatedSeat,
     });
-  } catch (error) {
-    console.error('Lỗi cập nhật ghế:', error);
-
+  } catch {
     return NextResponse.json(
-      {
-        message: 'Không thể cập nhật ghế.'
-      },
-      {
-        status: 500
-      }
+      { message: 'Không thể cập nhật ghế.' },
+      { status: 500 },
     );
   }
 }
