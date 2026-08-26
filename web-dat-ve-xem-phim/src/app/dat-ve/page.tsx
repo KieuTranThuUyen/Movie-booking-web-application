@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth/next';
 
+import {
+  BookingStatus,
+} from '@prisma/client';
+
 import { SeatGrid } from '@/components/seat-grid';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
@@ -15,28 +19,38 @@ type BookingPageProps = {
 export default async function BookingPage({
   searchParams,
 }: BookingPageProps) {
-  const params = await searchParams;
+  const params =
+    await searchParams;
 
-  const showtimeId = params.showtime?.trim();
+  const showtimeId =
+    params.showtime?.trim();
 
-  // ============================================================
-  // KIỂM TRA SUẤT CHIẾU
-  // ============================================================
+  /*
+   * ============================================================
+   * KIỂM TRA SUẤT CHIẾU
+   * ============================================================
+   */
 
   if (!showtimeId) {
     redirect('/suat-chieu');
   }
 
-  // ============================================================
-  // KIỂM TRA ĐĂNG NHẬP
-  // ============================================================
+  /*
+   * ============================================================
+   * KIỂM TRA ĐĂNG NHẬP
+   * ============================================================
+   */
 
-  const session = await getServerSession(authOptions);
+  const session =
+    await getServerSession(
+      authOptions,
+    );
 
   if (!session?.user?.id) {
-    const callbackUrl = `/dat-ve?showtime=${encodeURIComponent(
-      showtimeId,
-    )}`;
+    const callbackUrl =
+      `/dat-ve?showtime=${encodeURIComponent(
+        showtimeId,
+      )}`;
 
     redirect(
       `/dang-nhap?callbackUrl=${encodeURIComponent(
@@ -45,30 +59,35 @@ export default async function BookingPage({
     );
   }
 
-  // ============================================================
-  // LẤY SUẤT CHIẾU
-  // ============================================================
+  /*
+   * ============================================================
+   * LẤY SUẤT CHIẾU
+   * ============================================================
+   */
 
-  const showtime = await prisma.showtime.findUnique({
-    where: {
-      id: showtimeId,
-    },
+  const showtime =
+    await prisma.showtime.findUnique({
+      where: {
+        id: showtimeId,
+      },
 
-    include: {
-      movie: true,
+      include: {
+        movie: true,
 
-      hall: {
-        include: {
-          cinema: true,
-          seats: true,
+        hall: {
+          include: {
+            cinema: true,
+            seats: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  // ============================================================
-  // KHÔNG TÌM THẤY SUẤT CHIẾU
-  // ============================================================
+  /*
+   * ============================================================
+   * KHÔNG TÌM THẤY SUẤT CHIẾU
+   * ============================================================
+   */
 
   if (!showtime) {
     return (
@@ -78,7 +97,8 @@ export default async function BookingPage({
         </h1>
 
         <p className="mt-2 text-slate-400">
-          Suất chiếu bạn đang tìm kiếm không tồn tại.
+          Suất chiếu bạn đang tìm kiếm
+          không tồn tại.
         </p>
 
         <Link
@@ -91,11 +111,16 @@ export default async function BookingPage({
     );
   }
 
-  // ============================================================
-  // KIỂM TRA SUẤT CHIẾU ĐÃ BẮT ĐẦU
-  // ============================================================
+  /*
+   * ============================================================
+   * KIỂM TRA SUẤT CHIẾU ĐÃ BẮT ĐẦU
+   * ============================================================
+   */
 
-  if (showtime.startTime <= new Date()) {
+  if (
+    showtime.startTime <=
+    new Date()
+  ) {
     return (
       <main className="min-h-screen bg-slate-950 px-6 py-20 text-center text-white">
         <h1 className="text-2xl font-bold">
@@ -103,7 +128,8 @@ export default async function BookingPage({
         </h1>
 
         <p className="mt-2 text-slate-400">
-          Bạn không thể đặt vé cho suất chiếu đã bắt đầu.
+          Bạn không thể đặt vé cho suất
+          chiếu đã bắt đầu.
         </p>
 
         <Link
@@ -116,15 +142,27 @@ export default async function BookingPage({
     );
   }
 
-  // ============================================================
-  // XÓA HOLD HẾT HẠN
-  // ============================================================
+  /*
+   * ============================================================
+   * THỜI GIAN HIỆN TẠI
+   * ============================================================
+   */
 
-  const now = new Date();
+  const now =
+    new Date();
+
+  /*
+   * ============================================================
+   * XÓA HOLD HẾT HẠN
+   *
+   * Những SeatHold quá thời gian sẽ được giải phóng.
+   * ============================================================
+   */
 
   await prisma.seatHold.deleteMany({
     where: {
-      showtimeId: showtime.id,
+      showtimeId:
+        showtime.id,
 
       expiresAt: {
         lte: now,
@@ -132,80 +170,132 @@ export default async function BookingPage({
     },
   });
 
-  // ============================================================
-  // LẤY GHẾ ĐÃ BÁN
-  // ============================================================
+  /*
+   * ============================================================
+   * LẤY GHẾ ĐÃ BÁN
+   *
+   * Booking CANCELED không chiếm ghế.
+   * ============================================================
+   */
 
-  const soldTickets = await prisma.ticket.findMany({
-    where: {
-      booking: {
-        showtimeId: showtime.id,
+  const soldTickets =
+    await prisma.ticket.findMany({
+      where: {
+        booking: {
+          showtimeId:
+            showtime.id,
 
-        // Booking bị hủy thì ghế được xem là trống
-        status: {
-          not: 'CANCELED',
+          status: {
+            not:
+              BookingStatus.CANCELED,
+          },
         },
       },
-    },
 
-    select: {
-      seatCode: true,
-    },
-  });
-
-  const soldSeats = soldTickets.map(
-    (ticket) => ticket.seatCode,
-  );
-
-  // ============================================================
-  // LẤY GHẾ ĐANG ĐƯỢC GIỮ
-  // ============================================================
-
-  const heldSeats = await prisma.seatHold.findMany({
-    where: {
-      showtimeId: showtime.id,
-
-      expiresAt: {
-        gt: now,
+      select: {
+        seatCode: true,
       },
-    },
+    });
 
-    select: {
-      seatId: true,
-      expiresAt: true,
-      userId: true,
+  const soldSeats =
+    soldTickets.map(
+      (ticket) =>
+        ticket.seatCode,
+    );
 
-      seat: {
-        select: {
-          code: true,
-          isActive: true,
+  /*
+   * ============================================================
+   * LẤY GHẾ ĐANG ĐƯỢC GIỮ
+   *
+   * Chỉ tính:
+   *
+   * - SeatHold chưa gắn Booking
+   * hoặc
+   * - SeatHold đã gắn Booking nhưng Booking vẫn PENDING
+   *
+   * Booking CANCELED sẽ không được coi là đang giữ ghế.
+   * ============================================================
+   */
+
+  const heldSeats =
+    await prisma.seatHold.findMany({
+      where: {
+        showtimeId:
+          showtime.id,
+
+        expiresAt: {
+          gt: now,
+        },
+
+        OR: [
+          {
+            bookingId: null,
+          },
+
+          {
+            booking: {
+              status:
+                BookingStatus.PENDING,
+            },
+          },
+        ],
+      },
+
+      select: {
+        seatId: true,
+
+        expiresAt: true,
+
+        userId: true,
+
+        bookingId: true,
+
+        seat: {
+          select: {
+            code: true,
+            isActive: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  // ============================================================
-  // CHỈ LẤY GHẾ ACTIVE
-  // ============================================================
+  /*
+   * ============================================================
+   * CHỈ LẤY GHẾ ACTIVE
+   * ============================================================
+   */
 
-  const activeHeldSeats = heldSeats
-    .filter((hold) => hold.seat.isActive)
-    .map((hold) => ({
-      seatId: hold.seatId,
+  const activeHeldSeats =
+    heldSeats
+      .filter(
+        (hold) =>
+          hold.seat.isActive,
+      )
+      .map(
+        (hold) => ({
+          seatId:
+            hold.seatId,
 
-      seatCode: hold.seat.code,
+          seatCode:
+            hold.seat.code,
 
-      expiresAt: hold.expiresAt.toISOString(),
+          expiresAt:
+            hold.expiresAt.toISOString(),
 
-      userId: hold.userId,
+          userId:
+            hold.userId,
 
-      isMine:
-        hold.userId === session.user.id,
-    }));
+          isMine:
+            hold.userId ===
+            session.user.id,
+        }),
+      );
 
-  // ============================================================
-  // RENDER
-  // ============================================================
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-10 text-white">
@@ -225,7 +315,8 @@ export default async function BookingPage({
           </h1>
 
           <p className="mt-2 text-slate-300">
-            Chọn ghế yêu thích của bạn cho suất chiếu
+            Chọn ghế yêu thích của bạn
+            cho suất chiếu
           </p>
         </div>
 
@@ -274,7 +365,9 @@ export default async function BookingPage({
               <p className="mt-1 font-semibold text-white">
                 {new Date(
                   showtime.startTime,
-                ).toLocaleString('vi-VN')}
+                ).toLocaleString(
+                  'vi-VN',
+                )}
               </p>
             </div>
 
@@ -340,27 +433,48 @@ export default async function BookingPage({
 
         <div className="mt-8">
           <SeatGrid
-            movieSlug={showtime.movie.slug}
-            showtimeId={showtime.id}
-            movieTitle={showtime.movie.title}
-            cinemaName={showtime.hall.cinema.name}
-            hallName={showtime.hall.name}
+            movieSlug={
+              showtime.movie.slug
+            }
+            showtimeId={
+              showtime.id
+            }
+            movieTitle={
+              showtime.movie.title
+            }
+            cinemaName={
+              showtime.hall.cinema.name
+            }
+            hallName={
+              showtime.hall.name
+            }
             startTime={showtime.startTime.toISOString()}
 
-            // ==================================================
-            // GIÁ LẤY THEO SUẤT CHIẾU
-            // ==================================================
+            /*
+             * Giá theo suất chiếu
+             */
+            standardPrice={
+              showtime.standardPrice
+            }
 
-            standardPrice={showtime.standardPrice}
-            vipPrice={showtime.vipPrice}
-            couplePrice={showtime.couplePrice}
+            vipPrice={
+              showtime.vipPrice
+            }
 
-            // ==================================================
-            // TRẠNG THÁI GHẾ
-            // ==================================================
+            couplePrice={
+              showtime.couplePrice
+            }
 
-            soldSeats={soldSeats}
-            heldSeats={activeHeldSeats}
+            /*
+             * Trạng thái ghế
+             */
+            soldSeats={
+              soldSeats
+            }
+
+            heldSeats={
+              activeHeldSeats
+            }
           />
         </div>
 

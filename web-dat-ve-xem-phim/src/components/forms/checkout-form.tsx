@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+
 import { useRouter } from 'next/navigation';
 
 type CheckoutFormProps = {
@@ -14,34 +15,13 @@ type CheckoutFormProps = {
   bookingFee?: number;
 };
 
-type PaymentMethod =
-  | 'VNPAY'
-  | 'MOMO'
-  | 'ZALOPAY';
-
-const paymentMethods = [
-  {
-    id: 'VNPAY' as const,
-    shortName: 'VN',
-    name: 'VNPay',
-    description:
-      'Mô phỏng thanh toán VNPay',
-  },
-  {
-    id: 'MOMO' as const,
-    shortName: 'M',
-    name: 'MoMo',
-    description:
-      'Mô phỏng thanh toán MoMo',
-  },
-  {
-    id: 'ZALOPAY' as const,
-    shortName: 'Z',
-    name: 'ZaloPay',
-    description:
-      'Mô phỏng thanh toán ZaloPay',
-  },
-];
+type CreateBookingResponse = {
+  success?: boolean;
+  id?: string;
+  bookingId?: string;
+  bookingCode?: string;
+  message?: string;
+};
 
 export function CheckoutForm({
   movieTitle,
@@ -53,10 +33,8 @@ export function CheckoutForm({
   subtotal,
   bookingFee = 0,
 }: CheckoutFormProps) {
-  const router = useRouter();
-
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>('VNPAY');
+  const router =
+    useRouter();
 
   const [loading, setLoading] =
     useState(false);
@@ -66,6 +44,15 @@ export function CheckoutForm({
 
   const total =
     subtotal + bookingFee;
+
+  const handleBackToSeats =
+    () => {
+      router.push(
+        `/dat-ve?showtime=${encodeURIComponent(
+          showtimeId,
+        )}`,
+      );
+    };
 
   const handleSubmit =
     async () => {
@@ -100,42 +87,62 @@ export function CheckoutForm({
               },
 
               body: JSON.stringify({
-                paymentMethod,
                 showtimeId,
+
                 seats:
                   seats.join(','),
+
+                note: '',
               }),
             },
           );
 
         const data =
-          (await response.json()) as {
-            message?: string;
-            redirectTo?: string;
-          };
+          (await response.json()) as CreateBookingResponse;
 
         if (!response.ok) {
           setMessage(
-            data.message ||
+            data.message ??
               'Không thể tạo đơn đặt vé.',
           );
 
+          setLoading(false);
+
           return;
         }
 
-        if (
-          data.redirectTo
-        ) {
-          router.push(
-            data.redirectTo,
+        const bookingId =
+          data.id ??
+          data.bookingId;
+
+        if (!bookingId) {
+          setMessage(
+            'Server không trả về id booking.',
           );
 
+          setLoading(false);
+
           return;
         }
 
-        setMessage(
-          data.message ||
-            'Không thể tiếp tục thanh toán.',
+        console.log(
+          '[CheckoutForm] NEW BOOKING',
+          {
+            bookingId,
+            bookingCode:
+              data.bookingCode,
+          },
+        );
+
+        /*
+         * Mỗi lần click phải dùng bookingId
+         * vừa được POST /api/bookings trả về.
+         */
+
+        window.location.assign(
+          `/api/payments/sepay/checkout/${encodeURIComponent(
+            bookingId,
+          )}`,
         );
       } catch (error) {
         console.error(
@@ -146,7 +153,7 @@ export function CheckoutForm({
         setMessage(
           'Không thể kết nối đến hệ thống đặt vé.',
         );
-      } finally {
+
         setLoading(false);
       }
     };
@@ -160,12 +167,14 @@ export function CheckoutForm({
           </p>
 
           <h2 className="mt-2 text-2xl font-semibold text-white">
-            Phương thức thanh toán
+            Thanh toán SePay Sandbox
           </h2>
 
           <p className="mt-2 text-sm text-slate-400">
-            Chọn phương thức để tiếp tục đến bước
-            thanh toán mô phỏng.
+            Bạn sẽ được chuyển đến môi
+            trường SePay Sandbox để thực
+            hiện thanh toán giả lập trên
+            máy. Không phát sinh tiền thật.
           </p>
         </div>
 
@@ -181,7 +190,9 @@ export function CheckoutForm({
           <p className="mt-1 text-sm text-slate-400">
             {new Date(
               showtimeStart,
-            ).toLocaleString('vi-VN')}
+            ).toLocaleString(
+              'vi-VN',
+            )}
           </p>
 
           <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
@@ -195,109 +206,43 @@ export function CheckoutForm({
           </div>
         </div>
 
-        <div>
-          <p className="mb-3 text-sm font-medium text-white">
-            Chọn phương thức
-          </p>
-
-          <div className="space-y-3">
-            {paymentMethods.map(
-              (method) => {
-                const selected =
-                  paymentMethod ===
-                  method.id;
-
-                return (
-                  <button
-                    key={
-                      method.id
-                    }
-                    type="button"
-                    onClick={() =>
-                      setPaymentMethod(
-                        method.id,
-                      )
-                    }
-                    className={`flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition ${
-                      selected
-                        ? 'border-sky-400 bg-sky-500/10'
-                        : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
-                    }`}
-                  >
-                    <span
-                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg font-bold ${
-                        selected
-                          ? 'bg-sky-400 text-slate-950'
-                          : 'bg-white/10 text-white'
-                      }`}
-                    >
-                      {method.shortName}
-                    </span>
-
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold text-white">
-                        {method.name}
-                      </span>
-
-                      <span className="mt-1 block text-sm text-slate-400">
-                        {method.description}
-                      </span>
-                    </span>
-
-                    <span
-                      className={`flex h-6 w-6 items-center justify-center rounded-full border ${
-                        selected
-                          ? 'border-sky-400 bg-sky-400 text-slate-950'
-                          : 'border-white/20'
-                      }`}
-                    >
-                      {selected
-                        ? '✓'
-                        : ''}
-                    </span>
-                  </button>
-                );
-              },
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
+        <div className="rounded-2xl border border-sky-400/20 bg-sky-500/5 p-4">
           <div className="flex gap-3">
             <span className="text-lg">
-              ℹ️
+              🧪
             </span>
 
             <div>
               <p className="text-sm font-semibold text-white">
-                Thanh toán mô phỏng
+                Môi trường Sandbox
               </p>
 
               <p className="mt-1 text-xs leading-5 text-slate-400">
-                VNPay, MoMo và ZaloPay hiện chỉ được
-                mô phỏng để kiểm thử quy trình đặt vé.
-                Hệ thống chưa kết nối cổng thanh toán
-                thực tế.
+                Đây là giao dịch kiểm thử.
+                Bạn không dùng tài khoản ngân
+                hàng thật và không bị trừ tiền
+                thật.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-emerald-400/10 bg-emerald-500/5 p-4">
+        <div className="rounded-2xl border border-amber-400/10 bg-amber-500/5 p-4">
           <div className="flex gap-3">
             <span className="text-lg">
-              🔒
+              ⏱️
             </span>
 
             <div>
               <p className="text-sm font-semibold text-white">
-                Kiểm tra thanh toán phía server
+                Ghế có thời gian giữ
               </p>
 
               <p className="mt-1 text-xs leading-5 text-slate-400">
-                Giá vé và trạng thái ghế được kiểm tra
-                lại trên máy chủ trước khi xác nhận
-                thanh toán.
+                Nếu thời gian giữ ghế hết
+                trước khi thanh toán hoàn tất,
+                phiên thanh toán sẽ bị hủy và
+                ghế được giải phóng.
               </p>
             </div>
           </div>
@@ -306,6 +251,16 @@ export function CheckoutForm({
         {message ? (
           <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
             {message}
+
+            <button
+              type="button"
+              onClick={
+                handleBackToSeats
+              }
+              className="mt-3 block rounded-xl bg-white px-4 py-2 font-semibold text-slate-950"
+            >
+              Quay lại chọn ghế
+            </button>
           </div>
         ) : null}
       </section>
@@ -358,39 +313,25 @@ export function CheckoutForm({
           </div>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs text-slate-500">
-            Phương thức đã chọn
-          </p>
-
-          <p className="mt-1 font-semibold text-white">
-            {
-              paymentMethods.find(
-                (item) =>
-                  item.id ===
-                  paymentMethod,
-              )?.name
-            }
-          </p>
-        </div>
-
         <button
           type="button"
-          onClick={handleSubmit}
+          onClick={
+            handleSubmit
+          }
           disabled={loading}
-          className="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-sky-400 px-4 py-4 font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-sky-400 px-4 py-4 font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading
             ? 'Đang tạo đơn...'
-            : `Tiếp tục thanh toán ${total.toLocaleString(
+            : `Thanh toán Sandbox ${total.toLocaleString(
                 'vi-VN',
               )} đ`}
         </button>
 
         <p className="mt-3 text-center text-xs leading-5 text-slate-500">
-          Ghế sẽ tiếp tục được giữ trong thời gian
-          thanh toán. Giá cuối cùng được hệ thống kiểm
-          tra lại trên máy chủ.
+          Mỗi lần bấm thanh toán sẽ tạo một
+          đơn mới. Không dùng lại đơn thanh
+          toán cũ.
         </p>
       </aside>
     </div>

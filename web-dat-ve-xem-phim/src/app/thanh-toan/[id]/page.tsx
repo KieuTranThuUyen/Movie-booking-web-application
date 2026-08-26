@@ -1,9 +1,7 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth/next';
 
-import { PaymentConfirmButton } from '@/components/payment-confirm-button';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -34,10 +32,12 @@ export default async function PaymentPage({
       where: {
         id,
       },
+
       include: {
         showtime: {
           include: {
             movie: true,
+
             hall: {
               include: {
                 cinema: true,
@@ -45,7 +45,9 @@ export default async function PaymentPage({
             },
           },
         },
+
         tickets: true,
+
         payment: true,
       },
     });
@@ -54,7 +56,10 @@ export default async function PaymentPage({
     notFound();
   }
 
-  if (booking.userId !== session.user.id) {
+  if (
+    booking.userId !==
+    session.user.id
+  ) {
     return (
       <main className="min-h-screen bg-slate-950 px-6 py-20 text-center text-white">
         <h1 className="text-2xl font-bold">
@@ -62,7 +67,8 @@ export default async function PaymentPage({
         </h1>
 
         <p className="mt-2 text-slate-400">
-          Đơn vé này không thuộc tài khoản của bạn.
+          Đơn vé này không thuộc tài khoản
+          của bạn.
         </p>
 
         <Link
@@ -75,27 +81,142 @@ export default async function PaymentPage({
     );
   }
 
+  /*
+   * ============================================================
+   * TRẠNG THÁI
+   * ============================================================
+   */
+
   const isPaid =
-    booking.paymentStatus === 'PAID';
+    booking.paymentStatus ===
+    'PAID';
 
-  const paymentPending =
-    booking.payment?.status === 'PENDING';
+  const isConfirmed =
+    booking.status ===
+    'CONFIRMED';
 
-  const qrData = JSON.stringify({
-    bookingCode: booking.bookingCode,
-    paymentMethod: booking.paymentMethod,
-    amount: booking.totalPrice,
-    movie: booking.showtime.movie.title,
-    seats: booking.tickets.map(
-      (ticket) => ticket.seatCode,
-    ),
-  });
+  const isCanceled =
+    booking.status ===
+    'CANCELED';
 
-  const qrUrl =
-    `https://api.qrserver.com/v1/create-qr-code/` +
-    `?size=300x300&data=${encodeURIComponent(
-      qrData,
-    )}`;
+  const isPending =
+    booking.status ===
+      'PENDING' &&
+    booking.paymentStatus !==
+      'PAID';
+
+  /*
+   * ============================================================
+   * Nếu đã thanh toán thành công
+   * ============================================================
+   */
+
+  if (
+    isPaid &&
+    isConfirmed
+  ) {
+    return (
+      <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+        <div className="mx-auto max-w-2xl">
+          <section className="rounded-[28px] border border-emerald-400/20 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
+            <div className="text-6xl">
+              ✅
+            </div>
+
+            <h1 className="mt-5 text-3xl font-bold text-white">
+              Thanh toán thành công
+            </h1>
+
+            <p className="mt-3 text-slate-400">
+              Đơn vé của bạn đã được xác
+              nhận.
+            </p>
+
+            <div className="mx-auto mt-6 max-w-md rounded-2xl border border-white/10 bg-white/5 p-5">
+              <p className="text-sm text-slate-500">
+                Mã booking
+              </p>
+
+              <p className="mt-1 text-xl font-bold text-white">
+                {
+                  booking.bookingCode
+                }
+              </p>
+
+              <p className="mt-4 text-sm text-slate-500">
+                Tổng tiền
+              </p>
+
+              <p className="mt-1 text-2xl font-bold text-emerald-300">
+                {booking.totalPrice.toLocaleString(
+                  'vi-VN',
+                )}{' '}
+                đ
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link
+                href={`/ve/${booking.id}`}
+                className="inline-flex items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300"
+              >
+                Xem vé
+              </Link>
+
+              <Link
+                href="/don-hang"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
+              >
+                Xem đơn hàng
+              </Link>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  /*
+   * ============================================================
+   * BOOKING CANCELED
+   * ============================================================
+   */
+
+  if (isCanceled) {
+    return (
+      <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+        <div className="mx-auto max-w-2xl">
+          <section className="rounded-[28px] border border-rose-400/20 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
+            <div className="text-6xl">
+              ❌
+            </div>
+
+            <h1 className="mt-5 text-3xl font-bold">
+              Đơn đã bị hủy
+            </h1>
+
+            <p className="mt-3 text-slate-400">
+              Đơn đặt vé này không còn hiệu
+              lực để thanh toán.
+            </p>
+
+            <Link
+              href="/dat-ve"
+              className="mt-6 inline-flex rounded-2xl bg-white px-5 py-3 font-semibold text-slate-950"
+            >
+              Quay lại đặt vé
+            </Link>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  /*
+   * ============================================================
+   * PENDING
+   * ============================================================
+   */
 
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
@@ -106,84 +227,94 @@ export default async function PaymentPage({
           </p>
 
           <h1 className="mt-2 text-4xl font-bold">
-            Thanh toán mô phỏng
+            Thanh toán qua SePay
           </h1>
 
           <p className="mt-3 text-slate-400">
-            Phương thức:{' '}
-            <span className="font-semibold text-white">
-              {booking.paymentMethod}
-            </span>
+            Đơn của bạn đang chờ thanh toán
+            trên SePay Sandbox.
           </p>
+        </div>
 
-          <div className="mx-auto mt-5 max-w-2xl rounded-2xl border border-amber-400/20 bg-amber-500/5 px-5 py-4 text-sm text-amber-200">
-            Đây là giao dịch mô phỏng phục vụ kiểm thử
-            hệ thống đặt vé. VNPay, MoMo và ZaloPay chưa
-            được kết nối với cổng thanh toán thực tế.
+        <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-sky-400/20 bg-sky-500/5 px-5 py-4 text-sm text-sky-200">
+          <div className="font-semibold">
+            🧪 SePay Sandbox
           </div>
+
+          <p className="mt-1 text-slate-400">
+            Đây là môi trường kiểm thử.
+            Không sử dụng tài khoản ngân
+            hàng thật và không trừ tiền
+            thật.
+          </p>
         </div>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_380px]">
-          <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
-            <h2 className="text-xl font-semibold">
-              Mã QR Demo
-            </h2>
+          {/* ==================================================
+              PAYMENT
+          =================================================== */}
 
-            <p className="mt-2 text-sm text-slate-400">
-              QR này chỉ chứa thông tin đơn đặt vé, không
-              thực hiện giao dịch ngân hàng.
-            </p>
-
-            <div className="mx-auto mt-6 flex w-fit rounded-3xl bg-white p-5">
-              <Image
-                src={qrUrl}
-                alt="QR Demo thanh toán"
-                width={300}
-                height={300}
-                unoptimized
-                className="h-[300px] w-[300px]"
-              />
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-sm text-slate-400">
-                Mã đơn
-              </p>
-
-              <p className="mt-1 text-lg font-bold text-white">
-                {booking.bookingCode}
-              </p>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-sm text-slate-400">
-                  Trạng thái giao dịch
-                </span>
-
-                <span
-                  className={
-                    isPaid
-                      ? 'font-semibold text-emerald-400'
-                      : paymentPending
-                        ? 'font-semibold text-amber-400'
-                        : 'font-semibold text-rose-400'
-                  }
-                >
-                  {isPaid
-                    ? 'Đã thanh toán'
-                    : paymentPending
-                      ? 'Chờ thanh toán'
-                      : 'Không hợp lệ'}
-                </span>
+          <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 shadow-glow backdrop-blur-xl">
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-4xl">
+                ⏳
               </div>
-            </div>
 
-            <PaymentConfirmButton
-              bookingId={booking.id}
-              isPaid={isPaid}
-            />
+              <h2 className="mt-5 text-2xl font-semibold">
+                Đang chờ thanh toán
+              </h2>
+
+              <p className="mt-3 max-w-md text-sm leading-6 text-slate-400">
+                Hãy tiếp tục tới cổng SePay
+                Sandbox để thực hiện giao dịch
+                kiểm thử.
+              </p>
+
+              <div className="mt-6 w-full rounded-2xl border border-white/10 bg-white/5 p-5 text-left">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm text-slate-400">
+                    Mã đơn
+                  </span>
+
+                  <span className="font-semibold text-white">
+                    {
+                      booking.bookingCode
+                    }
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-4">
+                  <span className="text-sm text-slate-400">
+                    Trạng thái
+                  </span>
+
+                  <span className="font-semibold text-amber-400">
+                    Chờ thanh toán
+                  </span>
+                </div>
+              </div>
+
+              <Link
+                href={`/api/payments/sepay/checkout/${encodeURIComponent(
+                  booking.id,
+                )}`}
+                className="mt-6 inline-flex w-full max-w-md items-center justify-center rounded-2xl bg-sky-400 px-5 py-4 font-semibold text-slate-950 transition hover:bg-sky-300"
+              >
+                Mở SePay Sandbox
+              </Link>
+
+              <p className="mt-4 max-w-md text-xs leading-5 text-slate-500">
+                Sau khi thanh toán trên SePay
+                Sandbox, hệ thống sẽ nhận IPN
+                và tự động cập nhật đơn thành
+                CONFIRMED.
+              </p>
+            </div>
           </section>
+
+          {/* ==================================================
+              BOOKING INFO
+          =================================================== */}
 
           <aside className="h-fit rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow">
             <h2 className="text-xl font-semibold">
@@ -197,7 +328,11 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {booking.showtime.movie.title}
+                  {
+                    booking.showtime
+                      .movie
+                      .title
+                  }
                 </p>
               </div>
 
@@ -207,7 +342,12 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1">
-                  {booking.showtime.hall.cinema.name}
+                  {
+                    booking.showtime
+                      .hall
+                      .cinema
+                      .name
+                  }
                 </p>
               </div>
 
@@ -217,7 +357,11 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1">
-                  {booking.showtime.hall.name}
+                  {
+                    booking.showtime
+                      .hall
+                      .name
+                  }
                 </p>
               </div>
 
@@ -228,8 +372,11 @@ export default async function PaymentPage({
 
                 <p className="mt-1">
                   {new Date(
-                    booking.showtime.startTime,
-                  ).toLocaleString('vi-VN')}
+                    booking.showtime
+                      .startTime,
+                  ).toLocaleString(
+                    'vi-VN',
+                  )}
                 </p>
               </div>
 
@@ -239,13 +386,18 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {booking.tickets.length > 0
+                  {booking.tickets.length >
+                  0
                     ? booking.tickets
                         .map(
-                          (ticket) =>
+                          (
+                            ticket,
+                          ) =>
                             ticket.seatCode,
                         )
-                        .join(', ')
+                        .join(
+                          ', ',
+                        )
                     : 'Đang giữ ghế'}
                 </p>
               </div>
@@ -270,18 +422,14 @@ export default async function PaymentPage({
 
                 <p
                   className={
-                    booking.status === 'CONFIRMED'
-                      ? 'mt-1 font-semibold text-emerald-400'
-                      : booking.status === 'CANCELED'
-                        ? 'mt-1 font-semibold text-rose-400'
-                        : 'mt-1 font-semibold text-amber-400'
+                    isPending
+                      ? 'mt-1 font-semibold text-amber-400'
+                      : 'mt-1 font-semibold text-slate-300'
                   }
                 >
-                  {booking.status === 'CONFIRMED'
-                    ? 'Đã xác nhận'
-                    : booking.status === 'CANCELED'
-                      ? 'Đã hủy'
-                      : 'Chờ thanh toán'}
+                  {isPending
+                    ? 'Chờ thanh toán'
+                    : booking.status}
                 </p>
               </div>
 
@@ -290,16 +438,13 @@ export default async function PaymentPage({
                   Thanh toán
                 </p>
 
-                <p
-                  className={
-                    isPaid
-                      ? 'mt-1 font-semibold text-emerald-400'
-                      : 'mt-1 font-semibold text-amber-400'
-                  }
-                >
-                  {isPaid
-                    ? 'Đã thanh toán'
-                    : 'Chưa thanh toán'}
+                <p className="mt-1 font-semibold text-amber-400">
+                  {booking.payment?.status ===
+                  'PENDING'
+                    ? 'Chưa thanh toán'
+                    : booking.payment
+                        ?.status ??
+                      'Chưa có giao dịch'}
                 </p>
               </div>
             </div>

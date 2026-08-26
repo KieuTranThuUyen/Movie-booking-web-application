@@ -1,13 +1,33 @@
 import Link from 'next/link';
 
-import { prisma } from '@/lib/prisma';
-import { ensureMoviesSeeded } from '@/lib/seed-movies';
-import { formatSeatType } from '@/lib/seat-pricing';
+import { getServerSession } from 'next-auth/next';
+
+import {
+  BookingStatus,
+} from '@prisma/client';
+
+import {
+  prisma,
+} from '@/lib/prisma';
+
+import {
+  ensureMoviesSeeded,
+} from '@/lib/seed-movies';
+
+import {
+  formatSeatType,
+} from '@/lib/seat-pricing';
+
+import {
+  authOptions,
+} from '@/lib/auth';
 
 type CartPageProps = {
   searchParams: Promise<{
     movie?: string;
+
     showtime?: string;
+
     seats?: string;
   }>;
 };
@@ -15,116 +35,355 @@ type CartPageProps = {
 export default async function CartPage({
   searchParams,
 }: CartPageProps) {
-  const resolvedSearchParams =
+  const params =
     await searchParams;
-
-  // ============================================================
-  // SEED MOVIES
-  // ============================================================
 
   await ensureMoviesSeeded();
 
-  // ============================================================
-  // LẤY SHOWTIME
-  // ============================================================
+  /*
+   * ============================================================
+   * LOGIN
+   * ============================================================
+   */
+
+  const session =
+    await getServerSession(
+      authOptions,
+    );
+
+  const userId =
+    session?.user?.id ??
+    null;
+
+  /*
+   * ============================================================
+   * SHOWTIME
+   * ============================================================
+   */
+
+  const showtimeId =
+    params.showtime?.trim();
+
+  if (!showtimeId) {
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow">
+          <h1 className="text-2xl font-bold text-white">
+            Không tìm thấy suất chiếu
+          </h1>
+
+          <p className="mt-3 text-slate-400">
+            Vui lòng quay lại chọn suất
+            chiếu.
+          </p>
+
+          <Link
+            href="/suat-chieu"
+            className="mt-6 inline-flex rounded-2xl bg-white px-5 py-3 font-semibold text-slate-950"
+          >
+            Chọn suất chiếu
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   const showtime =
-    resolvedSearchParams.showtime
-      ? await prisma.showtime.findUnique({
-          where: {
-            id: resolvedSearchParams.showtime,
+    await prisma.showtime.findUnique({
+      where: {
+        id:
+          showtimeId,
+      },
+
+      include: {
+        movie: true,
+
+        hall: {
+          include: {
+            cinema: true,
+
+            seats: true,
+          },
+        },
+      },
+    });
+
+  if (!showtime) {
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow">
+          <h1 className="text-2xl font-bold text-white">
+            Không tìm thấy suất chiếu
+          </h1>
+        </div>
+      </main>
+    );
+  }
+
+  /*
+   * ============================================================
+   * URL SEATS
+   * ============================================================
+   */
+
+  const requestedSeats = [
+    ...new Set(
+      (params.seats ??
+        '')
+        .split(',')
+        .map(
+          (seat) =>
+            seat.trim(),
+        )
+        .filter(
+          Boolean,
+        ),
+    ),
+  ];
+
+  /*
+   * ============================================================
+   * USER
+   * ============================================================
+   */
+
+  if (!userId) {
+    const callbackUrl =
+      `/gio-hang?showtime=${encodeURIComponent(
+        showtimeId,
+      )}&seats=${encodeURIComponent(
+        requestedSeats.join(
+          ',',
+        ),
+      )}`;
+
+    return (
+      <main className="page-shell py-12 lg:py-16">
+        <div className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 text-center shadow-glow">
+          <h1 className="text-2xl font-bold text-white">
+            Bạn cần đăng nhập
+          </h1>
+
+          <p className="mt-3 text-slate-400">
+            Vui lòng đăng nhập để tiếp
+            tục đặt vé.
+          </p>
+
+          <Link
+            href={`/dang-nhap?callbackUrl=${encodeURIComponent(
+              callbackUrl,
+            )}`}
+            className="mt-6 inline-flex rounded-2xl bg-white px-5 py-3 font-semibold text-slate-950"
+          >
+            Đăng nhập
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const now =
+    new Date();
+
+  /*
+   * ============================================================
+   * XÓA HOLD HẾT HẠN
+   * ============================================================
+   */
+  await prisma.seatHold.deleteMany({
+    where: {
+      showtimeId,
+
+      expiresAt: {
+        lte: now,
+      },
+    },
+  });
+
+  /*
+   * ============================================================
+   * XÓA HOLD CANCELED
+   * ============================================================
+   */
+  await prisma.seatHold.deleteMany({
+    where: {
+      showtimeId,
+
+      booking: {
+        status:
+          BookingStatus.CANCELED,
+      },
+    },
+  });
+
+  /*
+   * ============================================================
+   * LẤY HOLD CỦA USER
+   *
+   * Có thể:
+   *
+   * - bookingId = null
+   * - bookingId = Booking PENDING
+   * ============================================================
+   */
+  const myHolds =
+    await prisma.seatHold.findMany({
+      where: {
+        showtimeId,
+
+        userId,
+
+        expiresAt: {
+          gt: now,
+        },
+
+        OR: [
+          {
+            bookingId:
+              null,
           },
 
-          include: {
-            movie: true,
-
-            hall: {
-              include: {
-                cinema: true,
-                seats: true,
-              },
+          {
+            booking: {
+              status:
+                BookingStatus.PENDING,
             },
           },
-        })
-      : null;
+        ],
+      },
 
-  // ============================================================
-  // LẤY DANH SÁCH GHẾ
-  // ============================================================
+      select: {
+        seatId:
+          true,
 
-  const selectedSeats = (
-    resolvedSearchParams.seats ?? ''
-  )
-    .split(',')
-    .map((seat) => seat.trim())
-    .filter(Boolean);
+        expiresAt:
+          true,
 
-  // ============================================================
-  // LẤY CHI TIẾT GHẾ
-  //
-  // QUAN TRỌNG:
-  // Giá lấy trực tiếp từ Showtime.
-  //
-  // STANDARD -> showtime.standardPrice
-  // VIP      -> showtime.vipPrice
-  // COUPLE   -> showtime.couplePrice
-  // ============================================================
+        bookingId:
+          true,
 
-  const seatDetails =
-    showtime?.hall.seats
-      .filter((seat) =>
-        selectedSeats.includes(
-          seat.code,
-        ),
+        seat: {
+          select: {
+            code:
+              true,
+
+            isActive:
+              true,
+          },
+        },
+      },
+    });
+
+  /*
+   * ============================================================
+   * SEAT CODE USER ĐANG GIỮ
+   * ============================================================
+   */
+  const myHeldCodes =
+    myHolds
+      .filter(
+        (hold) =>
+          hold.seat.isActive,
       )
-      .map((seat) => {
-        const type = formatSeatType(
-          seat.type,
-        );
+      .map(
+        (hold) =>
+          hold.seat.code,
+      );
 
-        let price =
-          showtime.standardPrice;
+  /*
+   * ============================================================
+   * CHỈ DÙNG NHỮNG GHẾ SERVER XÁC NHẬN
+   * ============================================================
+   */
+  const validSelectedSeats =
+    requestedSeats.filter(
+      (seatCode) =>
+        myHeldCodes.includes(
+          seatCode,
+        ),
+    );
 
-        switch (type) {
-          case 'VIP':
-            price =
-              showtime.vipPrice;
-            break;
+  /*
+   * ============================================================
+   * GHẾ KHÔNG CÒN ĐƯỢC GIỮ
+   * ============================================================
+   */
+  const missingSeats =
+    requestedSeats.filter(
+      (seatCode) =>
+        !myHeldCodes.includes(
+          seatCode,
+        ),
+    );
 
-          case 'COUPLE':
-            price =
-              showtime.couplePrice;
-            break;
+  /*
+   * ============================================================
+   * CHI TIẾT GHẾ
+   * ============================================================
+   */
+  const seatDetails =
+    showtime.hall.seats
+      .filter(
+        (seat) =>
+          validSelectedSeats.includes(
+            seat.code,
+          ),
+      )
+      .map(
+        (seat) => {
+          const type =
+            formatSeatType(
+              seat.type,
+            );
 
-          case 'STANDARD':
-          default:
-            price =
-              showtime.standardPrice;
-            break;
-        }
+          let price =
+            showtime.standardPrice;
 
-        return {
-          code: seat.code,
-          type,
-          price,
-        };
-      }) ?? [];
+          switch (
+            type
+          ) {
+            case 'VIP':
+              price =
+                showtime.vipPrice;
+              break;
 
-  // ============================================================
-  // TÍNH TỔNG
-  // ============================================================
+            case 'COUPLE':
+              price =
+                showtime.couplePrice;
+              break;
+
+            default:
+              price =
+                showtime.standardPrice;
+          }
+
+          return {
+            code:
+              seat.code,
+
+            type,
+
+            price,
+          };
+        },
+      );
 
   const subtotal =
     seatDetails.reduce(
-      (total, seat) =>
-        total + seat.price,
+      (
+        total,
+        seat,
+      ) =>
+        total +
+        seat.price,
       0,
     );
 
-  // ============================================================
-  // RENDER
-  // ============================================================
-
+  /*
+   * ============================================================
+   * RENDER
+   * ============================================================
+   */
   return (
     <main className="page-shell py-12 lg:py-16">
       <div className="space-y-3">
@@ -135,101 +394,115 @@ export default async function CartPage({
         <h1 className="text-4xl font-bold text-white">
           Thông tin vé đã chọn
         </h1>
+
+        <p className="text-slate-400">
+          Hệ thống đã kiểm tra lại ghế
+          trước khi thanh toán.
+        </p>
       </div>
 
+      {missingSeats.length >
+        0 && (
+        <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
+          <p className="text-sm font-semibold text-amber-300">
+            Một số ghế không còn được
+            giữ
+          </p>
+
+          <p className="mt-1 text-sm text-slate-400">
+            Ghế{' '}
+            {missingSeats.join(
+              ', ',
+            )}{' '}
+            đã được loại khỏi giỏ.
+          </p>
+        </div>
+      )}
+
       <div className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        {/* =====================================================
-            THÔNG TIN PHIM + GHẾ
-        ====================================================== */}
-
         <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-          {showtime ? (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-              {/* PHIM */}
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+            <div className="font-semibold text-white">
+              {
+                showtime.movie
+                  .title
+              }
+            </div>
 
-              <div className="font-semibold text-white">
-                {showtime.movie.title}
+            <div className="mt-2 text-sm text-slate-300">
+              {
+                showtime
+                  .hall
+                  .cinema
+                  .name
+              }
+              {' · '}
+              {
+                showtime
+                  .hall
+                  .name
+              }
+            </div>
+
+            <div className="mt-2 text-sm text-slate-300">
+              {new Date(
+                showtime.startTime,
+              ).toLocaleString(
+                'vi-VN',
+              )}
+            </div>
+
+            <div className="mt-6">
+              <div className="text-sm font-semibold text-white">
+                Ghế đã chọn
               </div>
 
-              {/* RẠP + PHÒNG */}
-
-              <div className="mt-2 text-sm text-slate-300">
-                {showtime.hall.cinema.name}
-                {' · '}
-                {showtime.hall.name}
-              </div>
-
-              {/* SUẤT CHIẾU */}
-
-              <div className="mt-2 text-sm text-slate-300">
-                {new Date(
-                  showtime.startTime,
-                ).toLocaleString(
-                  'vi-VN',
-                )}
-              </div>
-
-              {/* GHẾ */}
-
-              <div className="mt-6">
-                <div className="text-sm font-semibold text-white">
-                  Ghế đã chọn
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {seatDetails.length >
-                  0 ? (
-                    seatDetails.map(
-                      (seat) => (
-                        <div
-                          key={
-                            seat.code
-                          }
-                          className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="font-semibold text-white">
-                              {
-                                seat.code
-                              }
-                            </span>
-
-                            <span className="rounded-lg bg-slate-700/60 px-2 py-1 text-xs text-slate-300">
-                              {
-                                seat.type
-                              }
-                            </span>
-                          </div>
-
+              <div className="mt-3 space-y-2">
+                {seatDetails.length >
+                0 ? (
+                  seatDetails.map(
+                    (
+                      seat,
+                    ) => (
+                      <div
+                        key={
+                          seat.code
+                        }
+                        className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3">
                           <span className="font-semibold text-white">
-                            {seat.price.toLocaleString(
-                              'vi-VN',
-                            )}{' '}
-                            đ
+                            {
+                              seat.code
+                            }
+                          </span>
+
+                          <span className="rounded-lg bg-slate-700/60 px-2 py-1 text-xs text-slate-300">
+                            {
+                              seat.type
+                            }
                           </span>
                         </div>
-                      ),
-                    )
-                  ) : (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                      Chưa chọn ghế.
-                    </div>
-                  )}
-                </div>
+
+                        <span className="font-semibold text-white">
+                          {seat.price.toLocaleString(
+                            'vi-VN',
+                          )}{' '}
+                          đ
+                        </span>
+                      </div>
+                    ),
+                  )
+                ) : (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    Không còn ghế nào
+                    được bạn giữ.
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-slate-300">
-              Chưa có dữ liệu giỏ vé. Hãy
-              quay lại màn hình chọn ghế để
-              thêm vé trước khi thanh toán.
-            </div>
-          )}
+          </div>
         </section>
-
-        {/* =====================================================
-            TÓM TẮT
-        ====================================================== */}
 
         <aside className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
           <div className="text-lg font-semibold text-white">
@@ -237,17 +510,17 @@ export default async function CartPage({
           </div>
 
           <div className="mt-4 space-y-3 text-sm text-slate-200">
-            {/* SỐ VÉ */}
-
             <div className="flex items-center justify-between">
-              <span>Số vé</span>
+              <span>
+                Số vé
+              </span>
 
               <span>
-                {seatDetails.length}
+                {
+                  seatDetails.length
+                }
               </span>
             </div>
-
-            {/* CHI TIẾT GIÁ */}
 
             <div className="border-t border-white/10 pt-3">
               <div className="mb-3 font-semibold text-white">
@@ -256,15 +529,25 @@ export default async function CartPage({
 
               <div className="space-y-2">
                 {seatDetails.map(
-                  (seat) => (
+                  (
+                    seat,
+                  ) => (
                     <div
-                      key={seat.code}
+                      key={
+                        seat.code
+                      }
                       className="flex items-center justify-between text-sm"
                     >
                       <span className="text-slate-300">
-                        {seat.code}{' '}
+                        {
+                          seat.code
+                        }{' '}
                         <span className="text-slate-500">
-                          ({seat.type})
+                          (
+                          {
+                            seat.type
+                          }
+                          )
                         </span>
                       </span>
 
@@ -280,8 +563,6 @@ export default async function CartPage({
               </div>
             </div>
 
-            {/* TỔNG */}
-
             <div className="flex items-center justify-between border-t border-white/10 pt-4 text-base font-semibold">
               <span className="text-white">
                 Tổng cộng
@@ -296,24 +577,30 @@ export default async function CartPage({
             </div>
           </div>
 
-          {/* THANH TOÁN */}
-
-          <Link
-            href={
-              showtime
-                ? `/thanh-toan?showtime=${encodeURIComponent(
-                    showtime.id,
-                  )}&seats=${encodeURIComponent(
-                    selectedSeats.join(
-                      ',',
-                    ),
-                  )}`
-                : '/dat-ve'
-            }
-            className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
-          >
-            Sang thanh toán
-          </Link>
+          {seatDetails.length >
+          0 ? (
+            <Link
+              href={`/thanh-toan?showtime=${encodeURIComponent(
+                showtime.id,
+              )}&seats=${encodeURIComponent(
+                validSelectedSeats.join(
+                  ',',
+                ),
+              )}`}
+              className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
+            >
+              Sang thanh toán
+            </Link>
+          ) : (
+            <Link
+              href={`/dat-ve?showtime=${encodeURIComponent(
+                showtime.id,
+              )}`}
+              className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
+            >
+              Quay lại chọn ghế
+            </Link>
+          )}
         </aside>
       </div>
     </main>

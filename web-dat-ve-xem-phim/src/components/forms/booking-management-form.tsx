@@ -60,19 +60,16 @@ type BookingItem = {
 
 type UpdateBookingPayload = {
   status?: BookingStatus;
-  paymentStatus?: PaymentStatus;
 };
 
-function formatMoney(
-  value: number
-) {
+function formatMoney(value: number) {
   return `${value.toLocaleString(
-    'vi-VN'
+    'vi-VN',
   )} đ`;
 }
 
 function getBookingStatusLabel(
-  status: BookingStatus
+  status: BookingStatus,
 ) {
   switch (status) {
     case BookingStatus.PENDING:
@@ -90,7 +87,7 @@ function getBookingStatusLabel(
 }
 
 function getBookingStatusClass(
-  status: BookingStatus
+  status: BookingStatus,
 ) {
   switch (status) {
     case BookingStatus.CONFIRMED:
@@ -105,7 +102,7 @@ function getBookingStatusClass(
 }
 
 function getPaymentStatusLabel(
-  status: PaymentStatus
+  status: PaymentStatus,
 ) {
   switch (status) {
     case PaymentStatus.UNPAID:
@@ -126,7 +123,7 @@ function getPaymentStatusLabel(
 }
 
 function getPaymentStatusClass(
-  status: PaymentStatus
+  status: PaymentStatus,
 ) {
   switch (status) {
     case PaymentStatus.PAID:
@@ -145,7 +142,7 @@ function getPaymentStatusClass(
 
 function isShowtimeStarted(
   startTime: string,
-  now: number
+  now: number,
 ) {
   return (
     new Date(startTime).getTime() <=
@@ -176,8 +173,10 @@ export function BookingManagementForm() {
   const [loadingId, setLoadingId] =
     useState('');
 
-  const [loadingTicketId, setLoadingTicketId] =
-    useState('');
+  const [
+    loadingTicketId,
+    setLoadingTicketId,
+  ] = useState('');
 
   const [loading, setLoading] =
     useState(true);
@@ -188,11 +187,15 @@ export function BookingManagementForm() {
   useEffect(() => {
     const timer =
       window.setInterval(() => {
-        setCurrentTime(Date.now());
+        setCurrentTime(
+          Date.now(),
+        );
       }, 1000);
 
     return () => {
-      window.clearInterval(timer);
+      window.clearInterval(
+        timer,
+      );
     };
   }, []);
 
@@ -208,7 +211,7 @@ export function BookingManagementForm() {
             {
               method: 'GET',
               cache: 'no-store',
-            }
+            },
           );
 
         const data =
@@ -220,20 +223,20 @@ export function BookingManagementForm() {
         if (!response.ok) {
           setError(
             data.message ||
-              'Không thể tải danh sách đơn đặt vé.'
+              'Không thể tải danh sách đơn đặt vé.',
           );
 
           return;
         }
 
         setBookings(
-          data.bookings ?? []
+          data.bookings ?? [],
         );
       } catch (error) {
         console.error(error);
 
         setError(
-          'Có lỗi xảy ra khi tải danh sách đơn đặt vé.'
+          'Có lỗi xảy ra khi tải danh sách đơn đặt vé.',
         );
       } finally {
         setLoading(false);
@@ -241,7 +244,7 @@ export function BookingManagementForm() {
     }, []);
 
   useEffect(() => {
-    fetchBookings();
+    void fetchBookings();
   }, [fetchBookings]);
 
   const filteredBookings =
@@ -249,14 +252,12 @@ export function BookingManagementForm() {
       return bookings.filter(
         (booking) => {
           const matchesStatus =
-            statusFilter ===
-              'ALL' ||
+            statusFilter === 'ALL' ||
             booking.status ===
               statusFilter;
 
           const matchesPayment =
-            paymentFilter ===
-              'ALL' ||
+            paymentFilter === 'ALL' ||
             booking.paymentStatus ===
               paymentFilter;
 
@@ -264,7 +265,7 @@ export function BookingManagementForm() {
             matchesStatus &&
             matchesPayment
           );
-        }
+        },
       );
     }, [
       bookings,
@@ -275,7 +276,7 @@ export function BookingManagementForm() {
   const updateBooking =
     async (
       bookingId: string,
-      payload: UpdateBookingPayload
+      payload: UpdateBookingPayload,
     ) => {
       setLoadingId(bookingId);
       setMessage('');
@@ -294,9 +295,9 @@ export function BookingManagementForm() {
               },
 
               body: JSON.stringify(
-                payload
+                payload,
               ),
-            }
+            },
           );
 
         const data =
@@ -308,7 +309,7 @@ export function BookingManagementForm() {
         if (!response.ok) {
           setError(
             data.message ||
-              'Không thể cập nhật đơn đặt vé.'
+              'Không thể cập nhật đơn đặt vé.',
           );
 
           return;
@@ -322,99 +323,89 @@ export function BookingManagementForm() {
                   booking.id ===
                   bookingId
                     ? data.booking!
-                    : booking
-              )
+                    : booking,
+              ),
           );
         }
 
         setMessage(
           data.message ||
-            'Cập nhật đơn đặt vé thành công.'
+            'Cập nhật đơn đặt vé thành công.',
         );
       } catch (error) {
         console.error(error);
 
         setError(
-          'Có lỗi xảy ra khi cập nhật đơn đặt vé.'
+          'Có lỗi xảy ra khi cập nhật đơn đặt vé.',
         );
       } finally {
         setLoadingId('');
       }
     };
 
-  const handleConfirm = (
-    booking: BookingItem
+  /* ==========================================================
+     HỦY BOOKING
+     ========================================================== */
+
+  const handleCancelBooking = (
+    booking: BookingItem,
   ) => {
     if (
       isShowtimeStarted(
         booking.showtime.startTime,
-        currentTime
+        currentTime,
       )
     ) {
       setError(
-        'Suất chiếu đã bắt đầu hoặc đã kết thúc. Không thể sửa đơn này.'
+        'Suất chiếu đã bắt đầu hoặc đã kết thúc. Không thể hủy đơn này.',
       );
+
       return;
     }
 
-    updateBooking(
-      booking.id,
-      {
-        status:
-          BookingStatus.CONFIRMED,
-
-        paymentStatus:
-          PaymentStatus.PAID,
-      }
-    );
-  };
-
-  const handleCancelBooking = (
-    booking: BookingItem
-  ) => {
     if (
-      isShowtimeStarted(
-        booking.showtime.startTime,
-        currentTime
-      )
+      booking.status ===
+      BookingStatus.CANCELED
     ) {
-      setError(
-        'Suất chiếu đã bắt đầu hoặc đã kết thúc. Không thể hủy đơn này.'
-      );
       return;
     }
 
     if (
       !window.confirm(
-        `Bạn có chắc muốn hủy toàn bộ đơn ${booking.bookingCode}?`
+        `Bạn có chắc muốn hủy toàn bộ đơn ${booking.bookingCode}?`,
       )
     ) {
       return;
     }
 
-    updateBooking(
+    void updateBooking(
       booking.id,
       {
         status:
           BookingStatus.CANCELED,
-      }
+      },
     );
   };
+
+  /* ==========================================================
+     HỦY TỪNG VÉ
+     ========================================================== */
 
   const handleCancelTicket =
     async (
       booking: BookingItem,
-      ticket: BookingTicket
+      ticket: BookingTicket,
     ) => {
       if (
         isShowtimeStarted(
           booking.showtime.startTime,
-          currentTime
+          currentTime,
         )
       ) {
         setError(
-          'Suất chiếu đã bắt đầu hoặc đã kết thúc. Không thể hủy vé.'
+          'Suất chiếu đã bắt đầu hoặc đã kết thúc. Không thể hủy vé.',
         );
+
         return;
       }
 
@@ -429,29 +420,31 @@ export function BookingManagementForm() {
         booking.tickets.filter(
           (item) =>
             item.status ===
-            TicketStatus.ACTIVE
+            TicketStatus.ACTIVE,
         );
 
       if (
         activeTickets.length <= 1
       ) {
         setError(
-          'Đây là vé cuối cùng còn hiệu lực. Hãy dùng chức năng Hủy đơn.'
+          'Đây là vé cuối cùng còn hiệu lực. Hãy dùng chức năng Hủy đơn.',
         );
+
         return;
       }
 
       if (
         !window.confirm(
-          `Bạn có chắc muốn hủy vé ghế ${ticket.seatCode}?`
+          `Bạn có chắc muốn hủy vé ghế ${ticket.seatCode}?`,
         )
       ) {
         return;
       }
 
       setLoadingTicketId(
-        ticket.id
+        ticket.id,
       );
+
       setMessage('');
       setError('');
 
@@ -461,7 +454,7 @@ export function BookingManagementForm() {
             `/api/admin/bookings/${booking.id}/tickets/${ticket.id}`,
             {
               method: 'DELETE',
-            }
+            },
           );
 
         const data =
@@ -473,7 +466,7 @@ export function BookingManagementForm() {
         if (!response.ok) {
           setError(
             data.message ||
-              'Không thể hủy vé.'
+              'Không thể hủy vé.',
           );
 
           return;
@@ -487,20 +480,20 @@ export function BookingManagementForm() {
                   item.id ===
                   booking.id
                     ? data.booking!
-                    : item
-              )
+                    : item,
+              ),
           );
         }
 
         setMessage(
           data.message ||
-            `Đã hủy vé ghế ${ticket.seatCode}.`
+            `Đã hủy vé ghế ${ticket.seatCode}.`,
         );
       } catch (error) {
         console.error(error);
 
         setError(
-          'Có lỗi xảy ra khi hủy vé.'
+          'Có lỗi xảy ra khi hủy vé.',
         );
       } finally {
         setLoadingTicketId('');
@@ -518,21 +511,20 @@ export function BookingManagementForm() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-400">
-            Hiển thị {filteredBookings.length} /{' '}
+            Hiển thị{' '}
+            {filteredBookings.length} /{' '}
             {bookings.length} đơn
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* BOOKING FILTER */}
-
           <select
             value={statusFilter}
             onChange={(event) =>
               setStatusFilter(
                 event.target.value as
                   | 'ALL'
-                  | BookingStatus
+                  | BookingStatus,
               )
             }
             className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none"
@@ -541,20 +533,30 @@ export function BookingManagementForm() {
               Tất cả đơn
             </option>
 
-            <option value={BookingStatus.PENDING}>
+            <option
+              value={
+                BookingStatus.PENDING
+              }
+            >
               Chờ xử lý
             </option>
 
-            <option value={BookingStatus.CONFIRMED}>
+            <option
+              value={
+                BookingStatus.CONFIRMED
+              }
+            >
               Đã xác nhận
             </option>
 
-            <option value={BookingStatus.CANCELED}>
+            <option
+              value={
+                BookingStatus.CANCELED
+              }
+            >
               Đã hủy
             </option>
           </select>
-
-          {/* PAYMENT FILTER */}
 
           <select
             value={paymentFilter}
@@ -562,7 +564,7 @@ export function BookingManagementForm() {
               setPaymentFilter(
                 event.target.value as
                   | 'ALL'
-                  | PaymentStatus
+                  | PaymentStatus,
               )
             }
             className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-2 text-sm text-white outline-none"
@@ -571,26 +573,44 @@ export function BookingManagementForm() {
               Tất cả thanh toán
             </option>
 
-            <option value={PaymentStatus.UNPAID}>
+            <option
+              value={
+                PaymentStatus.UNPAID
+              }
+            >
               Chưa thanh toán
             </option>
 
-            <option value={PaymentStatus.PAID}>
+            <option
+              value={
+                PaymentStatus.PAID
+              }
+            >
               Đã thanh toán
             </option>
 
-            <option value={PaymentStatus.PARTIALLY_REFUNDED}>
+            <option
+              value={
+                PaymentStatus.PARTIALLY_REFUNDED
+              }
+            >
               Đã hoàn tiền một phần
             </option>
 
-            <option value={PaymentStatus.REFUNDED}>
+            <option
+              value={
+                PaymentStatus.REFUNDED
+              }
+            >
               Đã hoàn tiền
             </option>
           </select>
 
           <button
             type="button"
-            onClick={fetchBookings}
+            onClick={
+              fetchBookings
+            }
             disabled={loading}
             className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-50"
           >
@@ -618,9 +638,11 @@ export function BookingManagementForm() {
       {/* EMPTY */}
 
       {!loading &&
-      filteredBookings.length === 0 ? (
+      filteredBookings.length ===
+        0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-sm text-slate-400">
-          Không có đơn phù hợp bộ lọc.
+          Không có đơn phù hợp bộ
+          lọc.
         </div>
       ) : null}
 
@@ -630,12 +652,14 @@ export function BookingManagementForm() {
         {filteredBookings.map(
           (booking) => {
             const isLoading =
-              loadingId === booking.id;
+              loadingId ===
+              booking.id;
 
             const showtimeStarted =
               isShowtimeStarted(
-                booking.showtime.startTime,
-                currentTime
+                booking.showtime
+                  .startTime,
+                currentTime,
               );
 
             const canEdit =
@@ -647,14 +671,14 @@ export function BookingManagementForm() {
               booking.tickets.filter(
                 (ticket) =>
                   ticket.status ===
-                  TicketStatus.ACTIVE
+                  TicketStatus.ACTIVE,
               );
 
             const canceledTickets =
               booking.tickets.filter(
                 (ticket) =>
                   ticket.status ===
-                  TicketStatus.CANCELED
+                  TicketStatus.CANCELED,
               );
 
             const originalTotal =
@@ -671,26 +695,45 @@ export function BookingManagementForm() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-white">
-                      {booking.bookingCode}
+                      {
+                        booking.bookingCode
+                      }
                     </div>
 
                     <div className="mt-1 text-slate-400">
-                      {booking.showtime.movie.title}
+                      {
+                        booking
+                          .showtime
+                          .movie.title
+                      }
                       {' · '}
-                      {booking.showtime.hall.cinema.name}
+                      {
+                        booking
+                          .showtime
+                          .hall
+                          .cinema
+                          .name
+                      }
                       {' · '}
-                      {booking.showtime.hall.name}
+                      {
+                        booking
+                          .showtime
+                          .hall
+                          .name
+                      }
                     </div>
                   </div>
 
                   <div className="text-right text-xs text-slate-400">
-                    <div>Ngày đặt</div>
+                    <div>
+                      Ngày đặt
+                    </div>
 
                     <div className="mt-1 text-slate-300">
                       {new Date(
-                        booking.createdAt
+                        booking.createdAt,
                       ).toLocaleString(
-                        'vi-VN'
+                        'vi-VN',
                       )}
                     </div>
                   </div>
@@ -708,21 +751,27 @@ export function BookingManagementForm() {
                       <span className="text-slate-500">
                         Họ tên:
                       </span>{' '}
-                      {booking.customerName}
+                      {
+                        booking.customerName
+                      }
                     </div>
 
                     <div>
                       <span className="text-slate-500">
                         Điện thoại:
                       </span>{' '}
-                      {booking.customerPhone}
+                      {
+                        booking.customerPhone
+                      }
                     </div>
 
                     <div>
                       <span className="text-slate-500">
                         Email:
                       </span>{' '}
-                      {booking.customerEmail}
+                      {
+                        booking.customerEmail
+                      }
                     </div>
                   </div>
                 </div>
@@ -737,9 +786,9 @@ export function BookingManagementForm() {
 
                     <span className="text-slate-300">
                       {new Date(
-                        booking.showtime.startTime
+                        booking.showtime.startTime,
                       ).toLocaleString(
-                        'vi-VN'
+                        'vi-VN',
                       )}
                     </span>
                   </div>
@@ -750,7 +799,10 @@ export function BookingManagementForm() {
                     </span>{' '}
 
                     <span className="text-slate-300">
-                      {booking.tickets.length}
+                      {
+                        booking.tickets
+                          .length
+                      }
                     </span>
                   </div>
 
@@ -760,7 +812,9 @@ export function BookingManagementForm() {
                     </span>{' '}
 
                     <span className="font-semibold text-emerald-300">
-                      {activeTickets.length}
+                      {
+                        activeTickets.length
+                      }
                     </span>
                   </div>
 
@@ -770,7 +824,9 @@ export function BookingManagementForm() {
                     </span>{' '}
 
                     <span className="font-semibold text-rose-300">
-                      {canceledTickets.length}
+                      {
+                        canceledTickets.length
+                      }
                     </span>
                   </div>
                 </div>
@@ -785,19 +841,20 @@ export function BookingManagementForm() {
 
                     <div className="mt-1 font-bold text-white">
                       {formatMoney(
-                        originalTotal
+                        originalTotal,
                       )}
                     </div>
                   </div>
 
                   <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-3">
                     <div className="text-xs text-slate-500">
-                      Tổng tiền còn hiệu lực
+                      Tổng tiền còn hiệu
+                      lực
                     </div>
 
                     <div className="mt-1 font-bold text-emerald-300">
                       {formatMoney(
-                        booking.totalPrice
+                        booking.totalPrice,
                       )}
                     </div>
                   </div>
@@ -809,7 +866,7 @@ export function BookingManagementForm() {
 
                     <div className="mt-1 font-bold text-purple-300">
                       {formatMoney(
-                        booking.refundedAmount
+                        booking.refundedAmount,
                       )}
                     </div>
                   </div>
@@ -820,37 +877,39 @@ export function BookingManagementForm() {
                 <div className="mt-3">
                   {showtimeStarted ? (
                     <span className="inline-flex rounded-xl border border-slate-400/20 bg-slate-500/10 px-3 py-2 text-xs text-slate-300">
-                      🔒 Suất chiếu đã bắt đầu — không thể sửa
+                      🔒 Suất chiếu đã
+                      bắt đầu — không
+                      thể sửa
                     </span>
                   ) : (
                     <span className="inline-flex rounded-xl border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
-                      ✓ Chưa chiếu — có thể sửa
+                      ✓ Chưa chiếu
                     </span>
                   )}
                 </div>
 
-                {/* BOOKING / PAYMENT STATUS */}
+                {/* STATUS */}
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span
                     className={`rounded-xl border px-3 py-2 text-xs font-medium ${getBookingStatusClass(
-                      booking.status
+                      booking.status,
                     )}`}
                   >
                     Đơn:{' '}
                     {getBookingStatusLabel(
-                      booking.status
+                      booking.status,
                     )}
                   </span>
 
                   <span
                     className={`rounded-xl border px-3 py-2 text-xs font-medium ${getPaymentStatusClass(
-                      booking.paymentStatus
+                      booking.paymentStatus,
                     )}`}
                   >
                     Thanh toán:{' '}
                     {getPaymentStatusLabel(
-                      booking.paymentStatus
+                      booking.paymentStatus,
                     )}
                   </span>
                 </div>
@@ -864,7 +923,8 @@ export function BookingManagementForm() {
                     </div>
 
                     <div className="text-xs text-slate-500">
-                      Chỉ ticket bị hủy mới có tiền hoàn riêng.
+                      Chỉ ticket bị hủy mới
+                      có tiền hoàn riêng.
                     </div>
                   </div>
 
@@ -881,7 +941,9 @@ export function BookingManagementForm() {
 
                         return (
                           <div
-                            key={ticket.id}
+                            key={
+                              ticket.id
+                            }
                             className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${
                               isCanceled
                                 ? 'border-rose-400/20 bg-rose-500/5'
@@ -898,7 +960,9 @@ export function BookingManagementForm() {
                                   }`}
                                 >
                                   Ghế{' '}
-                                  {ticket.seatCode}
+                                  {
+                                    ticket.seatCode
+                                  }
                                 </span>
 
                                 {isCanceled ? (
@@ -915,20 +979,20 @@ export function BookingManagementForm() {
                               <div className="mt-1 text-xs text-slate-500">
                                 Giá:{' '}
                                 {formatMoney(
-                                  ticket.price
+                                  Number(
+                                    ticket.price,
+                                  ),
                                 )}
                               </div>
 
-                              {/*
-                               * CHỈ TICKET CANCELED
-                               * mới hiển thị tiền hoàn.
-                               */}
                               {isCanceled ? (
                                 <>
                                   <div className="mt-2 text-xs font-semibold text-purple-300">
                                     Đã hoàn:{' '}
                                     {formatMoney(
-                                      ticket.price
+                                      Number(
+                                        ticket.price,
+                                      ),
                                     )}
                                   </div>
 
@@ -936,9 +1000,9 @@ export function BookingManagementForm() {
                                     <div className="mt-1 text-xs text-slate-500">
                                       Hủy lúc:{' '}
                                       {new Date(
-                                        ticket.canceledAt
+                                        ticket.canceledAt,
                                       ).toLocaleString(
-                                        'vi-VN'
+                                        'vi-VN',
                                       )}
                                     </div>
                                   ) : null}
@@ -955,7 +1019,7 @@ export function BookingManagementForm() {
                                 onClick={() =>
                                   handleCancelTicket(
                                     booking,
-                                    ticket
+                                    ticket,
                                   )
                                 }
                                 disabled={
@@ -971,7 +1035,7 @@ export function BookingManagementForm() {
                             ) : null}
                           </div>
                         );
-                      }
+                      },
                     )}
                   </div>
                 </div>
@@ -979,33 +1043,12 @@ export function BookingManagementForm() {
                 {/* ACTIONS */}
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {canEdit &&
-                  booking.status !==
-                    BookingStatus.CONFIRMED ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleConfirm(
-                          booking
-                        )
-                      }
-                      disabled={
-                        isLoading
-                      }
-                      className="rounded-xl border border-emerald-400/40 px-3 py-2 text-xs font-semibold text-emerald-200"
-                    >
-                      {isLoading
-                        ? 'Đang xử lý...'
-                        : 'Xác nhận + đã thanh toán'}
-                    </button>
-                  ) : null}
-
                   {canEdit ? (
                     <button
                       type="button"
                       onClick={() =>
                         handleCancelBooking(
-                          booking
+                          booking,
                         )
                       }
                       disabled={
@@ -1028,7 +1071,7 @@ export function BookingManagementForm() {
                 </div>
               </article>
             );
-          }
+          },
         )}
       </div>
     </div>
