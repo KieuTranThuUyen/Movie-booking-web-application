@@ -159,7 +159,7 @@ model Booking {
 }
 
 model Ticket {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   bookingId String
   seatId    String
   seatCode  String
@@ -184,6 +184,9 @@ model Payment {
   paidAt          DateTime?
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, transactionCode])
+  @@index([status])
 }
 
 model SeatHold {
