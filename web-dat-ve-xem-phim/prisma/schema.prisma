@@ -65,25 +65,60 @@ model Hall {
   name     String
   capacity Int
 
-  cinema    Cinema     @relation(fields: [cinemaId], references: [id], onDelete: Cascade)
-  showtimes Showtime[]
-  seats     Seat[]
+  layoutWidth  Int    @default(1000)
+  layoutHeight Int    @default(650)
+  layoutPreset String @default("STANDARD")
+
+  cinema Cinema @relation(fields: [cinemaId], references: [id], onDelete: Cascade)
+
+  showtimes    Showtime[]
+  seats        Seat[]
+  layoutBlocks HallLayoutBlock[]
+
+  @@index([cinemaId])
 }
 
 model Seat {
-  id         String  @id @default(cuid())
-  hallId     String
+  id     String @id @default(cuid())
+  hallId String
+
   code       String
   rowLabel   String
   seatNumber Int
-  type       String  @default("STANDARD")
-  isActive   Boolean @default(true)
 
-  hall      Hall       @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  type String @default("STANDARD")
+
+  isActive Boolean @default(true)
+
+  positionX Int @default(0)
+  positionY Int @default(0)
+
+  hall Hall @relation(fields: [hallId], references: [id], onDelete: Cascade)
+
   tickets   Ticket[]
   seatHolds SeatHold[]
 
   @@unique([hallId, code])
+  @@index([hallId, positionY])
+  @@index([hallId, positionX])
+}
+
+model HallLayoutBlock {
+  id     String @id @default(cuid())
+  hallId String
+
+  type String
+
+  x      Int
+  y      Int
+  width  Int
+  height Int
+
+  label String?
+
+  hall Hall @relation(fields: [hallId], references: [id], onDelete: Cascade)
+
+  @@index([hallId])
 }
 
 model Movie {

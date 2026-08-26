@@ -1,388 +1,208 @@
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
-
 import { prisma } from '@/lib/prisma';
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
-
-type SeatTypeInput = {
-  type: string;
-  quantity: number;
-};
+type RouteContext = { params: Promise<{ id: string }> };
+const PRESETS = ['STANDARD', 'AISLE_CENTER', 'STAGGERED', 'VIP_REAR', 'COUPLE_REAR', 'FREE'];
+const BLOCK_TYPES = ['AISLE', 'SPACE'];
+const SEAT_TYPES = ['STANDARD', 'VIP', 'COUPLE'];
 
 async function isAdmin(request: Request) {
   const token = await getToken({
     req: request as NextRequest,
     secret: process.env.NEXTAUTH_SECRET,
   });
-
   return token?.role === 'ADMIN';
 }
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext,
-) {
-  if (!(await isAdmin(request))) {
-    return NextResponse.json(
-      { message: 'Bạn không có quyền thực hiện thao tác này.' },
-      { status: 403 },
-    );
-  }
-
-  try {
-    const { id } = await context.params;
-
-    if (!id) {
-      return NextResponse.json(
-        { message: 'ID phòng chiếu không hợp lệ.' },
-        { status: 400 },
-      );
-    }
-
-    const body = (await request.json()) as {
-      name?: string;
-      rows?: number;
-      seatsPerRow?: number;
-      seatTypes?: SeatTypeInput[];
-    };
-
-    const existingHall = await prisma.hall.findUnique({
-      where: { id },
-      include: {
-        seats: {
-          orderBy: [
-            { rowLabel: 'asc' },
-            { seatNumber: 'asc' },
-          ],
-        },
-      },
-    });
-
-    if (!existingHall) {
-      return NextResponse.json(
-        { message: 'Không tìm thấy phòng chiếu.' },
-        { status: 404 },
-      );
-    }
-
-    const name =
-      body.name !== undefined
-        ? body.name.trim()
-        : undefined;
-
-    if (body.name !== undefined && !name) {
-      return NextResponse.json(
-        { message: 'Tên phòng không được để trống.' },
-        { status: 400 },
-      );
-    }
-
-    const currentRows =
-      existingHall.seats.length > 0
-        ? Math.max(
-            ...existingHall.seats.map(
-              (seat) =>
-                seat.rowLabel.charCodeAt(0) - 64,
-            ),
-          )
-        : 6;
-
-    const currentSeatsPerRow =
-      existingHall.seats.length > 0
-        ? Math.max(
-            ...existingHall.seats.map(
-              (seat) => seat.seatNumber,
-            ),
-          )
-        : 8;
-
-    const rows = Number(
-      body.rows !== undefined
-        ? body.rows
-        : currentRows,
-    );
-
-    const seatsPerRow = Number(
-      body.seatsPerRow !== undefined
-        ? body.seatsPerRow
-        : currentSeatsPerRow,
-    );
-
-    if (
-      !Number.isInteger(rows) ||
-      rows < 1 ||
-      rows > 26
-    ) {
-      return NextResponse.json(
-        { message: 'Số hàng ghế không hợp lệ.' },
-        { status: 400 },
-      );
-    }
-
-    if (
-      !Number.isInteger(seatsPerRow) ||
-      seatsPerRow < 1
-    ) {
-      return NextResponse.json(
-        { message: 'Số ghế mỗi hàng không hợp lệ.' },
-        { status: 400 },
-      );
-    }
-
-    const totalSeats = rows * seatsPerRow;
-
-    const seatTypes =
-      body.seatTypes?.filter(
-        (item) =>
-          item.type?.trim() &&
-          Number.isInteger(Number(item.quantity)) &&
-          Number(item.quantity) > 0,
-      ) ?? [];
-
-    let normalizedSeatTypes: SeatTypeInput[];
-
-    if (seatTypes.length > 0) {
-      const typeTotal = seatTypes.reduce(
-        (total, item) => total + Number(item.quantity),
-        0,
-      );
-
-      if (typeTotal !== totalSeats) {
-        return NextResponse.json(
-          {
-            message: `Tổng số ghế theo loại phải bằng ${totalSeats} ghế.`,
-          },
-          { status: 400 },
-        );
-      }
-
-      normalizedSeatTypes = seatTypes.map((item) => ({
-        type: item.type.trim(),
-        quantity: Number(item.quantity),
-      }));
-    } else {
-      const currentTypeCount = new Map<string, number>();
-
-      for (const seat of existingHall.seats) {
-        currentTypeCount.set(
-          seat.type,
-          (currentTypeCount.get(seat.type) ?? 0) + 1,
-        );
-      }
-
-      normalizedSeatTypes = Array.from(
-        currentTypeCount.entries(),
-      ).map(([type, quantity]) => ({
-        type,
-        quantity,
-      }));
-
-      if (normalizedSeatTypes.length === 0) {
-        normalizedSeatTypes = [
-          {
-            type: 'STANDARD',
-            quantity: totalSeats,
-          },
-        ];
-      }
-
-      const oldTypeTotal = normalizedSeatTypes.reduce(
-        (total, item) => total + item.quantity,
-        0,
-      );
-
-      if (oldTypeTotal !== totalSeats) {
-        normalizedSeatTypes = [
-          {
-            type: 'STANDARD',
-            quantity: totalSeats,
-          },
-        ];
-      }
-    }
-
-    const changingLayout =
-      body.rows !== undefined ||
-      body.seatsPerRow !== undefined ||
-      body.seatTypes !== undefined;
-
-    if (changingLayout) {
-      const ticketCount = await prisma.ticket.count({
-        where: {
-          seat: {
-            hallId: id,
-          },
-        },
-      });
-
-      if (ticketCount > 0) {
-        return NextResponse.json(
-          {
-            message:
-              'Phòng đã có vé được đặt nên không thể thay đổi số hàng, số ghế hoặc loại ghế. Bạn chỉ có thể đổi tên phòng.',
-          },
-          { status: 400 },
-        );
-      }
-    }
-
-    const updatedHall = await prisma.$transaction(
-      async (tx) => {
-        const hall = await tx.hall.update({
-          where: { id },
-          data: {
-            name,
-            capacity: totalSeats,
-          },
-        });
-
-        if (changingLayout) {
-          await tx.seat.deleteMany({
-            where: {
-              hallId: id,
-            },
-          });
-
-          const seatRecords: {
-            hallId: string;
-            code: string;
-            rowLabel: string;
-            seatNumber: number;
-            type: string;
-          }[] = [];
-
-          let seatIndex = 0;
-
-          for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
-            const rowLabel = String.fromCharCode(
-              65 + rowIndex,
-            );
-
-            for (
-              let seatNumber = 1;
-              seatNumber <= seatsPerRow;
-              seatNumber++
-            ) {
-              let currentType = 'STANDARD';
-              let accumulated = 0;
-
-              for (const seatType of normalizedSeatTypes) {
-                accumulated += seatType.quantity;
-
-                if (seatIndex < accumulated) {
-                  currentType = seatType.type;
-                  break;
-                }
-              }
-
-              seatRecords.push({
-                hallId: id,
-                code: `${rowLabel}${seatNumber}`,
-                rowLabel,
-                seatNumber,
-                type: currentType,
-              });
-
-              seatIndex++;
-            }
-          }
-
-          await tx.seat.createMany({
-            data: seatRecords,
-          });
-        }
-
-        return hall;
-      },
-    );
-
-    const result = await prisma.hall.findUnique({
-      where: {
-        id: updatedHall.id,
-      },
-      include: {
-        seats: {
-          orderBy: [
-            { rowLabel: 'asc' },
-            { seatNumber: 'asc' },
-          ],
-        },
-      },
-    });
-
-    return NextResponse.json({
-      message: 'Cập nhật phòng chiếu thành công.',
-      hall: result,
-    });
-  } catch {
-    return NextResponse.json(
-      { message: 'Không thể cập nhật phòng chiếu.' },
-      { status: 500 },
-    );
-  }
+function validInt(value: unknown, min: number, max: number) {
+  return Number.isInteger(value) && Number(value) >= min && Number(value) <= max;
 }
 
-export async function DELETE(
-  request: Request,
-  context: RouteContext,
-) {
+export async function PATCH(request: Request, context: RouteContext) {
   if (!(await isAdmin(request))) {
-    return NextResponse.json(
-      { message: 'Bạn không có quyền thực hiện thao tác này.' },
-      { status: 403 },
-    );
+    return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
   }
 
   try {
     const { id } = await context.params;
+    const body = await request.json() as {
+      name?: string;
+      layoutWidth?: number;
+      layoutHeight?: number;
+      layoutPreset?: string;
+      seats?: Array<{
+        id: string;
+        code?: string;
+        rowLabel?: string;
+        seatNumber?: number;
+        type?: string;
+        isActive?: boolean;
+        positionX?: number;
+        positionY?: number;
+      }>;
+      layoutBlocks?: Array<{
+        id?: string;
+        type: string;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        label?: string | null;
+      }>;
+    };
 
     const hall = await prisma.hall.findUnique({
       where: { id },
+      include: { seats: true },
     });
 
-    if (!hall) {
-      return NextResponse.json(
-        { message: 'Không tìm thấy phòng chiếu.' },
-        { status: 404 },
-      );
+    if (!hall) return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+
+    if (body.layoutWidth !== undefined && !validInt(body.layoutWidth, 600, 3000)) {
+      return NextResponse.json({ message: 'Chiều rộng sơ đồ không hợp lệ.' }, { status: 400 });
+    }
+    if (body.layoutHeight !== undefined && !validInt(body.layoutHeight, 400, 2000)) {
+      return NextResponse.json({ message: 'Chiều cao sơ đồ không hợp lệ.' }, { status: 400 });
+    }
+    if (body.layoutPreset !== undefined && !PRESETS.includes(body.layoutPreset)) {
+      return NextResponse.json({ message: 'Mẫu bố cục không hợp lệ.' }, { status: 400 });
     }
 
-    const ticketCount = await prisma.ticket.count({
-      where: {
-        seat: {
-          hallId: id,
+    const ticketCount = await prisma.ticket.count({ where: { seat: { hallId: id } } });
+
+    if (body.seats) {
+      const existingIds = new Set(hall.seats.map((seat) => seat.id));
+      const seenCodes = new Set<string>();
+
+      for (const item of body.seats) {
+        if (!existingIds.has(item.id)) {
+          return NextResponse.json({ message: 'Danh sách ghế chứa ghế không thuộc phòng.' }, { status: 400 });
+        }
+        const code = item.code?.trim();
+        if (!code) return NextResponse.json({ message: 'Tên/mã ghế không được để trống.' }, { status: 400 });
+        const type = (item.type ?? 'STANDARD').toUpperCase();
+        if (!SEAT_TYPES.includes(type)) return NextResponse.json({ message: `Loại ghế ${type} không hợp lệ.` }, { status: 400 });
+        if (!validInt(item.positionX, 0, hall.layoutWidth - 1) || !validInt(item.positionY, 0, hall.layoutHeight - 1)) {
+          return NextResponse.json({ message: `Vị trí ghế ${code} nằm ngoài sơ đồ.` }, { status: 400 });
+        }
+        if (seenCodes.has(code)) return NextResponse.json({ message: `Mã ghế ${code} bị trùng.` }, { status: 400 });
+        seenCodes.add(code);
+      }
+
+      if (ticketCount > 0) {
+        const changedStructural = body.seats.some((item) => {
+          const old = hall.seats.find((s) => s.id === item.id);
+          return old && (
+            (item.code ?? old.code) !== old.code ||
+            (item.rowLabel ?? old.rowLabel) !== old.rowLabel ||
+            (item.seatNumber ?? old.seatNumber) !== old.seatNumber
+          );
+        });
+        if (changedStructural) {
+          return NextResponse.json({
+            message: 'Phòng đã có vé nên không thể đổi mã/hàng/số ghế. Bạn vẫn có thể kéo thả và đổi loại ghế.',
+          }, { status: 400 });
+        }
+      }
+    }
+
+    if (body.layoutBlocks) {
+      for (const block of body.layoutBlocks) {
+        if (!BLOCK_TYPES.includes(block.type) ||
+            !validInt(block.x, 0, hall.layoutWidth) ||
+            !validInt(block.y, 0, hall.layoutHeight) ||
+            !validInt(block.width, 1, hall.layoutWidth) ||
+            !validInt(block.height, 1, hall.layoutHeight) ||
+            block.x + block.width > hall.layoutWidth ||
+            block.y + block.height > hall.layoutHeight) {
+          return NextResponse.json({ message: 'Có lối đi/khoảng trống không hợp lệ.' }, { status: 400 });
+        }
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.hall.update({
+        where: { id },
+        data: {
+          ...(body.name?.trim() ? { name: body.name.trim() } : {}),
+          ...(body.layoutWidth !== undefined ? { layoutWidth: body.layoutWidth } : {}),
+          ...(body.layoutHeight !== undefined ? { layoutHeight: body.layoutHeight } : {}),
+          ...(body.layoutPreset !== undefined ? { layoutPreset: body.layoutPreset } : {}),
+          ...(body.seats ? { capacity: body.seats.filter((s) => s.isActive !== false).length } : {}),
         },
-      },
+      });
+
+      if (body.seats) {
+        for (const item of body.seats) {
+          const old = hall.seats.find((s) => s.id === item.id)!;
+          await tx.seat.update({
+            where: { id: item.id },
+            data: {
+              code: item.code?.trim() ?? old.code,
+              rowLabel: item.rowLabel ?? old.rowLabel,
+              seatNumber: item.seatNumber ?? old.seatNumber,
+              type: item.type?.toUpperCase() ?? old.type,
+              isActive: item.isActive ?? old.isActive,
+              positionX: item.positionX ?? old.positionX,
+              positionY: item.positionY ?? old.positionY,
+            },
+          });
+        }
+      }
+
+      if (body.layoutBlocks) {
+        await tx.hallLayoutBlock.deleteMany({ where: { hallId: id } });
+        if (body.layoutBlocks.length) {
+          await tx.hallLayoutBlock.createMany({
+            data: body.layoutBlocks.map((b) => ({
+              hallId: id,
+              type: b.type,
+              x: b.x,
+              y: b.y,
+              width: b.width,
+              height: b.height,
+              label: b.label?.trim() || null,
+            })),
+          });
+        }
+      }
     });
 
-    if (ticketCount > 0) {
-      return NextResponse.json(
-        {
-          message:
-            'Không thể xóa phòng vì đã có dữ liệu vé liên quan.',
-        },
-        { status: 400 },
-      );
-    }
-
-    await prisma.hall.delete({
+    const result = await prisma.hall.findUnique({
       where: { id },
+      include: {
+        seats: { orderBy: [{ positionY: 'asc' }, { positionX: 'asc' }] },
+        layoutBlocks: { orderBy: [{ y: 'asc' }, { x: 'asc' }] },
+      },
     });
 
-    return NextResponse.json({
-      message: 'Xóa phòng chiếu thành công.',
-    });
+    return NextResponse.json({ message: 'Cập nhật phòng và sơ đồ thành công.', hall: result });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ message: 'Không thể cập nhật phòng chiếu.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+  if (!(await isAdmin(request))) {
+    return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
+  }
+
+  try {
+    const { id } = await context.params;
+    const hall = await prisma.hall.findUnique({ where: { id } });
+    if (!hall) return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+
+    const ticketCount = await prisma.ticket.count({ where: { seat: { hallId: id } } });
+    if (ticketCount > 0) {
+      return NextResponse.json({ message: 'Không thể xóa phòng vì đã có dữ liệu vé liên quan.' }, { status: 400 });
+    }
+
+    await prisma.hall.delete({ where: { id } });
+    return NextResponse.json({ message: 'Xóa phòng chiếu thành công.' });
   } catch {
-    return NextResponse.json(
-      {
-        message:
-          'Không thể xóa phòng do đang có dữ liệu liên quan.',
-      },
-      { status: 400 },
-    );
+    return NextResponse.json({ message: 'Không thể xóa phòng do đang có dữ liệu liên quan.' }, { status: 400 });
   }
 }
