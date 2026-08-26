@@ -92,17 +92,60 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
 
       if (ticketCount > 0) {
+        // Lấy danh sách ghế đã có vé ACTIVE
+        const bookedSeatIds = new Set(
+          (
+            await prisma.ticket.findMany({
+              where: {
+                seat: { hallId: id },
+                status: 'ACTIVE',
+                booking: { status: { in: ['PENDING', 'CONFIRMED'] } },
+              },
+              select: { seatId: true },
+            })
+          ).map((t) => t.seatId),
+        );
+
+        for (const item of body.seats) {
+          const oldSeat = hall.seats.find((s) => s.id === item.id);
+          if (!oldSeat) continue;
+          const isBooked = bookedSeatIds.has(item.id);
+
+          const codeChanged = (item.code ?? oldSeat.code) !== oldSeat.code;
+          const rowChanged = (item.rowLabel ?? oldSeat.rowLabel) !== oldSeat.rowLabel;
+          const numChanged = (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber;
+          const typeChanged = (item.type ?? oldSeat.type).toUpperCase() !== oldSeat.type.toUpperCase();
+          const lockChanged =
+            item.isActive !== undefined && item.isActive !== oldSeat.isActive;
+
+          if (isBooked && (codeChanged || rowChanged || numChanged)) {
+            return NextResponse.json({
+              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi mã/hàng/số ghế.`,
+            }, { status: 400 });
+          }
+          if (isBooked && typeChanged) {
+            return NextResponse.json({
+              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi loại ghế.`,
+            }, { status: 400 });
+          }
+          if (isBooked && lockChanged && item.isActive === false) {
+            return NextResponse.json({
+              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể khóa ghế.`,
+            }, { status: 400 });
+          }
+        }
+
         const changedStructural = body.seats.some((item) => {
-          const old = hall.seats.find((s) => s.id === item.id);
-          return old && (
-            (item.code ?? old.code) !== old.code ||
-            (item.rowLabel ?? old.rowLabel) !== old.rowLabel ||
-            (item.seatNumber ?? old.seatNumber) !== old.seatNumber
+          const oldSeat = hall.seats.find((s) => s.id === item.id);
+          return oldSeat && (
+            (item.code ?? oldSeat.code) !== oldSeat.code ||
+            (item.rowLabel ?? oldSeat.rowLabel) !== oldSeat.rowLabel ||
+            (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber
           );
         });
         if (changedStructural) {
           return NextResponse.json({
-            message: 'Phòng đã có vé nên không thể đổi mã/hàng/số ghế. Bạn vẫn có thể kéo thả và đổi loại ghế.',
+            message: 'Phòng đã có vé nên không thể đổi mã/hàng/số ghế.',
           }, { status: 400 });
         }
       }
@@ -194,6 +237,13 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const hall = await prisma.hall.findUnique({ where: { id } });
     if (!hall) return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+
+    const showtimeCount = await prisma.showtime.count({ where: { hallId: id } });
+    if (showtimeCount > 0) {
+      return NextResponse.json({
+        message: `Không thể xóa phòng vì đang có ${showtimeCount} suất chiếu. Vui lòng xóa hoặc chuyển suất chiếu trước.`,
+      }, { status: 400 });
+    }
 
     const ticketCount = await prisma.ticket.count({ where: { seat: { hallId: id } } });
     if (ticketCount > 0) {

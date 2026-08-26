@@ -143,12 +143,32 @@ export async function DELETE(
 
     const cinema = await prisma.cinema.findUnique({
       where: { id },
+      include: {
+        halls: {
+          include: {
+            _count: { select: { showtimes: true } },
+          },
+        },
+      },
     });
 
     if (!cinema) {
       return NextResponse.json(
         { message: 'Không tìm thấy rạp.' },
         { status: 404 },
+      );
+    }
+
+    const showtimeCount = cinema.halls.reduce(
+      (sum, hall) => sum + hall._count.showtimes,
+      0,
+    );
+    if (showtimeCount > 0) {
+      return NextResponse.json(
+        {
+          message: `Không thể xóa rạp vì đang có ${showtimeCount} suất chiếu. Vui lòng xóa hoặc chuyển suất chiếu trước.`,
+        },
+        { status: 400 },
       );
     }
 
@@ -163,7 +183,7 @@ export async function DELETE(
     return NextResponse.json(
       {
         message:
-          'Không thể xóa rạp do đang có dữ liệu đặt vé liên quan.',
+          'Không thể xóa rạp do đang có dữ liệu đặt vé hoặc suất chiếu liên quan.',
       },
       { status: 400 },
     );

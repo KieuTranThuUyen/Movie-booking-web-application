@@ -65,16 +65,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ message: 'Vị trí ghế nằm ngoài sơ đồ.' }, { status: 400 });
     }
 
-    if (body.isActive === false) {
-      const bookedTicket = await prisma.ticket.findFirst({
-        where: {
-          seatId: seat.id,
-          status: 'ACTIVE',
-          booking: { status: { in: ['PENDING', 'CONFIRMED'] } },
-        },
-      });
-      if (bookedTicket) {
-        return NextResponse.json({ message: `Không thể tắt ghế ${seat.code} vì ghế đã được đặt.` }, { status: 400 });
+    const bookedTicket = await prisma.ticket.findFirst({
+      where: {
+        seatId: seat.id,
+        status: 'ACTIVE',
+        booking: { status: { in: ['PENDING', 'CONFIRMED'] } },
+      },
+    });
+
+    if (bookedTicket) {
+      if (body.isActive === false) {
+        return NextResponse.json({
+          message: `Không thể khóa ghế ${seat.code} vì ghế đã được đặt vé.`,
+        }, { status: 400 });
+      }
+      if (type !== undefined && type !== seat.type) {
+        return NextResponse.json({
+          message: `Không thể đổi loại ghế ${seat.code} vì ghế đã được đặt vé.`,
+        }, { status: 400 });
       }
     }
 
