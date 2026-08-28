@@ -415,6 +415,42 @@ export async function POST(request: Request) {
       );
     }
 
+    if (movie.isComingSoon) {
+      return NextResponse.json(
+        {
+          message:
+            'Không thể tạo suất chiếu cho phim sắp chiếu.',
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    // ========================================================
+    // NGÀY CHIẾU >= NGÀY KHỞI CHIẾU
+    // ========================================================
+
+    const releaseDay = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    }).format(movie.releaseDate);
+
+    const showDay = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    }).format(startTime);
+
+    if (showDay < releaseDay) {
+      return NextResponse.json(
+        {
+          message:
+            `Ngày chiếu phải từ ngày khởi chiếu của phim (${releaseDay}) trở đi.`,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
     // ========================================================
     // TÌM PHÒNG
     // ========================================================

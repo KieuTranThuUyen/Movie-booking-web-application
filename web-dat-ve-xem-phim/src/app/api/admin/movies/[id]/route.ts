@@ -75,8 +75,13 @@ export async function PATCH(
         ? Number(body.duration)
         : undefined;
 
+    // Parse YYYY-MM-DD theo giờ VN để không bị lệch ngày
     const releaseDate = body.releaseDate
-      ? new Date(body.releaseDate)
+      ? new Date(
+          /^\d{4}-\d{2}-\d{2}$/.test(body.releaseDate.trim())
+            ? `${body.releaseDate.trim()}T12:00:00+07:00`
+            : body.releaseDate,
+        )
       : undefined;
 
     if (

@@ -22,6 +22,24 @@ type MovieManagementFormProps = {
   movies: MovieItem[];
 };
 
+
+/** Chuẩn hóa ngày về YYYY-MM-DD theo giờ Việt Nam (cho input type="date") */
+function toDateInputValue(value: string | Date | null | undefined): string {
+  if (!value) return '';
+
+  // Đã đúng dạng YYYY-MM-DD
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(date);
+}
+
 const emptyForm = {
   title: '',
   slug: '',
@@ -90,9 +108,7 @@ export function MovieManagementForm({
       synopsis: movie.synopsis,
       posterUrl: movie.posterUrl,
       trailerUrl: movie.trailerUrl ?? '',
-      releaseDate: String(
-        movie.releaseDate,
-      ).slice(0, 10),
+      releaseDate: toDateInputValue(movie.releaseDate),
       isNowShowing: movie.isNowShowing,
       isComingSoon: movie.isComingSoon,
     });
@@ -153,9 +169,7 @@ export function MovieManagementForm({
           posterUrl: data.movie.posterUrl,
           trailerUrl:
             data.movie.trailerUrl ?? '',
-          releaseDate: String(
-            data.movie.releaseDate,
-          ).slice(0, 10),
+          releaseDate: toDateInputValue(data.movie.releaseDate) || form.releaseDate,
           isNowShowing:
             data.movie.isNowShowing,
           isComingSoon:
