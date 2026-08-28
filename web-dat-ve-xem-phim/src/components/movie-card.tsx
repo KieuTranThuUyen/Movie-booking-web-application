@@ -7,9 +7,9 @@ type MovieCardProps = {
   movie: Movie;
 };
 
-export function MovieCard({
-  movie,
-}: MovieCardProps) {
+export function MovieCard({ movie }: MovieCardProps) {
+  const canBook = movie.isNowShowing && !movie.isComingSoon;
+
   return (
     <article className="overflow-hidden rounded-[28px] border border-white/10 bg-white/5 shadow-glow transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/8">
       <Image
@@ -43,28 +43,28 @@ export function MovieCard({
           </span>
 
           <span className="rounded-full bg-white/10 px-3 py-1">
-            {movie.isNowShowing
-              ? 'Đang chiếu'
-              : 'Sắp chiếu'}
+            {movie.isNowShowing ? 'Đang chiếu' : 'Sắp chiếu'}
           </span>
         </div>
 
         <div className="flex gap-3">
           <Link
             href={`/phim/${movie.slug}`}
-            className="inline-flex flex-1 items-center justify-center rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
+            className={`inline-flex items-center justify-center rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-slate-100 ${
+              canBook ? 'flex-1' : 'w-full'
+            }`}
           >
             Xem chi tiết
           </Link>
 
-          <Link
-            href={`/suat-chieu?movie=${encodeURIComponent(
-              movie.slug,
-            )}`}
-            className="inline-flex flex-1 items-center justify-center rounded-full border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5"
-          >
-            Đặt vé
-          </Link>
+          {canBook ? (
+            <Link
+              href={`/suat-chieu?movie=${encodeURIComponent(movie.slug)}`}
+              className="inline-flex flex-1 items-center justify-center rounded-full border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/5"
+            >
+              Đặt vé
+            </Link>
+          ) : null}
         </div>
       </div>
     </article>

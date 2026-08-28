@@ -100,12 +100,14 @@ export default async function MovieDetailPage({
                 {movie.synopsis}
               </p>
 
-            <Link
-              href={`/suat-chieu?movie=${encodeURIComponent(movie.slug)}`}
-              className="inline-flex rounded-full bg-white px-6 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
-            >
-              Đặt vé
-            </Link>
+            {movie.isNowShowing && !movie.isComingSoon ? (
+              <Link
+                href={`/suat-chieu?movie=${encodeURIComponent(movie.slug)}`}
+                className="inline-flex rounded-full bg-white px-6 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
+              >
+                Đặt vé
+              </Link>
+            ) : null}
             </div>
 
             {/* =========================
