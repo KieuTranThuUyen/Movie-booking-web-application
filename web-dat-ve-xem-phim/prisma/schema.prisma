@@ -130,6 +130,7 @@ model Movie {
   ageRating    String
   synopsis     String   @db.Text
   posterUrl    String   @db.Text
+  imageUrl     String   @db.Text
   trailerUrl   String?  @db.Text
   releaseDate  DateTime
   isNowShowing Boolean  @default(true)

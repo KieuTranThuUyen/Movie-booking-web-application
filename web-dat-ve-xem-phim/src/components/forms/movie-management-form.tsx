@@ -12,6 +12,7 @@ type MovieItem = {
   ageRating: string;
   synopsis: string;
   posterUrl: string;
+  imageUrl: string;
   trailerUrl: string | null;
   releaseDate: string | Date;
   isNowShowing: boolean;
@@ -48,6 +49,7 @@ const emptyForm = {
   ageRating: 'T13',
   synopsis: '',
   posterUrl: '',
+  imageUrl: '',
   trailerUrl: '',
   releaseDate: '',
   isNowShowing: true,
@@ -107,6 +109,7 @@ export function MovieManagementForm({
       ageRating: movie.ageRating,
       synopsis: movie.synopsis,
       posterUrl: movie.posterUrl,
+      imageUrl: movie.imageUrl,
       trailerUrl: movie.trailerUrl ?? '',
       releaseDate: toDateInputValue(movie.releaseDate),
       isNowShowing: movie.isNowShowing,
@@ -167,6 +170,7 @@ export function MovieManagementForm({
           ageRating: data.movie.ageRating,
           synopsis: data.movie.synopsis,
           posterUrl: data.movie.posterUrl,
+          imageUrl: data.movie.imageUrl,
           trailerUrl:
             data.movie.trailerUrl ?? '',
           releaseDate: toDateInputValue(data.movie.releaseDate) || form.releaseDate,
@@ -477,6 +481,20 @@ export function MovieManagementForm({
             }))
           }
           placeholder="Poster URL"
+          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
+          required
+        />
+
+        {/* ẢNH PHIM */}
+        <input
+          value={form.imageUrl}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              imageUrl: event.target.value,
+            }))
+          }
+          placeholder="Ảnh phim URL (dùng cho danh sách/chi tiết/lịch chiếu)"
           className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
           required
         />

@@ -51,6 +51,7 @@ export async function POST(request: Request) {
       ageRating?: string;
       synopsis?: string;
       posterUrl?: string;
+      imageUrl?: string;
       trailerUrl?: string;
       releaseDate?: string;
       isNowShowing?: boolean;
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
     const ageRating = body.ageRating?.trim();
     const synopsis = body.synopsis?.trim();
     const posterUrl = body.posterUrl?.trim();
+    const imageUrl = body.imageUrl?.trim();
     const trailerUrl = body.trailerUrl?.trim();
     const duration = Number(body.duration);
     // Parse YYYY-MM-DD theo giờ VN để không bị lệch ngày
@@ -81,6 +83,7 @@ export async function POST(request: Request) {
       !ageRating ||
       !synopsis ||
       !posterUrl ||
+      !imageUrl ||
       !body.releaseDate
     ) {
       return NextResponse.json(
@@ -123,6 +126,7 @@ export async function POST(request: Request) {
         ageRating,
         synopsis,
         posterUrl,
+        imageUrl,
         trailerUrl: trailerUrl || null,
         releaseDate,
         isNowShowing: Boolean(body.isNowShowing),

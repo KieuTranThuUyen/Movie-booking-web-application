@@ -38,6 +38,7 @@ export async function PATCH(
       ageRating?: string;
       synopsis?: string;
       posterUrl?: string;
+      imageUrl?: string;
       trailerUrl?: string;
       releaseDate?: string;
       isNowShowing?: boolean;
@@ -68,6 +69,7 @@ export async function PATCH(
     const ageRating = body.ageRating?.trim();
     const synopsis = body.synopsis?.trim();
     const posterUrl = body.posterUrl?.trim();
+    const imageUrl = body.imageUrl?.trim();
     const trailerUrl = body.trailerUrl?.trim();
 
     const duration =
@@ -147,6 +149,7 @@ export async function PATCH(
         ageRating,
         synopsis,
         posterUrl,
+        imageUrl,
         trailerUrl:
           body.trailerUrl !== undefined
             ? trailerUrl || null

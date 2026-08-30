@@ -66,6 +66,7 @@ export default async function HomePage() {
               title: true,
               slug: true,
               posterUrl: true,
+              imageUrl: true,
               ageRating: true,
               genre: true,
             },

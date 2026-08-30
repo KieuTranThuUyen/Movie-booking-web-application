@@ -94,6 +94,7 @@ export async function GET() {
               title: true,
               slug: true,
               posterUrl: true,
+              imageUrl: true,
               duration: true,
             },
           },

@@ -13,7 +13,7 @@ export type ScheduleShowtime = {
     id: string;
     title: string;
     slug: string;
-    posterUrl: string;
+    imageUrl: string;
     ageRating: string;
     genre: string;
   };
@@ -290,7 +290,7 @@ export function MovieSchedule({
                           className="relative h-28 w-20 shrink-0 overflow-hidden rounded-xl"
                         >
                           <Image
-                            src={movie.posterUrl}
+                            src={movie.imageUrl}
                             alt={movie.title}
                             fill
                             unoptimized

@@ -58,7 +58,7 @@ export default async function MovieDetailPage({
              ========================= */}
           <div className="lg:sticky lg:top-24 lg:self-start">
             <MovieTrailer
-              posterUrl={movie.posterUrl}
+              imageUrl={movie.imageUrl}
               trailerUrl={movie.trailerUrl}
               title={movie.title}
             />

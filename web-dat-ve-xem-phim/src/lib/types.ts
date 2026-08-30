@@ -9,6 +9,7 @@ export type Movie = {
   ageRating: string;
   synopsis: string;
   posterUrl: string;
+  imageUrl: string;
   trailerUrl?: string | null;
   releaseDate: string | Date;
   isNowShowing: boolean;

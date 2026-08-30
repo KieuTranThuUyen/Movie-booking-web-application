@@ -13,7 +13,7 @@ export function MovieCard({ movie }: MovieCardProps) {
   return (
     <article className="overflow-hidden rounded-[28px] border border-white/10 bg-white/5 shadow-glow transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/8">
       <Image
-        src={movie.posterUrl}
+        src={movie.imageUrl}
         alt={movie.title}
         width={600}
         height={900}
