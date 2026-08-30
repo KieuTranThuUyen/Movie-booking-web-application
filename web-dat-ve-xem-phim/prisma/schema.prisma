@@ -128,9 +128,9 @@ model Movie {
   genre        String
   duration     Int
   ageRating    String
-  synopsis     String
-  posterUrl    String
-  trailerUrl   String?
+  synopsis     String   @db.Text
+  posterUrl    String   @db.Text
+  trailerUrl   String?  @db.Text
   releaseDate  DateTime
   isNowShowing Boolean  @default(true)
   isComingSoon Boolean  @default(false)

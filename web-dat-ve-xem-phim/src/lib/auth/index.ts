@@ -1,45 +1,10 @@
-import { compare, hash } from 'bcryptjs';
+import { compare } from 'bcryptjs';
 import { UserRole } from '@prisma/client';
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import type { JWT } from 'next-auth/jwt';
 
 import { prisma } from '@/lib/db/prisma';
-
-const ADMIN_EMAIL =
-  process.env.ADMIN_EMAIL ?? 'admin@example.com';
-
-const ADMIN_PASSWORD =
-  process.env.ADMIN_PASSWORD ?? 'Admin123!';
-
-const ADMIN_NAME =
-  process.env.ADMIN_NAME ?? 'Administrator';
-
-async function ensureDefaultAdminUser() {
-  const existingAdmin = await prisma.user.findUnique({
-    where: {
-      email: ADMIN_EMAIL,
-    },
-  });
-
-  if (existingAdmin) {
-    return existingAdmin;
-  }
-
-  const hashedPassword = await hash(
-    ADMIN_PASSWORD,
-    10,
-  );
-
-  return prisma.user.create({
-    data: {
-      name: ADMIN_NAME,
-      email: ADMIN_EMAIL,
-      password: hashedPassword,
-      role: UserRole.ADMIN,
-    },
-  });
-}
 
 type AuthenticatedUser = {
   id: string;
@@ -59,18 +24,11 @@ export async function findAuthenticatedUser(
   identifier: string,
   password: string,
 ): Promise<AuthenticatedUser | null> {
-  // Đảm bảo tài khoản Admin mặc định tồn tại.
-  await ensureDefaultAdminUser();
-
   const user = await prisma.user.findFirst({
     where: {
       OR: [
-        {
-          email: identifier,
-        },
-        {
-          phone: identifier,
-        },
+        { email: identifier },
+        { phone: identifier },
       ],
     },
   });
@@ -79,10 +37,7 @@ export async function findAuthenticatedUser(
     return null;
   }
 
-  const passwordValid = await compare(
-    password,
-    user.password,
-  );
+  const passwordValid = await compare(password, user.password);
 
   if (!passwordValid) {
     return null;
@@ -116,7 +71,6 @@ export const authOptions: NextAuthOptions = {
           type: 'text',
           placeholder: 'Email hoặc số điện thoại',
         },
-
         password: {
           label: 'Mật khẩu',
           type: 'password',
@@ -124,20 +78,14 @@ export const authOptions: NextAuthOptions = {
       },
 
       async authorize(credentials) {
-        const identifier =
-          credentials?.identifier?.trim();
-
-        const password =
-          credentials?.password ?? '';
+        const identifier = credentials?.identifier?.trim();
+        const password = credentials?.password ?? '';
 
         if (!identifier || !password) {
           return null;
         }
 
-        return findAuthenticatedUser(
-          identifier,
-          password,
-        );
+        return findAuthenticatedUser(identifier, password);
       },
     }),
   ],
@@ -145,11 +93,8 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const typedUser =
-          user as AuthenticatedUser;
-
-        const typedToken =
-          token as AuthToken;
+        const typedUser = user as AuthenticatedUser;
+        const typedToken = token as AuthToken;
 
         typedToken.id = typedUser.id;
         typedToken.role = typedUser.role;
@@ -161,18 +106,11 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (session.user) {
-        const typedToken =
-          token as AuthToken;
+        const typedToken = token as AuthToken;
 
-        session.user.id =
-          typedToken.id ?? '';
-
-        session.user.role =
-          typedToken.role ??
-          UserRole.CUSTOMER;
-
-        session.user.phone =
-          typedToken.phone ?? null;
+        session.user.id = typedToken.id ?? '';
+        session.user.role = typedToken.role ?? UserRole.CUSTOMER;
+        session.user.phone = typedToken.phone ?? null;
       }
 
       return session;

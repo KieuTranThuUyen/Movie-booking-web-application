@@ -2,3 +2,4 @@ docs/
 cach-lam.md
 tt1.docx
 *.tsbuildinfo
+prisma/reset-data.ts
