@@ -12,7 +12,7 @@ import type {
   NextRequest,
 } from 'next/server';
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 type RouteContext = {
   params: Promise<{

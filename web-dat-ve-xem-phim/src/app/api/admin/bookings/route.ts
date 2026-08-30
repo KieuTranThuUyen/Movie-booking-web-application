@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 async function isAdmin(request: Request) {
   const token = await getToken({

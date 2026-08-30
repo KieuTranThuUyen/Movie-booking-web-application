@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
-import { ensureMoviesSeeded } from '@/lib/seed-movies';
-import { MovieTrailer } from '@/components/movie-trailer';
+import { prisma } from '@/lib/db/prisma';
+import { MovieTrailer } from '@/components/movie/movie-trailer';
 
 type MovieDetailPageProps = {
   params: Promise<{ slug: string }>;
@@ -13,7 +12,6 @@ export default async function MovieDetailPage({
 }: MovieDetailPageProps) {
   const resolvedParams = await params;
 
-  await ensureMoviesSeeded();
 
   const movie = await prisma.movie.findUnique({
     where: {

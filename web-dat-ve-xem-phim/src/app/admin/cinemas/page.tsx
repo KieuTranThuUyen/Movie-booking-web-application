@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 import { CinemaManagementForm } from '@/components/forms/cinema-management-form';
 
 export default async function AdminCinemasPage() {

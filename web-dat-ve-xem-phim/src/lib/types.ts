@@ -1,3 +1,5 @@
+/** Shared view types used by UI components */
+
 export type Movie = {
   id: string;
   title: string;
@@ -11,25 +13,4 @@ export type Movie = {
   releaseDate: string | Date;
   isNowShowing: boolean;
   isComingSoon: boolean;
-};
-
-export type Showtime = {
-  id: string;
-  movieSlug: string;
-  cinemaName: string;
-  hallName: string;
-  startTime: string;
-  format: string;
-  language: string;
-  basePrice: number;
-};
-
-export type BookingRecord = {
-  code: string;
-  movieTitle: string;
-  cinemaName: string;
-  seats: string[];
-  time: string;
-  status: 'Chờ xử lý' | 'Đã xác nhận' | 'Đã hủy';
-  total: number;
 };

@@ -1,6 +1,5 @@
 import { CheckoutForm } from '@/components/forms/checkout-form';
-import { prisma } from '@/lib/prisma';
-import { ensureMoviesSeeded } from '@/lib/seed-movies';
+import { prisma } from '@/lib/db/prisma';
 
 type CheckoutPageProps = {
   searchParams: Promise<{
@@ -14,7 +13,6 @@ export default async function CheckoutPage({
 }: CheckoutPageProps) {
   const resolvedSearchParams = await searchParams;
 
-  await ensureMoviesSeeded();
 
   const showtimeId =
     resolvedSearchParams.showtime?.trim() ?? '';

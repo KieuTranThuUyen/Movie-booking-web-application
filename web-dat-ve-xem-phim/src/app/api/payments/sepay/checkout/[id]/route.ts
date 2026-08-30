@@ -7,11 +7,11 @@ import {
 } from '@prisma/client';
 
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 import {
   createSepayCheckoutFields,
-} from '@/lib/sepay';
+} from '@/lib/payment/sepay';
 
 type RouteContext = {
   params: Promise<{

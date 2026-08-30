@@ -3,8 +3,8 @@ import { getServerSession } from 'next-auth/next';
 import { redirect } from 'next/navigation';
 
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { AccountProfile } from '@/components/account-profile';
+import { prisma } from '@/lib/db/prisma';
+import { AccountProfile } from '@/components/booking/account-profile';
 
 function getBookingStatusLabel(status: string) {
   switch (status) {

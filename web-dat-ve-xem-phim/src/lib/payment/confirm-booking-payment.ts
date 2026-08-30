@@ -3,7 +3,7 @@ import {
   PaymentStatus,
 } from '@prisma/client';
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 type ConfirmPaymentOptions = {
   bookingId: string;

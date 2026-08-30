@@ -1,13 +1,13 @@
 import Link from 'next/link';
 
-import { MovieCard } from '@/components/movie-card';
+import { MovieCard } from '@/components/movie/movie-card';
 import {
   MovieSchedule,
   type ScheduleCinema,
   type ScheduleShowtime,
-} from '@/components/movie-schedule';
-import { PosterBanner } from '@/components/poster-banner';
-import { prisma } from '@/lib/prisma';
+} from '@/components/movie/movie-schedule';
+import { PosterBanner } from '@/components/movie/poster-banner';
+import { prisma } from '@/lib/db/prisma';
 
 function getTodayVietnam() {
   return new Intl.DateTimeFormat('en-CA', {

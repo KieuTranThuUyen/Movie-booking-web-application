@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { ensureMoviesSeeded } from '@/lib/seed-movies';
+import { prisma } from '@/lib/db/prisma';
 
 const ALLOWED_LANGUAGES = [
   'VietSub',
@@ -77,7 +76,6 @@ export async function GET() {
     // SEED PHIM
     // ========================================================
 
-    await ensureMoviesSeeded();
 
     // ========================================================
     // LẤY DANH SÁCH SUẤT CHIẾU
@@ -390,7 +388,6 @@ export async function POST(request: Request) {
     // SEED PHIM
     // ========================================================
 
-    await ensureMoviesSeeded();
 
     // ========================================================
     // TÌM PHIM

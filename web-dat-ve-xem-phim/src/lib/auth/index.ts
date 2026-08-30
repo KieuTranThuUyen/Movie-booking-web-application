@@ -4,7 +4,7 @@ import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import type { JWT } from 'next-auth/jwt';
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 const ADMIN_EMAIL =
   process.env.ADMIN_EMAIL ?? 'admin@example.com';

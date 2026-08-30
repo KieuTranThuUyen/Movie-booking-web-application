@@ -8,15 +8,11 @@ import {
 
 import {
   prisma,
-} from '@/lib/prisma';
-
-import {
-  ensureMoviesSeeded,
-} from '@/lib/seed-movies';
+} from '@/lib/db/prisma';
 
 import {
   formatSeatType,
-} from '@/lib/seat-pricing';
+} from '@/lib/booking/seat-pricing';
 
 import {
   authOptions,
@@ -37,8 +33,6 @@ export default async function CartPage({
 }: CartPageProps) {
   const params =
     await searchParams;
-
-  await ensureMoviesSeeded();
 
   /*
    * ============================================================

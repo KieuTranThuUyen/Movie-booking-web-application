@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 
-import { DateStrip } from '@/components/date-strip';
-import { prisma } from '@/lib/prisma';
-import { ensureMoviesSeeded } from '@/lib/seed-movies';
+import { DateStrip } from '@/components/movie/date-strip';
+import { prisma } from '@/lib/db/prisma';
 
 type ShowtimesPageProps = {
   searchParams: Promise<{
@@ -88,7 +87,6 @@ function buildQuery(base: {
 export default async function ShowtimesPage({
   searchParams,
 }: ShowtimesPageProps) {
-  await ensureMoviesSeeded();
 
   const params = await searchParams;
   const movieSlug = params.movie?.trim() ?? '';

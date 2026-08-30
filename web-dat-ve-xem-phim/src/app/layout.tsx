@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Manrope, Space_Grotesk } from 'next/font/google';
 
-import { SiteHeader } from '@/components/site-header';
-import { SiteFooter } from '@/components/site-footer';
-import { AdminSidebarWrapper } from '@/components/admin-sidebar-wrapper';
-import { AppSessionProvider } from '@/components/session-provider';
+import { SiteHeader } from '@/components/layout/site-header';
+import { SiteFooter } from '@/components/layout/site-footer';
+import { AdminSidebarWrapper } from '@/components/layout/admin-sidebar-wrapper';
+import { AppSessionProvider } from '@/components/layout/session-provider';
 
 import './globals.css';
 

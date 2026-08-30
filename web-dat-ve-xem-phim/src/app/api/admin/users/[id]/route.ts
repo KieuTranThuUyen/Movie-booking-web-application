@@ -7,7 +7,7 @@ import {
 
 import bcrypt from 'bcryptjs';
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 type RouteContext = {
   params: Promise<{

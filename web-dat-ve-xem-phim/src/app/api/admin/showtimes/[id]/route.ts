@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 const ALLOWED_LANGUAGES = ['VietSub', 'VietDub', 'EngSub'] as const;
 const ALLOWED_FORMATS = ['2D', '3D', 'IMAX'] as const;

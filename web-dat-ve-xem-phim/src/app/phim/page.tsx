@@ -1,5 +1,5 @@
-import { MovieCard } from '@/components/movie-card';
-import { prisma } from '@/lib/prisma';
+import { MovieCard } from '@/components/movie/movie-card';
+import { prisma } from '@/lib/db/prisma';
 
 type MoviesPageProps = {
   searchParams: Promise<{

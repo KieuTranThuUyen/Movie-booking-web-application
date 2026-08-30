@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth/next';
 
-import { SignOutButton } from '@/components/sign-out-button';
+import { SignOutButton } from '@/components/layout/sign-out-button';
 import { authOptions } from '@/lib/auth';
 
 export async function SiteHeader() {

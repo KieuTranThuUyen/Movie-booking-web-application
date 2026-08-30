@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 import { ShowtimeManagementForm } from '@/components/forms/showtime-management-form';
 
 export default async function AdminShowtimesPage() {

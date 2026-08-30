@@ -4,7 +4,7 @@ import {
   TicketStatus,
 } from '@prisma/client';
 
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 const VND = new Intl.NumberFormat('vi-VN', {
   style: 'currency',

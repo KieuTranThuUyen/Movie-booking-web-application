@@ -6,8 +6,8 @@ import {
   BookingStatus,
 } from '@prisma/client';
 
-import { SeatGrid } from '@/components/seat-grid';
-import { prisma } from '@/lib/prisma';
+import { SeatGrid } from '@/components/booking/seat-grid';
+import { prisma } from '@/lib/db/prisma';
 import { authOptions } from '@/lib/auth';
 
 type BookingPageProps = {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 const PRESETS = ['STANDARD', 'AISLE_CENTER', 'STAGGERED', 'VIP_REAR', 'COUPLE_REAR', 'FREE'] as const;
 const TYPES = ['STANDARD', 'VIP', 'COUPLE'] as const;

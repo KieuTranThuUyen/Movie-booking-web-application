@@ -7,12 +7,12 @@ import { getServerSession } from 'next-auth/next';
 
 import { TicketStatus } from '@prisma/client';
 
-import { BookingQR } from '@/components/booking-qr';
-import { PrintTicketButton } from '@/components/print-ticket-button';
-import { TicketPaymentWaiter } from '@/components/ticket-payment-waiter';
+import { BookingQR } from '@/components/booking/booking-qr';
+import { PrintTicketButton } from '@/components/booking/print-ticket-button';
+import { TicketPaymentWaiter } from '@/components/booking/ticket-payment-waiter';
 
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { prisma } from '@/lib/db/prisma';
 
 type TicketPageProps = {
   params: Promise<{
