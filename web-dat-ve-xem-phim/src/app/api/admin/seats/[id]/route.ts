@@ -15,12 +15,15 @@ async function isAdmin(request: Request) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   if (!(await isAdmin(request))) {
-    return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
+    return NextResponse.json(
+      { message: 'Bạn không có quyền thực hiện thao tác này.' },
+      { status: 403 },
+    );
   }
 
   try {
     const { id } = await context.params;
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       isActive?: boolean;
       type?: string;
       code?: string;
@@ -31,12 +34,23 @@ export async function PATCH(request: Request, context: RouteContext) {
     };
 
     const seat = await prisma.seat.findUnique({ where: { id } });
-    if (!seat) return NextResponse.json({ message: 'Không tìm thấy ghế.' }, { status: 404 });
+    if (!seat) {
+      return NextResponse.json({ message: 'Không tìm thấy ghế.' }, { status: 404 });
+    }
 
-    if (body.isActive === undefined && body.type === undefined && body.code === undefined &&
-        body.rowLabel === undefined && body.seatNumber === undefined &&
-        body.positionX === undefined && body.positionY === undefined) {
-      return NextResponse.json({ message: 'Không có dữ liệu cần cập nhật.' }, { status: 400 });
+    if (
+      body.isActive === undefined &&
+      body.type === undefined &&
+      body.code === undefined &&
+      body.rowLabel === undefined &&
+      body.seatNumber === undefined &&
+      body.positionX === undefined &&
+      body.positionY === undefined
+    ) {
+      return NextResponse.json(
+        { message: 'Không có dữ liệu cần cập nhật.' },
+        { status: 400 },
+      );
     }
 
     const type = body.type?.trim().toUpperCase();
@@ -46,23 +60,46 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const nextCode = body.code?.trim();
     if (nextCode !== undefined && !nextCode) {
-      return NextResponse.json({ message: 'Tên ghế không được để trống.' }, { status: 400 });
+      return NextResponse.json(
+        { message: 'Tên ghế không được để trống.' },
+        { status: 400 },
+      );
     }
 
     if (nextCode && nextCode !== seat.code) {
       const duplicate = await prisma.seat.findUnique({
         where: { hallId_code: { hallId: seat.hallId, code: nextCode } },
       });
-      if (duplicate) return NextResponse.json({ message: `Ghế ${nextCode} đã tồn tại.` }, { status: 409 });
+      if (duplicate) {
+        return NextResponse.json(
+          { message: `Ghế ${nextCode} đã tồn tại.` },
+          { status: 409 },
+        );
+      }
     }
 
     const hall = await prisma.hall.findUnique({ where: { id: seat.hallId } });
-    if (!hall) return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+    if (!hall) {
+      return NextResponse.json(
+        { message: 'Không tìm thấy phòng chiếu.' },
+        { status: 404 },
+      );
+    }
 
     const x = body.positionX ?? seat.positionX;
     const y = body.positionY ?? seat.positionY;
-    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= hall.layoutWidth || y >= hall.layoutHeight) {
-      return NextResponse.json({ message: 'Vị trí ghế nằm ngoài sơ đồ.' }, { status: 400 });
+    if (
+      !Number.isInteger(x) ||
+      !Number.isInteger(y) ||
+      x < 0 ||
+      y < 0 ||
+      x >= hall.layoutWidth ||
+      y >= hall.layoutHeight
+    ) {
+      return NextResponse.json(
+        { message: 'Vị trí ghế nằm ngoài sơ đồ.' },
+        { status: 400 },
+      );
     }
 
     const bookedTicket = await prisma.ticket.findFirst({
@@ -75,14 +112,20 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (bookedTicket) {
       if (body.isActive === false) {
-        return NextResponse.json({
-          message: `Không thể khóa ghế ${seat.code} vì ghế đã được đặt vé.`,
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            message: `Không thể khóa ghế ${seat.code} vì ghế đã được đặt vé.`,
+          },
+          { status: 400 },
+        );
       }
       if (type !== undefined && type !== seat.type) {
-        return NextResponse.json({
-          message: `Không thể đổi loại ghế ${seat.code} vì ghế đã được đặt vé.`,
-        }, { status: 400 });
+        return NextResponse.json(
+          {
+            message: `Không thể đổi loại ghế ${seat.code} vì ghế đã được đặt vé.`,
+          },
+          { status: 400 },
+        );
       }
     }
 
@@ -92,14 +135,19 @@ export async function PATCH(request: Request, context: RouteContext) {
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
         ...(type !== undefined ? { type } : {}),
         ...(nextCode !== undefined ? { code: nextCode } : {}),
-        ...(body.rowLabel !== undefined ? { rowLabel: body.rowLabel.trim() || seat.rowLabel } : {}),
+        ...(body.rowLabel !== undefined
+          ? { rowLabel: body.rowLabel.trim() || seat.rowLabel }
+          : {}),
         ...(body.seatNumber !== undefined ? { seatNumber: body.seatNumber } : {}),
         positionX: x,
         positionY: y,
       },
     });
 
-    return NextResponse.json({ message: 'Cập nhật ghế thành công.', seat: updatedSeat });
+    return NextResponse.json({
+      message: 'Cập nhật ghế thành công.',
+      seat: updatedSeat,
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ message: 'Không thể cập nhật ghế.' }, { status: 500 });
@@ -108,23 +156,53 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   if (!(await isAdmin(request))) {
-    return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
+    return NextResponse.json(
+      { message: 'Bạn không có quyền thực hiện thao tác này.' },
+      { status: 403 },
+    );
   }
 
   try {
     const { id } = await context.params;
     const seat = await prisma.seat.findUnique({ where: { id } });
-    if (!seat) return NextResponse.json({ message: 'Không tìm thấy ghế.' }, { status: 404 });
+    if (!seat) {
+      return NextResponse.json({ message: 'Không tìm thấy ghế.' }, { status: 404 });
+    }
 
     const ticketCount = await prisma.ticket.count({ where: { seatId: id } });
     if (ticketCount > 0) {
-      return NextResponse.json({ message: `Không thể xóa ghế ${seat.code} vì ghế đã có dữ liệu vé.` }, { status: 400 });
+      return NextResponse.json(
+        {
+          message: `Không thể xóa ghế ${seat.code} vì ghế đã có dữ liệu vé.`,
+        },
+        { status: 400 },
+      );
     }
 
-    await prisma.seat.delete({ where: { id } });
-    await prisma.hall.update({
-      where: { id: seat.hallId },
-      data: { capacity: { decrement: 1 } },
+    // Chặn xóa khi ghế đang được giữ (SeatHold còn hiệu lực)
+    const activeHold = await prisma.seatHold.findFirst({
+      where: {
+        seatId: id,
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (activeHold) {
+      return NextResponse.json(
+        {
+          message: `Không thể xóa ghế ${seat.code} vì ghế đang được giữ bởi người dùng.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    // Xóa hold hết hạn (nếu còn) rồi xóa ghế + giảm capacity trong transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.seatHold.deleteMany({ where: { seatId: id } });
+      await tx.seat.delete({ where: { id } });
+      await tx.hall.update({
+        where: { id: seat.hallId },
+        data: { capacity: { decrement: 1 } },
+      });
     });
 
     return NextResponse.json({ message: `Đã xóa ghế ${seat.code}.` });

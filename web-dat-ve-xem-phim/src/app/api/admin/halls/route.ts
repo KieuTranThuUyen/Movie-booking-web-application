@@ -20,6 +20,17 @@ async function isAdmin(request: Request) {
   return token?.role === 'ADMIN';
 }
 
+/** Sinh nhãn hàng: A..Z, AA, AB, ... (không dùng fromCharCode vượt Z) */
+function rowLabelFromIndex(index: number): string {
+  let n = index;
+  let label = '';
+  do {
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return label;
+}
+
 /**
  * Tạo ghế theo số lượng từng loại (Standard / VIP / Couple).
  * Tự suy ra số hàng & ghế mỗi hàng để bố cục hợp lý.
@@ -31,12 +42,10 @@ function makeSeatsFromQuantities(
   width: number,
   height: number,
 ) {
-  const total =
-    counts.STANDARD + counts.VIP + counts.COUPLE;
+  const total = counts.STANDARD + counts.VIP + counts.COUPLE;
 
   if (total <= 0) return [];
 
-  // Ước lượng số ghế mỗi hàng (khoảng 8–14)
   const seatsPerRow = Math.min(
     14,
     Math.max(6, Math.ceil(Math.sqrt(total * 1.4))),
@@ -54,29 +63,23 @@ function makeSeatsFromQuantities(
     Math.max(42, Math.floor((height - 170) / Math.max(rows, 1))),
   );
 
-  // Xây danh sách loại ghế: LUÔN đúng số lượng từng loại.
-  // Preset chỉ đổi thứ tự đặt ghế (trước → sau), không đổi/biến mất loại.
   const typeList: SeatType[] = [];
 
   if (preset === 'VIP_REAR') {
-    // Trước → sau: Standard → Couple → VIP (Couple nằm giữa, không biến thành STANDARD)
     for (let i = 0; i < counts.STANDARD; i++) typeList.push('STANDARD');
     for (let i = 0; i < counts.COUPLE; i++) typeList.push('COUPLE');
     for (let i = 0; i < counts.VIP; i++) typeList.push('VIP');
   } else if (preset === 'COUPLE_REAR') {
-    // Trước → sau: Standard → VIP → Couple
     for (let i = 0; i < counts.STANDARD; i++) typeList.push('STANDARD');
     for (let i = 0; i < counts.VIP; i++) typeList.push('VIP');
     for (let i = 0; i < counts.COUPLE; i++) typeList.push('COUPLE');
   } else {
-    // Mặc định / AISLE / STAGGERED / FREE: Standard → VIP → Couple
     for (let i = 0; i < counts.STANDARD; i++) typeList.push('STANDARD');
     for (let i = 0; i < counts.VIP; i++) typeList.push('VIP');
     for (let i = 0; i < counts.COUPLE; i++) typeList.push('COUPLE');
   }
 
   if (typeList.length !== total) {
-    // An toàn: không bao giờ thiếu / thừa so với số lượng đã nhập
     while (typeList.length < total) typeList.push('STANDARD');
     typeList.length = total;
   }
@@ -86,9 +89,9 @@ function makeSeatsFromQuantities(
 
   for (let r = 0; r < rows; r++) {
     const seatsInThisRow = Math.min(seatsPerRow, total - seatIndex);
-    // Căn giữa hàng
     const rowWidth = (seatsInThisRow - 1) * gapX;
     const rowStartX = Math.round((width - rowWidth) / 2);
+    const rowLabel = rowLabelFromIndex(r);
 
     for (let c = 0; c < seatsInThisRow; c++) {
       let x = rowStartX + c * gapX;
@@ -104,8 +107,8 @@ function makeSeatsFromQuantities(
       const type = typeList[seatIndex] ?? 'STANDARD';
       records.push({
         hallId,
-        code: `${String.fromCharCode(65 + r)}${c + 1}`,
-        rowLabel: String.fromCharCode(65 + r),
+        code: `${rowLabel}${c + 1}`,
+        rowLabel,
         seatNumber: c + 1,
         type,
         isActive: true,
@@ -131,7 +134,6 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       cinemaId?: string;
       name?: string;
-      // Hỗ trợ cả cách cũ (rows/seatsPerRow) và cách mới (số lượng loại)
       rows?: number;
       seatsPerRow?: number;
       standardCount?: number;
@@ -175,7 +177,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Kích thước sơ đồ không hợp lệ.' }, { status: 400 });
     }
 
-    // Ưu tiên số lượng loại ghế
     const counts: Record<SeatType, number> = {
       STANDARD: 0,
       VIP: 0,
@@ -199,13 +200,12 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      // Fallback cách cũ: rows * seatsPerRow
       const rows = Number(body.rows ?? 6);
       const seatsPerRow = Number(body.seatsPerRow ?? 8);
       if (
         !Number.isInteger(rows) ||
         rows < 1 ||
-        rows > 26 ||
+        rows > 100 ||
         !Number.isInteger(seatsPerRow) ||
         seatsPerRow < 1 ||
         seatsPerRow > 50

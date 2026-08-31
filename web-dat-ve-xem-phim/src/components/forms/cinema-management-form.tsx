@@ -716,14 +716,15 @@ export function CinemaManagementForm({ cinemas }: Props) {
 
     const code =
       newSeatCode.trim() || `N${selectedHall.seats.length + 1}`;
-    const rowMatch = code.match(/^[A-Z]+/);
+    const rowMatch = code.match(/^[A-Z]+/i);
     const numberMatch = code.match(/\d+$/);
-    const rowLabel = rowMatch?.[0] ?? 'A';
+    const rowLabel = (rowMatch?.[0] ?? 'A').toUpperCase();
     const seatNumber = Number(
       numberMatch?.[0] ?? selectedHall.seats.length + 1,
     );
 
     setLoading(true);
+    setMessage('');
     try {
       const response = await fetch('/api/admin/seats', {
         method: 'POST',
@@ -747,9 +748,10 @@ export function CinemaManagementForm({ cinemas }: Props) {
       }
 
       const newSeat = data.seat as SeatOption;
+      // Đồng bộ từ server: seats + capacity (backend đã increment)
       updateHallLocal((hall) => ({
         ...hall,
-        capacity: hall.capacity + 1,
+        capacity: hall.seats.length + 1,
         seats: [...hall.seats, newSeat],
       }));
       setNewSeatCode('');
@@ -769,26 +771,44 @@ export function CinemaManagementForm({ cinemas }: Props) {
     if (!confirm(`Xóa ${selectedSeatIds.length} ghế đã chọn?`)) return;
 
     setLoading(true);
+    setMessage('');
     try {
+      const deletedIds: string[] = [];
+
       for (const id of selectedSeatIds) {
         const response = await fetch(`/api/admin/seats/${id}`, {
           method: 'DELETE',
         });
         const data = await response.json();
         if (!response.ok) {
+          // Cập nhật những ghế đã xóa thành công trước khi dừng
+          if (deletedIds.length > 0) {
+            const ids = new Set(deletedIds);
+            updateHallLocal((hall) => ({
+              ...hall,
+              capacity: Math.max(0, hall.seats.length - deletedIds.length),
+              seats: hall.seats.filter((seat) => !ids.has(seat.id)),
+            }));
+            setSelectedSeatIds((prev) => prev.filter((x) => !ids.has(x)));
+          }
           setMessage(data.message ?? 'Không thể xóa ghế.');
           return;
         }
+        deletedIds.push(id);
       }
 
-      const ids = new Set(selectedSeatIds);
+      const ids = new Set(deletedIds);
       updateHallLocal((hall) => ({
         ...hall,
-        capacity: Math.max(0, hall.capacity - selectedSeatIds.length),
+        capacity: Math.max(0, hall.seats.length - deletedIds.length),
         seats: hall.seats.filter((seat) => !ids.has(seat.id)),
       }));
       setSelectedSeatIds([]);
-      setMessage('Đã xóa ghế.');
+      setMessage(
+        deletedIds.length === 1
+          ? 'Đã xóa ghế.'
+          : `Đã xóa ${deletedIds.length} ghế.`,
+      );
     } catch {
       setMessage('Không thể kết nối đến máy chủ.');
     } finally {
@@ -804,12 +824,13 @@ export function CinemaManagementForm({ cinemas }: Props) {
     const seat = selectedHall.seats.find((item) => item.id === id);
     if (!seat) return;
 
-    const rowMatch = value.match(/^[A-Z]+/);
+    const rowMatch = value.match(/^[A-Z]+/i);
     const numberMatch = value.match(/\d+$/);
-    const rowLabel = rowMatch?.[0] ?? seat.rowLabel;
+    const rowLabel = (rowMatch?.[0] ?? seat.rowLabel).toUpperCase();
     const seatNumber = Number(numberMatch?.[0] ?? seat.seatNumber);
 
     setLoading(true);
+    setMessage('');
     try {
       const response = await fetch(`/api/admin/seats/${id}`, {
         method: 'PATCH',
@@ -823,11 +844,24 @@ export function CinemaManagementForm({ cinemas }: Props) {
         return;
       }
 
+      // Ưu tiên data.seat từ server nếu có
+      const updated = (data.seat as SeatOption | undefined) ?? {
+        ...seat,
+        code: value,
+        rowLabel,
+        seatNumber,
+      };
+
       updateHallLocal((hall) => ({
         ...hall,
         seats: hall.seats.map((item) =>
           item.id === id
-            ? { ...item, code: value, rowLabel, seatNumber }
+            ? {
+                ...item,
+                code: updated.code,
+                rowLabel: updated.rowLabel,
+                seatNumber: updated.seatNumber,
+              }
             : item,
         ),
       }));
@@ -1657,7 +1691,7 @@ export function CinemaManagementForm({ cinemas }: Props) {
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
                   Sức chứa:{' '}
                   <b className="text-white">
-                    {selectedHall.capacity}
+                    {selectedHall.seats.length}
                   </b>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">

@@ -22,12 +22,15 @@ function validInt(value: unknown, min: number, max: number) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   if (!(await isAdmin(request))) {
-    return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
+    return NextResponse.json(
+      { message: 'Bạn không có quyền thực hiện thao tác này.' },
+      { status: 403 },
+    );
   }
 
   try {
     const { id } = await context.params;
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       name?: string;
       layoutWidth?: number;
       layoutHeight?: number;
@@ -58,41 +61,89 @@ export async function PATCH(request: Request, context: RouteContext) {
       include: { seats: true },
     });
 
-    if (!hall) return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+    if (!hall) {
+      return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+    }
 
     if (body.layoutWidth !== undefined && !validInt(body.layoutWidth, 600, 3000)) {
-      return NextResponse.json({ message: 'Chiều rộng sơ đồ không hợp lệ.' }, { status: 400 });
+      return NextResponse.json(
+        { message: 'Chiều rộng sơ đồ không hợp lệ.' },
+        { status: 400 },
+      );
     }
     if (body.layoutHeight !== undefined && !validInt(body.layoutHeight, 400, 2000)) {
-      return NextResponse.json({ message: 'Chiều cao sơ đồ không hợp lệ.' }, { status: 400 });
+      return NextResponse.json(
+        { message: 'Chiều cao sơ đồ không hợp lệ.' },
+        { status: 400 },
+      );
     }
     if (body.layoutPreset !== undefined && !PRESETS.includes(body.layoutPreset)) {
       return NextResponse.json({ message: 'Mẫu bố cục không hợp lệ.' }, { status: 400 });
     }
 
-    const ticketCount = await prisma.ticket.count({ where: { seat: { hallId: id } } });
+    // Dùng kích thước MỚI khi validate (fix #3)
+    const layoutWidth = body.layoutWidth ?? hall.layoutWidth;
+    const layoutHeight = body.layoutHeight ?? hall.layoutHeight;
+
+    const ticketCount = await prisma.ticket.count({
+      where: { seat: { hallId: id } },
+    });
 
     if (body.seats) {
       const existingIds = new Set(hall.seats.map((seat) => seat.id));
       const seenCodes = new Set<string>();
 
+      // Ghế không nằm trong payload giữ nguyên code → phải tính vào check trùng
+      const codesFromPayload = new Map<string, string>(); // id -> code
       for (const item of body.seats) {
         if (!existingIds.has(item.id)) {
-          return NextResponse.json({ message: 'Danh sách ghế chứa ghế không thuộc phòng.' }, { status: 400 });
+          return NextResponse.json(
+            { message: 'Danh sách ghế chứa ghế không thuộc phòng.' },
+            { status: 400 },
+          );
         }
         const code = item.code?.trim();
-        if (!code) return NextResponse.json({ message: 'Tên/mã ghế không được để trống.' }, { status: 400 });
-        const type = (item.type ?? 'STANDARD').toUpperCase();
-        if (!SEAT_TYPES.includes(type)) return NextResponse.json({ message: `Loại ghế ${type} không hợp lệ.` }, { status: 400 });
-        if (!validInt(item.positionX, 0, hall.layoutWidth - 1) || !validInt(item.positionY, 0, hall.layoutHeight - 1)) {
-          return NextResponse.json({ message: `Vị trí ghế ${code} nằm ngoài sơ đồ.` }, { status: 400 });
+        if (!code) {
+          return NextResponse.json(
+            { message: 'Tên/mã ghế không được để trống.' },
+            { status: 400 },
+          );
         }
-        if (seenCodes.has(code)) return NextResponse.json({ message: `Mã ghế ${code} bị trùng.` }, { status: 400 });
+        codesFromPayload.set(item.id, code);
+      }
+
+      for (const oldSeat of hall.seats) {
+        const code = codesFromPayload.get(oldSeat.id) ?? oldSeat.code;
+        if (seenCodes.has(code)) {
+          return NextResponse.json(
+            { message: `Mã ghế ${code} bị trùng.` },
+            { status: 400 },
+          );
+        }
         seenCodes.add(code);
       }
 
+      for (const item of body.seats) {
+        const code = item.code!.trim();
+        const type = (item.type ?? 'STANDARD').toUpperCase();
+        if (!SEAT_TYPES.includes(type)) {
+          return NextResponse.json(
+            { message: `Loại ghế ${type} không hợp lệ.` },
+            { status: 400 },
+          );
+        }
+        if (
+          !validInt(item.positionX, 0, layoutWidth - 1) ||
+          !validInt(item.positionY, 0, layoutHeight - 1)
+        ) {
+          return NextResponse.json(
+            { message: `Vị trí ghế ${code} nằm ngoài sơ đồ.` },
+            { status: 400 },
+          );
+        }
+      }
+
       if (ticketCount > 0) {
-        // Lấy danh sách ghế đã có vé ACTIVE
         const bookedSeatIds = new Set(
           (
             await prisma.ticket.findMany({
@@ -113,59 +164,91 @@ export async function PATCH(request: Request, context: RouteContext) {
 
           const codeChanged = (item.code ?? oldSeat.code) !== oldSeat.code;
           const rowChanged = (item.rowLabel ?? oldSeat.rowLabel) !== oldSeat.rowLabel;
-          const numChanged = (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber;
-          const typeChanged = (item.type ?? oldSeat.type).toUpperCase() !== oldSeat.type.toUpperCase();
+          const numChanged =
+            (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber;
+          const typeChanged =
+            (item.type ?? oldSeat.type).toUpperCase() !== oldSeat.type.toUpperCase();
           const lockChanged =
             item.isActive !== undefined && item.isActive !== oldSeat.isActive;
 
           if (isBooked && (codeChanged || rowChanged || numChanged)) {
-            return NextResponse.json({
-              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi mã/hàng/số ghế.`,
-            }, { status: 400 });
+            return NextResponse.json(
+              {
+                message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi mã/hàng/số ghế.`,
+              },
+              { status: 400 },
+            );
           }
           if (isBooked && typeChanged) {
-            return NextResponse.json({
-              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi loại ghế.`,
-            }, { status: 400 });
+            return NextResponse.json(
+              {
+                message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi loại ghế.`,
+              },
+              { status: 400 },
+            );
           }
           if (isBooked && lockChanged && item.isActive === false) {
-            return NextResponse.json({
-              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể khóa ghế.`,
-            }, { status: 400 });
+            return NextResponse.json(
+              {
+                message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể khóa ghế.`,
+              },
+              { status: 400 },
+            );
           }
         }
 
         const changedStructural = body.seats.some((item) => {
           const oldSeat = hall.seats.find((s) => s.id === item.id);
-          return oldSeat && (
-            (item.code ?? oldSeat.code) !== oldSeat.code ||
-            (item.rowLabel ?? oldSeat.rowLabel) !== oldSeat.rowLabel ||
-            (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber
+          return (
+            oldSeat &&
+            ((item.code ?? oldSeat.code) !== oldSeat.code ||
+              (item.rowLabel ?? oldSeat.rowLabel) !== oldSeat.rowLabel ||
+              (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber)
           );
         });
         if (changedStructural) {
-          return NextResponse.json({
-            message: 'Phòng đã có vé nên không thể đổi mã/hàng/số ghế.',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              message: 'Phòng đã có vé nên không thể đổi mã/hàng/số ghế.',
+            },
+            { status: 400 },
+          );
         }
       }
     }
 
     if (body.layoutBlocks) {
       for (const block of body.layoutBlocks) {
-        if (!BLOCK_TYPES.includes(block.type) ||
-            !validInt(block.x, 0, hall.layoutWidth) ||
-            !validInt(block.y, 0, hall.layoutHeight) ||
-            !validInt(block.width, 1, hall.layoutWidth) ||
-            !validInt(block.height, 1, hall.layoutHeight) ||
-            block.x + block.width > hall.layoutWidth ||
-            block.y + block.height > hall.layoutHeight) {
-          return NextResponse.json({ message: 'Có lối đi/khoảng trống không hợp lệ.' }, { status: 400 });
+        if (
+          !BLOCK_TYPES.includes(block.type) ||
+          !validInt(block.x, 0, layoutWidth) ||
+          !validInt(block.y, 0, layoutHeight) ||
+          !validInt(block.width, 1, layoutWidth) ||
+          !validInt(block.height, 1, layoutHeight) ||
+          block.x + block.width > layoutWidth ||
+          block.y + block.height > layoutHeight
+        ) {
+          return NextResponse.json(
+            { message: 'Có lối đi/khoảng trống không hợp lệ.' },
+            { status: 400 },
+          );
         }
       }
     }
 
     await prisma.$transaction(async (tx) => {
+      // capacity: ưu tiên đếm ghế active sau khi update (tránh lệch)
+      let nextCapacity: number | undefined;
+      if (body.seats) {
+        nextCapacity = body.seats.filter((s) => s.isActive !== false).length;
+        // Ghế không gửi trong payload vẫn còn → cộng thêm
+        const payloadIds = new Set(body.seats.map((s) => s.id));
+        const remainingActive = hall.seats.filter(
+          (s) => !payloadIds.has(s.id) && s.isActive,
+        ).length;
+        nextCapacity += remainingActive;
+      }
+
       await tx.hall.update({
         where: { id },
         data: {
@@ -173,7 +256,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           ...(body.layoutWidth !== undefined ? { layoutWidth: body.layoutWidth } : {}),
           ...(body.layoutHeight !== undefined ? { layoutHeight: body.layoutHeight } : {}),
           ...(body.layoutPreset !== undefined ? { layoutPreset: body.layoutPreset } : {}),
-          ...(body.seats ? { capacity: body.seats.filter((s) => s.isActive !== false).length } : {}),
+          ...(nextCapacity !== undefined ? { capacity: nextCapacity } : {}),
         },
       });
 
@@ -221,38 +304,69 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
     });
 
-    return NextResponse.json({ message: 'Cập nhật phòng và sơ đồ thành công.', hall: result });
+    // Đồng bộ capacity = số ghế thực tế (tránh lệch cuối cùng)
+    if (result && result.capacity !== result.seats.length) {
+      await prisma.hall.update({
+        where: { id },
+        data: { capacity: result.seats.length },
+      });
+      result.capacity = result.seats.length;
+    }
+
+    return NextResponse.json({
+      message: 'Cập nhật phòng và sơ đồ thành công.',
+      hall: result,
+    });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ message: 'Không thể cập nhật phòng chiếu.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Không thể cập nhật phòng chiếu.' },
+      { status: 500 },
+    );
   }
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
   if (!(await isAdmin(request))) {
-    return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
+    return NextResponse.json(
+      { message: 'Bạn không có quyền thực hiện thao tác này.' },
+      { status: 403 },
+    );
   }
 
   try {
     const { id } = await context.params;
     const hall = await prisma.hall.findUnique({ where: { id } });
-    if (!hall) return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+    if (!hall) {
+      return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
+    }
 
     const showtimeCount = await prisma.showtime.count({ where: { hallId: id } });
     if (showtimeCount > 0) {
-      return NextResponse.json({
-        message: `Không thể xóa phòng vì đang có ${showtimeCount} suất chiếu. Vui lòng xóa hoặc chuyển suất chiếu trước.`,
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          message: `Không thể xóa phòng vì đang có ${showtimeCount} suất chiếu. Vui lòng xóa hoặc chuyển suất chiếu trước.`,
+        },
+        { status: 400 },
+      );
     }
 
-    const ticketCount = await prisma.ticket.count({ where: { seat: { hallId: id } } });
+    const ticketCount = await prisma.ticket.count({
+      where: { seat: { hallId: id } },
+    });
     if (ticketCount > 0) {
-      return NextResponse.json({ message: 'Không thể xóa phòng vì đã có dữ liệu vé liên quan.' }, { status: 400 });
+      return NextResponse.json(
+        { message: 'Không thể xóa phòng vì đã có dữ liệu vé liên quan.' },
+        { status: 400 },
+      );
     }
 
     await prisma.hall.delete({ where: { id } });
     return NextResponse.json({ message: 'Xóa phòng chiếu thành công.' });
   } catch {
-    return NextResponse.json({ message: 'Không thể xóa phòng do đang có dữ liệu liên quan.' }, { status: 400 });
+    return NextResponse.json(
+      { message: 'Không thể xóa phòng do đang có dữ liệu liên quan.' },
+      { status: 400 },
+    );
   }
 }
