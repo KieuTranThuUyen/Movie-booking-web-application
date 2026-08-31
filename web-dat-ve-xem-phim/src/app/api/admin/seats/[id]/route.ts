@@ -102,6 +102,55 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
+    const codeChanged = nextCode !== undefined && nextCode !== seat.code;
+    const rowChanged =
+      body.rowLabel !== undefined &&
+      (body.rowLabel.trim() || seat.rowLabel) !== seat.rowLabel;
+    const numChanged =
+      body.seatNumber !== undefined && body.seatNumber !== seat.seatNumber;
+    const typeChanged = type !== undefined && type !== seat.type;
+    const positionChanged = x !== seat.positionX || y !== seat.positionY;
+    const identityChanged = codeChanged || rowChanged || numChanged;
+
+    /*
+     * Ghế đang được người dùng giữ (SeatHold còn hạn):
+     * không cho đổi tên / loại / di chuyển.
+     * (Xóa đã chặn ở DELETE)
+     */
+    if (identityChanged || typeChanged || positionChanged) {
+      const activeHold = await prisma.seatHold.findFirst({
+        where: {
+          seatId: seat.id,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (activeHold) {
+        if (identityChanged) {
+          return NextResponse.json(
+            {
+              message: `Không thể đổi tên ghế ${seat.code} vì ghế đang được giữ bởi người dùng.`,
+            },
+            { status: 400 },
+          );
+        }
+        if (typeChanged) {
+          return NextResponse.json(
+            {
+              message: `Không thể đổi loại ghế ${seat.code} vì ghế đang được giữ bởi người dùng.`,
+            },
+            { status: 400 },
+          );
+        }
+        return NextResponse.json(
+          {
+            message: `Không thể di chuyển ghế ${seat.code} vì ghế đang được giữ bởi người dùng.`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const bookedTicket = await prisma.ticket.findFirst({
       where: {
         seatId: seat.id,
@@ -119,10 +168,26 @@ export async function PATCH(request: Request, context: RouteContext) {
           { status: 400 },
         );
       }
-      if (type !== undefined && type !== seat.type) {
+      if (typeChanged) {
         return NextResponse.json(
           {
             message: `Không thể đổi loại ghế ${seat.code} vì ghế đã được đặt vé.`,
+          },
+          { status: 400 },
+        );
+      }
+      if (identityChanged) {
+        return NextResponse.json(
+          {
+            message: `Không thể đổi tên ghế ${seat.code} vì ghế đã được đặt vé.`,
+          },
+          { status: 400 },
+        );
+      }
+      if (positionChanged) {
+        return NextResponse.json(
+          {
+            message: `Không thể di chuyển ghế ${seat.code} vì ghế đã được đặt vé.`,
           },
           { status: 400 },
         );

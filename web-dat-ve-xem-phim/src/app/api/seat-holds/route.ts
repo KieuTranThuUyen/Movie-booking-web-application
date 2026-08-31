@@ -434,6 +434,9 @@ export async function POST(
             in: seatIds,
           },
 
+          // Chỉ tính vé còn hiệu lực — vé admin đã hủy thì ghế được bán lại
+          status: 'ACTIVE',
+
           booking: {
             showtimeId,
 

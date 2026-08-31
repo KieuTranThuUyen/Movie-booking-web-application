@@ -143,60 +143,117 @@ export async function PATCH(request: Request, context: RouteContext) {
         }
       }
 
-      if (ticketCount > 0) {
-        const bookedSeatIds = new Set(
-          (
-            await prisma.ticket.findMany({
-              where: {
-                seat: { hallId: id },
-                status: 'ACTIVE',
-                booking: { status: { in: ['PENDING', 'CONFIRMED'] } },
-              },
-              select: { seatId: true },
-            })
-          ).map((t) => t.seatId),
-        );
+      const bookedSeatIds = new Set(
+        (
+          await prisma.ticket.findMany({
+            where: {
+              seat: { hallId: id },
+              status: 'ACTIVE',
+              booking: { status: { in: ['PENDING', 'CONFIRMED'] } },
+            },
+            select: { seatId: true },
+          })
+        ).map((t) => t.seatId),
+      );
 
-        for (const item of body.seats) {
-          const oldSeat = hall.seats.find((s) => s.id === item.id);
-          if (!oldSeat) continue;
-          const isBooked = bookedSeatIds.has(item.id);
+      // Ghế đang được người dùng giữ (SeatHold còn hạn)
+      const heldSeatIds = new Set(
+        (
+          await prisma.seatHold.findMany({
+            where: {
+              seat: { hallId: id },
+              expiresAt: { gt: new Date() },
+            },
+            select: { seatId: true },
+          })
+        ).map((h) => h.seatId),
+      );
 
-          const codeChanged = (item.code ?? oldSeat.code) !== oldSeat.code;
-          const rowChanged = (item.rowLabel ?? oldSeat.rowLabel) !== oldSeat.rowLabel;
-          const numChanged =
-            (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber;
-          const typeChanged =
-            (item.type ?? oldSeat.type).toUpperCase() !== oldSeat.type.toUpperCase();
-          const lockChanged =
-            item.isActive !== undefined && item.isActive !== oldSeat.isActive;
+      for (const item of body.seats) {
+        const oldSeat = hall.seats.find((s) => s.id === item.id);
+        if (!oldSeat) continue;
 
-          if (isBooked && (codeChanged || rowChanged || numChanged)) {
+        const isBooked = bookedSeatIds.has(item.id);
+        const isHeld = heldSeatIds.has(item.id);
+
+        const codeChanged = (item.code ?? oldSeat.code) !== oldSeat.code;
+        const rowChanged = (item.rowLabel ?? oldSeat.rowLabel) !== oldSeat.rowLabel;
+        const numChanged =
+          (item.seatNumber ?? oldSeat.seatNumber) !== oldSeat.seatNumber;
+        const typeChanged =
+          (item.type ?? oldSeat.type).toUpperCase() !== oldSeat.type.toUpperCase();
+        const lockChanged =
+          item.isActive !== undefined && item.isActive !== oldSeat.isActive;
+        const positionChanged =
+          (item.positionX !== undefined && item.positionX !== oldSeat.positionX) ||
+          (item.positionY !== undefined && item.positionY !== oldSeat.positionY);
+        const identityChanged = codeChanged || rowChanged || numChanged;
+
+        /*
+         * Ghế đang được giữ: không cho đổi tên / loại / di chuyển.
+         */
+        if (isHeld) {
+          if (identityChanged) {
             return NextResponse.json(
               {
-                message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi mã/hàng/số ghế.`,
+                message: `Ghế ${oldSeat.code} đang được giữ bởi người dùng nên không thể đổi tên ghế.`,
               },
               { status: 400 },
             );
           }
-          if (isBooked && typeChanged) {
+          if (typeChanged) {
             return NextResponse.json(
               {
-                message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi loại ghế.`,
+                message: `Ghế ${oldSeat.code} đang được giữ bởi người dùng nên không thể đổi loại ghế.`,
               },
               { status: 400 },
             );
           }
-          if (isBooked && lockChanged && item.isActive === false) {
+          if (positionChanged) {
             return NextResponse.json(
               {
-                message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể khóa ghế.`,
+                message: `Ghế ${oldSeat.code} đang được giữ bởi người dùng nên không thể di chuyển ghế.`,
               },
               { status: 400 },
             );
           }
         }
 
+        if (isBooked && (codeChanged || rowChanged || numChanged)) {
+          return NextResponse.json(
+            {
+              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi mã/hàng/số ghế.`,
+            },
+            { status: 400 },
+          );
+        }
+        if (isBooked && typeChanged) {
+          return NextResponse.json(
+            {
+              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể đổi loại ghế.`,
+            },
+            { status: 400 },
+          );
+        }
+        if (isBooked && positionChanged) {
+          return NextResponse.json(
+            {
+              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể di chuyển ghế.`,
+            },
+            { status: 400 },
+          );
+        }
+        if (isBooked && lockChanged && item.isActive === false) {
+          return NextResponse.json(
+            {
+              message: `Ghế ${oldSeat.code} đã có người đặt vé nên không thể khóa ghế.`,
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      if (ticketCount > 0) {
         const changedStructural = body.seats.some((item) => {
           const oldSeat = hall.seats.find((s) => s.id === item.id);
           return (

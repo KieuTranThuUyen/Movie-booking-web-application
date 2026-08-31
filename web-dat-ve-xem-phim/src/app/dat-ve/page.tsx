@@ -181,6 +181,8 @@ export default async function BookingPage({
   const soldTickets =
     await prisma.ticket.findMany({
       where: {
+        // Chỉ tính vé còn hiệu lực — vé admin đã hủy thì ghế được bán lại
+        status: 'ACTIVE',
         booking: {
           showtimeId:
             showtime.id,

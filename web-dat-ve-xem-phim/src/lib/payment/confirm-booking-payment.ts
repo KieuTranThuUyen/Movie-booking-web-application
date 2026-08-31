@@ -272,6 +272,9 @@ export async function confirmBookingPayment(
               ),
             },
 
+            // Chỉ tính vé còn hiệu lực — vé admin đã hủy thì ghế được bán lại
+            status: 'ACTIVE',
+
             booking: {
               showtimeId:
                 booking.showtimeId,
