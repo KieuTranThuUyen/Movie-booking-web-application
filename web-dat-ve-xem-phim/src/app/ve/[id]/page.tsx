@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth/next';
 import { TicketStatus } from '@prisma/client';
 
 import { BookingQR } from '@/components/booking/booking-qr';
+import { AutoPrint } from '@/components/booking/auto-print';
 import { PrintTicketButton } from '@/components/booking/print-ticket-button';
 import { TicketPaymentWaiter } from '@/components/booking/ticket-payment-waiter';
 
@@ -22,6 +23,7 @@ type TicketPageProps = {
   searchParams: Promise<{
     seat?: string;
     checking?: string;
+    print?: string;
   }>;
 };
 
@@ -213,8 +215,11 @@ export default async function ElectronicTicketPage({
   const {
     seat,
     checking,
+    print,
   } =
     await searchParams;
+
+  const shouldAutoPrint = print === '1';
 
   /* ==========================================================
      SESSION
@@ -454,7 +459,7 @@ export default async function ElectronicTicketPage({
           <Link
             href={
               isAdmin
-                ? '/admin/bookings'
+                ? '/admin/tra-cuu-ve'
                 : '/don-hang'
             }
             className="mb-6 inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
@@ -585,6 +590,7 @@ export default async function ElectronicTicketPage({
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white print:bg-white print:px-0 print:py-0">
+      <AutoPrint enabled={shouldAutoPrint && canPrint} />
       <div className="mx-auto max-w-5xl print:max-w-none">
 
         {/* ====================================================
@@ -595,7 +601,7 @@ export default async function ElectronicTicketPage({
           <Link
             href={
               isAdmin
-                ? '/admin/bookings'
+                ? '/admin/tra-cuu-ve'
                 : '/don-hang'
             }
             className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"

@@ -25,6 +25,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim() ?? '';
 
+    // MySQL không hỗ trợ mode: 'insensitive' của Prisma.
+    // Collation utf8mb4_unicode_ci thường đã case-insensitive sẵn.
     const bookings = await prisma.booking.findMany({
       where: q
         ? {
@@ -32,7 +34,6 @@ export async function GET(request: Request) {
               {
                 bookingCode: {
                   contains: q,
-                  mode: 'insensitive',
                 },
               },
               {
@@ -43,13 +44,11 @@ export async function GET(request: Request) {
               {
                 customerName: {
                   contains: q,
-                  mode: 'insensitive',
                 },
               },
               {
                 customerEmail: {
                   contains: q,
-                  mode: 'insensitive',
                 },
               },
             ],
@@ -87,7 +86,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       bookings,
     });
-  } catch {
+  } catch (error) {
+    console.error('[GET /api/admin/bookings]', error);
+
     return NextResponse.json(
       {
         message: 'Không thể tải danh sách đơn đặt vé.',
