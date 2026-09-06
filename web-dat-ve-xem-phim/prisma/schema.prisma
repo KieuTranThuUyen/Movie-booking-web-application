@@ -231,7 +231,7 @@ model SeatHold {
   seatId     String
   showtimeId String
   bookingId  String?
-  userId     String?
+  userId     String
 
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -239,7 +239,7 @@ model SeatHold {
   seat     Seat     @relation(fields: [seatId], references: [id], onDelete: Cascade)
   showtime Showtime @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
   booking  Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([seatId, showtimeId])
   @@index([expiresAt])
