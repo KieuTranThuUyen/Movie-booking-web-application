@@ -30,6 +30,10 @@ const adminLinks = [
     href: '/admin/bookings',
     label: 'Quản lý đặt vé',
   },
+  {
+    href: '/admin/tra-cuu-ve',
+    label: 'Tra cứu & in vé',
+  },
 ];
 
 export function AdminSidebar() {

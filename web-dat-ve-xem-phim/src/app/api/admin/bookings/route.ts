@@ -22,7 +22,39 @@ export async function GET(request: Request) {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const q = searchParams.get('q')?.trim() ?? '';
+
     const bookings = await prisma.booking.findMany({
+      where: q
+        ? {
+            OR: [
+              {
+                bookingCode: {
+                  contains: q,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                customerPhone: {
+                  contains: q,
+                },
+              },
+              {
+                customerName: {
+                  contains: q,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                customerEmail: {
+                  contains: q,
+                  mode: 'insensitive',
+                },
+              },
+            ],
+          }
+        : undefined,
       orderBy: {
         createdAt: 'desc',
       },
@@ -58,8 +90,7 @@ export async function GET(request: Request) {
   } catch {
     return NextResponse.json(
       {
-        message:
-          'Không thể tải danh sách đơn đặt vé.',
+        message: 'Không thể tải danh sách đơn đặt vé.',
       },
       { status: 500 },
     );
