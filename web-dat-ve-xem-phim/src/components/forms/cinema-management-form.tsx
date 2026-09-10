@@ -1158,9 +1158,6 @@ export function CinemaManagementForm({ cinemas }: Props) {
             <h3 className="text-xl font-semibold text-white">
               Phòng chiếu
             </h3>
-            <p className="mt-1 text-xs text-slate-400">
-              Tạo phòng mới, sau đó chỉnh sửa trực tiếp trên sơ đồ.
-            </p>
           </div>
 
           <form
@@ -1405,9 +1402,6 @@ export function CinemaManagementForm({ cinemas }: Props) {
                   <h3 className="text-xl font-semibold text-white">
                     {selectedHall.name}
                   </h3>
-                  <p className="text-xs text-slate-400">
-                    Kéo ghế tự do. Click để chọn nhiều ghế.
-                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className="rounded-full bg-slate-700 px-3 py-1 text-slate-200">

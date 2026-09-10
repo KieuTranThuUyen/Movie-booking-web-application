@@ -24,11 +24,6 @@ export default async function AdminCinemasPage() {
       <h2 className="text-xl font-semibold text-white">
         Quản lý rạp chiếu và sơ đồ ghế
       </h2>
-      <p className="mt-3 text-sm leading-7 text-slate-300">
-        Tạo ghế theo số lượng Standard / VIP / Couple. Kéo thả, khóa ghế, đổi loại
-        (không khóa/đổi loại khi đã có người đặt vé). Xóa phòng/rạp khi còn suất
-        chiếu sẽ bị chặn và hiện thông báo. Sơ đồ thu nhỏ tỉ lệ để thấy toàn cảnh.
-      </p>
       <div className="mt-6">
         <CinemaManagementForm cinemas={cinemas} />
       </div>

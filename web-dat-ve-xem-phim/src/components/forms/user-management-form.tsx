@@ -33,7 +33,11 @@ export function UserManagementForm() {
     const res = await fetch(`/api/admin/users/${user.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: user.name, phone: user.phone, role: user.role })
+      body: JSON.stringify({
+        name: user.name,
+        phone: user.phone,
+        role: user.role,
+      }),
     });
 
     const data = await res.json();
@@ -60,20 +64,54 @@ export function UserManagementForm() {
           <div className="text-sm text-slate-400">Không có người dùng nào.</div>
         ) : (
           users.map((user) => (
-            <div key={user.id} className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm text-slate-200">
-              <div className="flex-1">
+            <div
+              key={user.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 px-4 py-3 text-sm text-slate-200"
+            >
+              <div className="min-w-0 flex-1">
                 <div className="font-semibold text-white">{user.name}</div>
-                <div className="mt-1 text-slate-400">{user.email} {user.phone ? `· ${user.phone}` : ''}</div>
+                <div className="mt-1 truncate text-slate-400">
+                  {user.email}
+                  {user.phone ? ` · ${user.phone}` : ''}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <select value={user.role} onChange={(e) => setUsers((cur) => cur.map((u) => (u.id === user.id ? { ...u, role: e.target.value as UserItem['role'] } : u)))} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none">
-                  <option value="CUSTOMER">Customer</option>
-                  <option value="ADMIN">Admin</option>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Dropdown: nền tối + chữ sáng (không bị trắng đè chữ) */}
+                <select
+                  value={user.role}
+                  onChange={(e) =>
+                    setUsers((cur) =>
+                      cur.map((u) =>
+                        u.id === user.id
+                          ? { ...u, role: e.target.value as UserItem['role'] }
+                          : u,
+                      ),
+                    )
+                  }
+                  className="rounded-2xl border border-white/15 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-100 outline-none ring-sky-400/40 transition focus:ring-2"
+                >
+                  <option value="CUSTOMER" className="bg-slate-900 text-slate-100">
+                    Customer
+                  </option>
+                  <option value="ADMIN" className="bg-slate-900 text-slate-100">
+                    Admin
+                  </option>
                 </select>
-                <button onClick={() => handleSave(user)} disabled={loading} className="rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                {/* Lưu: nền trắng + chữ tối – như thiết kế */}
+                <button
+                  type="button"
+                  onClick={() => handleSave(user)}
+                  disabled={loading}
+                  className="rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100 disabled:opacity-60"
+                >
                   Lưu
                 </button>
-                <button onClick={() => handleDelete(user.id)} disabled={loading} className="rounded-2xl border border-rose-400/40 px-3 py-2 text-sm font-semibold text-rose-200 disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={() => handleDelete(user.id)}
+                  disabled={loading}
+                  className="rounded-2xl border border-rose-400/40 px-3 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/10 disabled:opacity-50"
+                >
                   Xóa
                 </button>
               </div>
@@ -82,7 +120,11 @@ export function UserManagementForm() {
         )}
       </div>
 
-      {message ? <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">{message}</p> : null}
+      {message ? (
+        <p className="mt-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

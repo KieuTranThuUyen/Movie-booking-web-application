@@ -169,13 +169,6 @@ export function CheckoutForm({
           <h2 className="mt-2 text-2xl font-semibold text-white">
             Thanh toán SePay Sandbox
           </h2>
-
-          <p className="mt-2 text-sm text-slate-400">
-            Bạn sẽ được chuyển đến môi
-            trường SePay Sandbox để thực
-            hiện thanh toán giả lập trên
-            máy. Không phát sinh tiền thật.
-          </p>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
@@ -203,48 +196,6 @@ export function CheckoutForm({
             <span className="font-semibold text-white">
               {seats.join(', ')}
             </span>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-sky-400/20 bg-sky-500/5 p-4">
-          <div className="flex gap-3">
-            <span className="text-lg">
-              🧪
-            </span>
-
-            <div>
-              <p className="text-sm font-semibold text-white">
-                Môi trường Sandbox
-              </p>
-
-              <p className="mt-1 text-xs leading-5 text-slate-400">
-                Đây là giao dịch kiểm thử.
-                Bạn không dùng tài khoản ngân
-                hàng thật và không bị trừ tiền
-                thật.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-amber-400/10 bg-amber-500/5 p-4">
-          <div className="flex gap-3">
-            <span className="text-lg">
-              ⏱️
-            </span>
-
-            <div>
-              <p className="text-sm font-semibold text-white">
-                Ghế có thời gian giữ
-              </p>
-
-              <p className="mt-1 text-xs leading-5 text-slate-400">
-                Nếu thời gian giữ ghế hết
-                trước khi thanh toán hoàn tất,
-                phiên thanh toán sẽ bị hủy và
-                ghế được giải phóng.
-              </p>
-            </div>
           </div>
         </div>
 
@@ -328,11 +279,6 @@ export function CheckoutForm({
               )} đ`}
         </button>
 
-        <p className="mt-3 text-center text-xs leading-5 text-slate-500">
-          Mỗi lần bấm thanh toán sẽ tạo một
-          đơn mới. Không dùng lại đơn thanh
-          toán cũ.
-        </p>
       </aside>
     </div>
   );

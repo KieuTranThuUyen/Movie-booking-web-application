@@ -41,6 +41,8 @@ type MovieScheduleProps = {
   cities: string[];
 };
 
+const ALL_CITIES = '__ALL__';
+
 const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 function toDateKey(iso: string) {
@@ -63,8 +65,12 @@ function buildDates(count = 7) {
     timeZone: 'Asia/Ho_Chi_Minh',
   }).format(new Date());
   const [y, m, d] = todayStr.split('-').map(Number);
-  const list: { value: string; day: number; weekday: string; isToday: boolean }[] =
-    [];
+  const list: {
+    value: string;
+    day: number;
+    weekday: string;
+    isToday: boolean;
+  }[] = [];
 
   for (let i = 0; i < count; i++) {
     const date = new Date(Date.UTC(y, m - 1, d + i, 5, 0, 0));
@@ -88,22 +94,19 @@ export function MovieSchedule({
   cities,
 }: MovieScheduleProps) {
   const dates = useMemo(() => buildDates(7), []);
-  const [city, setCity] = useState(cities[0] ?? '');
-  const [cinemaId, setCinemaId] = useState(
-    () => cinemas.find((c) => c.city === (cities[0] ?? ''))?.id ?? cinemas[0]?.id ?? '',
-  );
+  const [city, setCity] = useState(ALL_CITIES);
+  const [cinemaId, setCinemaId] = useState(() => cinemas[0]?.id ?? '');
   const [date, setDate] = useState(dates[0]?.value ?? '');
 
   const filteredCinemas = useMemo(
-    () => (city ? cinemas.filter((c) => c.city === city) : cinemas),
+    () => (city === ALL_CITIES ? cinemas : cinemas.filter((c) => c.city === city)),
     [cinemas, city],
   );
 
-  // Khi đổi city, chọn rạp đầu trong list
-  const activeCinemaId =
-    filteredCinemas.some((c) => c.id === cinemaId)
-      ? cinemaId
-      : filteredCinemas[0]?.id ?? '';
+  // Khi đổi city / filter, giữ cinema đang chọn nếu còn trong list
+  const activeCinemaId = filteredCinemas.some((c) => c.id === cinemaId)
+    ? cinemaId
+    : filteredCinemas[0]?.id ?? '';
 
   const selectedCinema =
     filteredCinemas.find((c) => c.id === activeCinemaId) ?? null;
@@ -154,6 +157,11 @@ export function MovieSchedule({
     );
   }
 
+  const locationTabs = [
+    { key: ALL_CITIES, label: 'Tất cả' },
+    ...cities.map((c) => ({ key: c, label: c })),
+  ];
+
   return (
     <section className="mt-10">
       <div className="mb-6 text-center">
@@ -166,25 +174,31 @@ export function MovieSchedule({
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-glow">
-        {/* Thành phố */}
+        {/* Vị trí – có tab Tất cả */}
         <div className="flex flex-wrap items-center gap-2 border-b border-white/10 px-4 py-3 sm:px-5">
           <span className="mr-1 text-sm text-slate-400">Vị trí</span>
-          {cities.map((c) => (
+          {locationTabs.map((tab) => (
             <button
-              key={c}
+              key={tab.key}
               type="button"
               onClick={() => {
-                setCity(c);
-                const first = cinemas.find((x) => x.city === c);
-                if (first) setCinemaId(first.id);
+                setCity(tab.key);
+                if (tab.key === ALL_CITIES) {
+                  if (!cinemas.some((x) => x.id === cinemaId)) {
+                    setCinemaId(cinemas[0]?.id ?? '');
+                  }
+                } else {
+                  const first = cinemas.find((x) => x.city === tab.key);
+                  if (first) setCinemaId(first.id);
+                }
               }}
               className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-                city === c
+                city === tab.key
                   ? 'bg-white text-slate-950'
                   : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
               }`}
             >
-              {c}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -225,7 +239,11 @@ export function MovieSchedule({
                         strokeWidth="2"
                         aria-hidden
                       >
-                        <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        <path
+                          d="M9 18l6-6-6-6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
                       </svg>
                     </button>
                   );
