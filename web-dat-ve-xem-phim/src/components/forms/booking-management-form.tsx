@@ -13,6 +13,8 @@ import {
   useState,
 } from 'react';
 
+import { PAGE_SIZE, Pagination } from '@/components/ui/pagination';
+
 type BookingTicket = {
   id: string;
   seatCode: string;
@@ -179,6 +181,8 @@ export function BookingManagementForm() {
   const [expandedBookingId, setExpandedBookingId] =
     useState<string | null>(null);
 
+  const [listPage, setListPage] = useState(1);
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       setCurrentTime(Date.now());
@@ -261,6 +265,21 @@ export function BookingManagementForm() {
       statusFilter,
       paymentFilter,
     ]);
+
+  const totalListPages = Math.max(
+    1,
+    Math.ceil(filteredBookings.length / PAGE_SIZE),
+  );
+
+  const pagedBookings = useMemo(() => {
+    const page = Math.min(listPage, totalListPages);
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredBookings.slice(start, start + PAGE_SIZE);
+  }, [filteredBookings, listPage, totalListPages]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [statusFilter, paymentFilter]);
 
   const updateBooking =
     async (
@@ -646,7 +665,7 @@ export function BookingManagementForm() {
           ====================================================== */}
 
       <div className="grid gap-3">
-        {filteredBookings.map(
+        {pagedBookings.map(
           (booking) => {
             const isLoading =
               loadingId ===
@@ -1124,6 +1143,12 @@ export function BookingManagementForm() {
           },
         )}
       </div>
+
+      <Pagination
+        page={Math.min(listPage, totalListPages)}
+        totalPages={totalListPages}
+        onChange={setListPage}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 import { AccountProfile } from '@/components/booking/account-profile';
+import { BookingHistoryList } from '@/components/booking/booking-history-list';
 
 function getBookingStatusLabel(status: string) {
   switch (status) {
@@ -45,7 +46,7 @@ export default async function AccountPage() {
     redirect('/dang-nhap?callbackUrl=/tai-khoan');
   }
 
-  const bookings = await prisma.booking.findMany({
+  const rawBookings = await prisma.booking.findMany({
     where: {
       userId: session.user.id,
     },
@@ -72,6 +73,23 @@ export default async function AccountPage() {
       payment: true,
     },
   });
+
+  const bookings = rawBookings.map((booking) => ({
+    id: booking.id,
+    bookingCode: booking.bookingCode,
+    status: booking.status,
+    paymentStatus: booking.paymentStatus,
+    totalPrice: booking.totalPrice,
+    showtime: {
+      startTime: booking.showtime.startTime.toISOString(),
+      movie: { title: booking.showtime.movie.title },
+      hall: {
+        name: booking.showtime.hall.name,
+        cinema: { name: booking.showtime.hall.cinema.name },
+      },
+    },
+    tickets: booking.tickets.map((t) => ({ seatCode: t.seatCode })),
+  }));
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
@@ -134,89 +152,8 @@ export default async function AccountPage() {
               </Link>
             </div>
 
-            <div className="mt-4 space-y-4">
-              {bookings.length === 0 ? (
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-sm text-slate-400">
-                    Chưa có đơn đặt vé nào.
-                  </p>
-
-                  <Link
-                    href="/suat-chieu"
-                    className="mt-4 inline-flex rounded-xl border border-sky-400/30 px-4 py-2 text-sm font-semibold text-sky-300 transition hover:bg-sky-400/10"
-                  >
-                    Đặt vé ngay
-                  </Link>
-                </div>
-              ) : (
-                bookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-white">
-                        {booking.showtime.movie.title}
-                      </span>
-
-                      <span className="text-slate-400">
-                        {booking.bookingCode}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 text-slate-400">
-                      {booking.showtime.hall.cinema.name} ·{' '}
-                      {booking.showtime.hall.name} ·{' '}
-                      {new Date(
-                        booking.showtime.startTime
-                      ).toLocaleString('vi-VN')}
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <span className="rounded-full bg-sky-500/10 px-3 py-1 text-sky-300">
-                        {getBookingStatusLabel(
-                          booking.status
-                        )}
-                      </span>
-
-                      <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-emerald-300">
-                        {getPaymentStatusLabel(
-                          booking.paymentStatus
-                        )}
-                      </span>
-
-                      <span className="rounded-full bg-white/10 px-3 py-1 text-slate-300">
-                        Ghế:{' '}
-                        {booking.tickets
-                          .map(
-                            (ticket) => ticket.seatCode
-                          )
-                          .join(', ')}
-                      </span>
-
-                      <span className="rounded-full bg-white/10 px-3 py-1 text-slate-300">
-                        {booking.totalPrice.toLocaleString(
-                          'vi-VN'
-                        )}{' '}
-                        đ
-                      </span>
-                    </div>
-
-                    {/* =========================
-                        XEM VÉ
-                        ========================= */}
-
-                    <div className="mt-4">
-                      <Link
-                        href={`/ve/${booking.id}`}
-                        className="inline-flex rounded-xl border border-sky-400/30 px-4 py-2 text-xs font-semibold text-sky-300 transition hover:bg-sky-400/10"
-                      >
-                        Xem vé điện tử
-                      </Link>
-                    </div>
-                  </div>
-                ))
-              )}
+                        <div className="mt-4">
+              <BookingHistoryList bookings={bookings} />
             </div>
           </section>
         </div>

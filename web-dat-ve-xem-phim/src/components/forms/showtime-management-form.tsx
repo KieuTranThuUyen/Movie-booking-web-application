@@ -3,6 +3,8 @@
 import type { FormEvent } from 'react';
 import { useMemo, useState } from 'react';
 
+import { PAGE_SIZE, Pagination } from '@/components/ui/pagination';
+
 type MovieOption = {
   id: string;
   slug: string;
@@ -98,6 +100,9 @@ export function ShowtimeManagementForm({
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState('');
   const [list, setList] = useState(showtimes);
+  const [filterMovieId, setFilterMovieId] = useState('');
+  const [filterHallId, setFilterHallId] = useState('');
+  const [listPage, setListPage] = useState(1);
 
   // Chỉ phim đang chiếu (không phải sắp chiếu) mới tạo/sửa suất
   const bookableMovies = useMemo(
@@ -107,6 +112,22 @@ export function ShowtimeManagementForm({
       ),
     [movies],
   );
+
+  const filteredList = useMemo(() => {
+    return list.filter((st) => {
+      const matchMovie = !filterMovieId || st.movie.id === filterMovieId;
+      const matchHall = !filterHallId || st.hall.id === filterHallId;
+      return matchMovie && matchHall;
+    });
+  }, [list, filterMovieId, filterHallId]);
+
+  const totalListPages = Math.max(1, Math.ceil(filteredList.length / PAGE_SIZE));
+
+  const pagedList = useMemo(() => {
+    const page = Math.min(listPage, totalListPages);
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredList.slice(start, start + PAGE_SIZE);
+  }, [filteredList, listPage, totalListPages]);
 
   const [form, setForm] = useState({
     ...emptyForm,
@@ -536,17 +557,69 @@ export function ShowtimeManagementForm({
       {/* Danh sách + sửa/xóa */}
       <div>
         <h3 className="text-lg font-semibold text-white">
-          Danh sách suất chiếu ({list.length})
+          Danh sách suất chiếu ({filteredList.length}
+          {filteredList.length !== list.length ? ` / ${list.length}` : ''})
         </h3>
         <p className="mt-1 text-xs text-slate-500">
           Chỉ sửa/xóa được suất chưa có ai đặt vé.
         </p>
 
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-slate-400">
+              Lọc theo phim
+            </span>
+            <select
+              value={filterMovieId}
+              onChange={(e) => {
+                setFilterMovieId(e.target.value);
+                setListPage(1);
+              }}
+              className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-400"
+            >
+              <option value="" className="bg-slate-950">
+                Tất cả phim
+              </option>
+              {movies.map((m) => (
+                <option key={m.id} value={m.id} className="bg-slate-950">
+                  {m.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-slate-400">
+              Lọc theo phòng
+            </span>
+            <select
+              value={filterHallId}
+              onChange={(e) => {
+                setFilterHallId(e.target.value);
+                setListPage(1);
+              }}
+              className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-400"
+            >
+              <option value="" className="bg-slate-950">
+                Tất cả phòng
+              </option>
+              {halls.map((h) => (
+                <option key={h.id} value={h.id} className="bg-slate-950">
+                  {h.cinema.name} · {h.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         <div className="mt-4 grid gap-3">
-          {list.length === 0 ? (
-            <p className="text-sm text-slate-400">Chưa có suất chiếu nào.</p>
+          {filteredList.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              {list.length === 0
+                ? 'Chưa có suất chiếu nào.'
+                : 'Không có suất chiếu phù hợp bộ lọc.'}
+            </p>
           ) : (
-            list.map((st) => (
+            pagedList.map((st) => (
               <div
                 key={st.id}
                 className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200"
@@ -618,6 +691,12 @@ export function ShowtimeManagementForm({
             ))
           )}
         </div>
+
+        <Pagination
+          page={Math.min(listPage, totalListPages)}
+          totalPages={totalListPages}
+          onChange={setListPage}
+        />
       </div>
     </div>
   );
