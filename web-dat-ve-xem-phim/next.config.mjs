@@ -26,10 +26,11 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https:",
+              "connect-src 'self' https: https://pay-sandbox.sepay.vn https://pay.sepay.vn",
               "frame-ancestors 'none'",
               "base-uri 'self'",
-              "form-action 'self'",
+              // Cho phép submit form sang SePay
+              "form-action 'self' https://pay-sandbox.sepay.vn https://pay.sepay.vn",
             ].join('; '),
           },
           ...(isProduction

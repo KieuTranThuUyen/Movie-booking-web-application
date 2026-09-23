@@ -1,117 +1,73 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
 
-import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
+/** Rate-limit in-memory đơn giản (Edge-safe) */
+const buckets = new Map<string, { count: number; resetAt: number }>();
 
-/** Rate-limit config cho các endpoint nhạy cảm */
-const RATE_LIMITS: Array<{
-  match: (path: string, method: string) => boolean;
-  key: (path: string, method: string, ip: string) => string;
-  limit: number;
-  windowMs: number;
-}> = [
-  {
-    match: (p) =>
-      p === '/api/auth/register' ||
-      p === '/api/auth/login' ||
-      p === '/api/auth/callback/credentials',
-    key: (p, _m, ip) => `auth:${p.includes('register') ? 'register' : 'login'}:${ip}`,
-    limit: 5,
-    windowMs: 60_000,
-  },
-  {
-    match: (p) => p === '/api/auth/forgot-password' || p === '/api/auth/reset-password',
-    key: (p, _m, ip) => `auth:reset:${ip}`,
-    limit: 3,
-    windowMs: 60_000,
-  },
-  {
-    match: (p, m) => p === '/api/seat-holds' && m === 'POST',
-    key: (_p, _m, ip) => `seat-hold:${ip}`,
-    limit: 30,
-    windowMs: 60_000,
-  },
-  {
-    match: (p, m) => p === '/api/bookings' && m === 'POST',
-    key: (_p, _m, ip) => `booking-create:${ip}`,
-    limit: 10,
-    windowMs: 60_000,
-  },
-  {
-    match: (p) => p.startsWith('/api/bookings/') && p.endsWith('/cancel'),
-    key: (_p, _m, ip) => `booking-cancel:${ip}`,
-    limit: 10,
-    windowMs: 60_000,
-  },
-];
+function rateLimit(key: string, limit: number, windowMs: number) {
+  const now = Date.now();
+  const bucket = buckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    buckets.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true };
+  }
+  if (bucket.count >= limit) return { allowed: false, resetAt: bucket.resetAt };
+  bucket.count += 1;
+  return { allowed: true };
+}
+
+function clientIp(request: NextRequest) {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0]?.trim() || 'unknown';
+  return request.headers.get('x-real-ip')?.trim() || 'unknown';
+}
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const method = request.method;
-  const ip = getClientIp(request);
+  const ip = clientIp(request);
 
-  // ── Rate limiting ──────────────────────────────────────────
-  for (const rule of RATE_LIMITS) {
-    if (rule.match(pathname, method)) {
-      const result = checkRateLimit(rule.key(pathname, method, ip), rule.limit, rule.windowMs);
-      if (!result.allowed) {
-        const retryAfterSeconds = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000));
-        return new NextResponse(
-          JSON.stringify({
-            message: 'Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
-            code: 'RATE_LIMITED',
-            retryAfterSeconds,
-          }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json; charset=utf-8',
-              'Retry-After': String(retryAfterSeconds),
-              'Cache-Control': 'no-store',
-            },
-          },
-        );
-      }
-    }
-  }
+  // ── Rate limit các API nhạy cảm ───────────────────────────
+  const limits: Array<{ test: boolean; key: string; limit: number }> = [
+    {
+      test:
+        pathname === '/api/auth/register' ||
+        pathname === '/api/auth/login' ||
+        pathname === '/api/auth/callback/credentials',
+      key: `auth:${ip}`,
+      limit: 5,
+    },
+    {
+      test:
+        pathname === '/api/auth/forgot-password' ||
+        pathname === '/api/auth/reset-password',
+      key: `reset:${ip}`,
+      limit: 3,
+    },
+    {
+      test: pathname === '/api/seat-holds' && method === 'POST',
+      key: `seat-hold:${ip}`,
+      limit: 30,
+    },
+    {
+      test: pathname === '/api/bookings' && method === 'POST',
+      key: `booking:${ip}`,
+      limit: 10,
+    },
+  ];
 
-  // Auth routes không cần token admin
-  if (pathname.startsWith('/api/auth/')) {
-    return NextResponse.next();
-  }
-
-  // Trang đăng nhập admin
-  if (pathname === '/admin/dang-nhap') {
-    return NextResponse.next();
-  }
-
-  // Bảo vệ /admin/* và /api/admin/*
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-
-  if (!token) {
-    if (pathname.startsWith('/api/')) {
+  for (const rule of limits) {
+    if (!rule.test) continue;
+    const result = rateLimit(rule.key, rule.limit, 60_000);
+    if (!result.allowed) {
       return NextResponse.json(
-        { message: 'Bạn cần đăng nhập.', code: 'UNAUTHORIZED' },
-        { status: 401 },
+        {
+          message: 'Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
+          code: 'RATE_LIMITED',
+        },
+        { status: 429 },
       );
     }
-    const loginUrl = new URL('/admin/dang-nhap', request.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  if (token.role !== 'ADMIN') {
-    if (pathname.startsWith('/api/admin')) {
-      return NextResponse.json(
-        { message: 'Bạn không có quyền thực hiện thao tác này.', code: 'FORBIDDEN' },
-        { status: 403 },
-      );
-    }
-    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return NextResponse.next();
