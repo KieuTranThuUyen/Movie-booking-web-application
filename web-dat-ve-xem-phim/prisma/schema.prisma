@@ -31,20 +31,39 @@ enum TicketStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  phone     String?  @unique
-  password  String
-  role      UserRole @default(CUSTOMER)
-  address   String?
-  city      String?
-  district  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  phone         String?   @unique
+  password      String
+  role          UserRole  @default(CUSTOMER)
+  address       String?
+  city          String?
+  district      String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   bookings  Booking[]
   seatHolds SeatHold[]
+  authTokens AuthToken[]
+}
+
+/// Token dùng cho quên mật khẩu / xác thực email
+model AuthToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  type      String   // PASSWORD_RESET | EMAIL_VERIFY
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
 }
 
 model Cinema {

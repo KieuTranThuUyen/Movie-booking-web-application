@@ -48,7 +48,7 @@ export function RegisterForm() {
     <form onSubmit={handleSubmit} className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
       <div>
         <h2 className="text-2xl font-semibold text-white">Đăng ký tài khoản</h2>
-        <p className="mt-2 text-sm text-slate-300">Form này được lấy từ project cũ và đổi nhãn theo hệ thống đặt vé phim.</p>
+        <p className="mt-2 text-sm text-slate-300">Mật khẩu cần ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số.</p>
       </div>
 
       <label className="block space-y-2 text-sm text-slate-200">
@@ -96,7 +96,7 @@ export function RegisterForm() {
           name="password"
           value={form.password}
           onChange={handleChange}
-          placeholder="Nhập mật khẩu"
+          placeholder="Tối thiểu 8 ký tự, có chữ hoa, thường và số"
           className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400/60"
           required
         />

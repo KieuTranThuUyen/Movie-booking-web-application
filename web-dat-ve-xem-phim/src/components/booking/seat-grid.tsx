@@ -78,6 +78,24 @@ type SeatGridProps = {
 
 const HOLD_MINUTES = 10;
 const DEFAULT_LAYOUT_WIDTH = 1000;
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(
+      response.status === 401 || response.status === 403
+        ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+        : 'Máy chủ trả về phản hồi không hợp lệ.',
+    );
+  }
+
+  const body = await response.text();
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    throw new Error('Máy chủ trả về dữ liệu không hợp lệ. Vui lòng tải lại trang.');
+  }
+}
 const DEFAULT_LAYOUT_HEIGHT = 650;
 const DEFAULT_SEAT_SIZE = 44;
 const DEFAULT_SEAT_GAP = 8;
@@ -217,7 +235,7 @@ export function SeatGrid({
         throw new Error('Không thể lấy sơ đồ ghế.');
       }
 
-      const data = (await response.json()) as SeatsApiResponse | Seat[];
+      const data = await readJsonResponse<SeatsApiResponse | Seat[]>(response);
 
       if (!Array.isArray(data)) {
         const nextSeats = Array.isArray(data.seats) ? data.seats : [];
@@ -270,7 +288,7 @@ export function SeatGrid({
 
       if (!response.ok) return;
 
-      const data = (await response.json()) as HeldSeat[];
+      const data = await readJsonResponse<HeldSeat[]>(response);
       const validHolds = data.filter(
         (hold) => new Date(hold.expiresAt).getTime() > Date.now(),
       );
@@ -404,7 +422,7 @@ export function SeatGrid({
       );
 
       if (response.ok) {
-        const holds = (await response.json()) as HeldSeat[];
+        const holds = await readJsonResponse<HeldSeat[]>(response);
         const validHolds = holds.filter(
           (hold) => new Date(hold.expiresAt).getTime() > Date.now(),
         );
@@ -438,9 +456,7 @@ export function SeatGrid({
         }),
       });
 
-      const data = (await holdResponse.json()) as {
-        message?: string;
-      };
+      const data = await readJsonResponse<{ message?: string }>(holdResponse);
 
       if (!holdResponse.ok) {
         setMessage(data.message ?? 'Không thể giữ ghế.');
@@ -489,9 +505,7 @@ export function SeatGrid({
         }),
       });
 
-      const data = (await response.json()) as {
-        message?: string;
-      };
+      const data = await readJsonResponse<{ message?: string }>(response);
 
       if (!response.ok) {
         setMessage(data.message ?? 'Không thể bỏ giữ ghế.');
@@ -560,7 +574,7 @@ export function SeatGrid({
         return;
       }
 
-      const holds = (await response.json()) as HeldSeat[];
+      const holds = await readJsonResponse<HeldSeat[]>(response);
       const validHolds = holds.filter(
         (hold) => new Date(hold.expiresAt).getTime() > Date.now(),
       );

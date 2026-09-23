@@ -2,6 +2,7 @@ import { hash } from 'bcryptjs';
 import { UserRole } from '@prisma/client';
 
 import { prisma } from '@/lib/db/prisma';
+import { logger } from '@/lib/security/logger';
 
 /**
  * Kiểm tra DB đã có admin chưa.
@@ -13,16 +14,14 @@ export async function ensureAdminUser(): Promise<void> {
   const password = process.env.ADMIN_PASSWORD;
   const name = process.env.ADMIN_NAME?.trim() || 'Administrator';
 
-  // Không cấu hình .env → bỏ qua, không tạo
   if (!email || !password) {
-    console.warn(
-      '[ensure-admin] Bỏ qua: thiếu ADMIN_EMAIL hoặc ADMIN_PASSWORD trong .env',
-    );
+    logger.warn('ensure-admin', 'Bỏ qua: thiếu ADMIN_EMAIL hoặc ADMIN_PASSWORD trong .env');
     return;
   }
 
   const existing = await prisma.user.findUnique({
     where: { email },
+    select: { id: true },
   });
 
   if (existing) {
@@ -40,5 +39,5 @@ export async function ensureAdminUser(): Promise<void> {
     },
   });
 
-  console.log(`[ensure-admin] Đã tạo tài khoản admin: ${email}`);
+  logger.info('ensure-admin', 'Đã tạo tài khoản admin', { email });
 }

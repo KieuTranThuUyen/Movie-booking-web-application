@@ -1,44 +1,54 @@
 import { hash } from 'bcryptjs';
 import { NextResponse } from 'next/server';
+
 import { prisma } from '@/lib/db/prisma';
+import { registerSchema } from '@/lib/validation/auth';
+import { handleApiError, conflict } from '@/lib/api/errors';
+import { createAuthToken, TOKEN_TYPES } from '@/lib/auth/tokens';
+import { sendEmailVerification } from '@/lib/mail';
+import { logger } from '@/lib/security/logger';
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    name?: string;
-    email?: string;
-    phone?: string;
-    password?: string;
-    confirmPassword?: string;
-  };
+  try {
+    const data = registerSchema.parse(await request.json());
+    const email = data.email;
 
-  if (!body.name || !body.email || !body.phone || !body.password || !body.confirmPassword) {
-    return NextResponse.json({ message: 'Vui lòng điền đầy đủ thông tin.' }, { status: 400 });
-  }
+    const existingUser = await prisma.user.findFirst({
+      where: { OR: [{ email }, { phone: data.phone }] },
+      select: { id: true },
+    });
 
-  if (body.password !== body.confirmPassword) {
-    return NextResponse.json({ message: 'Mật khẩu và xác nhận mật khẩu không khớp.' }, { status: 400 });
-  }
-
-  const existingUser = await prisma.user.findFirst({
-    where: {
-      OR: [{ email: body.email }, { phone: body.phone }]
+    if (existingUser) {
+      throw conflict('Email hoặc số điện thoại đã được sử dụng.');
     }
-  });
 
-  if (existingUser) {
-    return NextResponse.json({ message: 'Email hoặc số điện thoại đã được sử dụng.' }, { status: 409 });
-  }
+    const hashedPassword = await hash(data.password, 12);
 
-  const hashedPassword = await hash(body.password, 10);
+    const user = await prisma.user.create({
+      data: {
+        name: data.name,
+        email,
+        phone: data.phone,
+        password: hashedPassword,
+      },
+      select: { id: true, email: true, name: true },
+    });
 
-  await prisma.user.create({
-    data: {
-      name: body.name,
-      email: body.email,
-      phone: body.phone,
-      password: hashedPassword
+    try {
+      const rawToken = await createAuthToken(user.id, TOKEN_TYPES.EMAIL_VERIFY);
+      await sendEmailVerification(user.email, rawToken);
+    } catch (mailErr) {
+      logger.error('auth/register', mailErr, { note: 'verify email send failed' });
     }
-  });
 
-  return NextResponse.json({ message: 'Tạo tài khoản thành công.', redirectTo: '/dang-nhap' });
+    logger.info('auth/register', 'User registered', { userId: user.id });
+
+    return NextResponse.json({
+      message:
+        'Tạo tài khoản thành công. Vui lòng kiểm tra email để xác thực tài khoản (nếu đã cấu hình SMTP).',
+      redirectTo: '/dang-nhap',
+    });
+  } catch (error) {
+    return handleApiError(error, 'POST /api/auth/register');
+  }
 }

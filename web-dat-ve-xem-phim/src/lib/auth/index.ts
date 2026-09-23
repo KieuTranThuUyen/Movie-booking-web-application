@@ -1,7 +1,9 @@
-import { compare } from 'bcryptjs';
+import { compare, hash } from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { UserRole } from '@prisma/client';
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
 import type { JWT } from 'next-auth/jwt';
 
 import { prisma } from '@/lib/db/prisma';
@@ -12,7 +14,33 @@ type AuthenticatedUser = {
   email: string;
   phone: string | null;
   role: UserRole;
+  emailVerified: Date;
 };
+
+async function upsertGoogleUser(email: string, name: string, image?: string | null) {
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+
+  if (existingUser) {
+    return prisma.user.update({
+      where: { id: existingUser.id },
+      data: {
+        name: name || existingUser.name,
+        image: image ?? existingUser.image,
+        emailVerified: existingUser.emailVerified ?? new Date(),
+      },
+    });
+  }
+
+  return prisma.user.create({
+    data: {
+      name: name || email,
+      email,
+      image: image ?? undefined,
+      password: await hash(randomBytes(32).toString('hex'), 12),
+      emailVerified: new Date(),
+    },
+  });
+}
 
 type AuthToken = JWT & {
   id?: string;
@@ -43,12 +71,17 @@ export async function findAuthenticatedUser(
     return null;
   }
 
+  if (!user.emailVerified) {
+    return null;
+  }
+
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     phone: user.phone,
     role: user.role,
+    emailVerified: user.emailVerified,
   };
 }
 
@@ -88,17 +121,47 @@ export const authOptions: NextAuthOptions = {
         return findAuthenticatedUser(identifier, password);
       },
     }),
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          GoogleProvider({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          }),
+        ]
+      : []),
   ],
 
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        const typedUser = user as AuthenticatedUser;
-        const typedToken = token as AuthToken;
+    async signIn({ account, profile }) {
+      if (account?.provider !== 'google') {
+        return true;
+      }
 
-        typedToken.id = typedUser.id;
-        typedToken.role = typedUser.role;
-        typedToken.phone = typedUser.phone;
+      const googleProfile = profile as
+        | (typeof profile & { email_verified?: boolean; picture?: string | null })
+        | undefined;
+      const email = googleProfile?.email?.trim().toLowerCase();
+      if (!email || googleProfile?.email_verified === false) {
+        return false;
+      }
+
+      await upsertGoogleUser(email, googleProfile?.name ?? email, googleProfile?.picture);
+      return true;
+    },
+
+    async jwt({ token, user }) {
+      const email = user?.email ?? token.email;
+      if (email) {
+        const databaseUser = await prisma.user.findUnique({
+          where: { email: email.toLowerCase() },
+        });
+        if (databaseUser) {
+          const typedToken = token as AuthToken;
+
+          typedToken.id = databaseUser.id;
+          typedToken.role = databaseUser.role;
+          typedToken.phone = databaseUser.phone;
+        }
       }
 
       return token;

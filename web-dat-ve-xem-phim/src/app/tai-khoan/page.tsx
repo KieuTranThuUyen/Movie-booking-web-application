@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 import { AccountProfile } from '@/components/booking/account-profile';
 import { BookingHistoryList } from '@/components/booking/booking-history-list';
+import { ChangePasswordForm } from '@/components/forms/change-password-form';
 
 function getBookingStatusLabel(status: string) {
   switch (status) {
@@ -117,12 +118,15 @@ export default async function AccountPage() {
               HỒ SƠ
               ========================= */}
 
-          <AccountProfile
-            name={session.user.name ?? ''}
-            email={session.user.email ?? ''}
-            phone={session.user.phone ?? ''}
-            role={session.user.role}
-          />
+          <div className="space-y-6">
+            <AccountProfile
+              name={session.user.name ?? ''}
+              email={session.user.email ?? ''}
+              phone={session.user.phone ?? ''}
+              role={session.user.role}
+            />
+            <ChangePasswordForm />
+          </div>
 
           {/* =========================
               LỊCH SỬ ĐẶT VÉ
