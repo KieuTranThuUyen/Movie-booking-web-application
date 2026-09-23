@@ -6,7 +6,6 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 import { AccountProfile } from '@/components/booking/account-profile';
 import { BookingHistoryList } from '@/components/booking/booking-history-list';
-import { ChangePasswordForm } from '@/components/forms/change-password-form';
 
 function getBookingStatusLabel(status: string) {
   switch (status) {
@@ -95,10 +94,6 @@ export default async function AccountPage() {
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        {/* =========================
-            HEADER
-            ========================= */}
-
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
             Tài khoản
@@ -114,10 +109,6 @@ export default async function AccountPage() {
         </div>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          {/* =========================
-              HỒ SƠ
-              ========================= */}
-
           <div className="space-y-6">
             <AccountProfile
               name={session.user.name ?? ''}
@@ -125,12 +116,14 @@ export default async function AccountPage() {
               phone={session.user.phone ?? ''}
               role={session.user.role}
             />
-            <ChangePasswordForm />
-          </div>
 
-          {/* =========================
-              LỊCH SỬ ĐẶT VÉ
-              ========================= */}
+            <Link
+              href="doi-mat-khau"
+              className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400"
+            >
+              Đổi mật khẩu
+            </Link>
+          </div>
 
           <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -144,10 +137,6 @@ export default async function AccountPage() {
                 </p>
               </div>
 
-              {/* =========================
-                  QUẢN LÝ ĐƠN
-                  ========================= */}
-
               <Link
                 href="/don-hang"
                 className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
@@ -156,7 +145,7 @@ export default async function AccountPage() {
               </Link>
             </div>
 
-                        <div className="mt-4">
+            <div className="mt-4">
               <BookingHistoryList bookings={bookings} />
             </div>
           </section>
@@ -165,3 +154,4 @@ export default async function AccountPage() {
     </main>
   );
 }
+

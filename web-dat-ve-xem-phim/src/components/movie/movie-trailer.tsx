@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type MovieTrailerProps = {
   imageUrl: string | null;
@@ -11,27 +11,57 @@ type MovieTrailerProps = {
 
 function getYoutubeEmbedUrl(url: string): string | null {
   try {
-    const parsedUrl = new URL(url);
+    const parsedUrl = new URL(url.trim());
 
-    const videoId = parsedUrl.searchParams.get('v');
+    const hostname = parsedUrl.hostname.toLowerCase();
 
-    if (videoId) {
-      return `https://www.youtube.com/embed/${videoId}`;
-    }
-
+    // https://www.youtube.com/watch?v=VIDEO_ID
     if (
-      parsedUrl.hostname === 'youtu.be' ||
-      parsedUrl.hostname === 'www.youtu.be'
+      hostname === 'youtube.com' ||
+      hostname === 'www.youtube.com' ||
+      hostname === 'm.youtube.com'
     ) {
-      const id = parsedUrl.pathname.substring(1);
+      const videoId = parsedUrl.searchParams.get('v');
 
-      if (id) {
-        return `https://www.youtube.com/embed/${id}`;
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+
+      // https://www.youtube.com/embed/VIDEO_ID
+      if (parsedUrl.pathname.startsWith('/embed/')) {
+        const videoId = parsedUrl.pathname
+          .split('/embed/')[1]
+          ?.split('/')[0];
+
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
+      }
+
+      // https://www.youtube.com/shorts/VIDEO_ID
+      if (parsedUrl.pathname.startsWith('/shorts/')) {
+        const videoId = parsedUrl.pathname
+          .split('/shorts/')[1]
+          ?.split('/')[0];
+
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}`;
+        }
       }
     }
 
-    if (parsedUrl.pathname.startsWith('/embed/')) {
-      return url;
+    // https://youtu.be/VIDEO_ID
+    if (
+      hostname === 'youtu.be' ||
+      hostname === 'www.youtu.be'
+    ) {
+      const videoId = parsedUrl.pathname
+        .substring(1)
+        .split('/')[0];
+
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
     }
 
     return null;
@@ -46,36 +76,44 @@ export function MovieTrailer({
   title,
 }: MovieTrailerProps) {
   const [showTrailer, setShowTrailer] = useState(false);
+  const [origin, setOrigin] = useState('');
+
+  /*
+   * Không dùng window.location.origin trực tiếp
+   * trong lúc render vì Client Component vẫn có thể
+   * được prerender phía server.
+   */
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   const embedUrl = trailerUrl
     ? getYoutubeEmbedUrl(trailerUrl)
     : null;
 
+  const iframeUrl =
+    embedUrl && origin
+      ? `${embedUrl}?rel=0&enablejsapi=1&origin=${encodeURIComponent(
+          origin,
+        )}`
+      : null;
+
   return (
     <div className="flex w-full flex-col items-center gap-4">
-      {showTrailer && embedUrl ? (
-        /* =========================
-           TRAILER
-           GIỮ KHUNG 16:9
-           ========================= */
+      {showTrailer && iframeUrl ? (
         <div className="w-full max-w-[480px]">
           <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black shadow-xl">
             <iframe
-              src={`${embedUrl}?rel=0`}
+              src={iframeUrl}
               title={`Trailer ${title}`}
               className="absolute inset-0 h-full w-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
             />
           </div>
         </div>
       ) : imageUrl ? (
-        /* =========================
-           IMAGE
-           CHỈ RỘNG BẰNG ẢNH
-           CAO = TRAILER
-           KHÔNG DƯ KHUNG ĐEN
-           ========================= */
         <div className="flex h-[270px] w-fit overflow-hidden rounded-2xl border border-white/10 bg-black shadow-xl">
           <Image
             src={imageUrl}
@@ -99,7 +137,7 @@ export function MovieTrailer({
           onClick={() => setShowTrailer((value) => !value)}
           className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
         >
-          {showTrailer ? 'Image' : 'Trailer'}
+          {showTrailer ? 'Ảnh' : 'Trailer'}
         </button>
       )}
     </div>

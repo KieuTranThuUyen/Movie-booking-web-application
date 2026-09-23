@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth/next';
 
-import { SignOutButton } from '@/components/layout/sign-out-button';
+import { HeaderAccount } from '@/components/layout/header-account';
 import { authOptions } from '@/lib/auth';
 
 export async function SiteHeader() {
@@ -9,9 +9,9 @@ export async function SiteHeader() {
 
   /**
    * Logo:
-   * - ADMIN      → Dashboard quản trị
-   * - CUSTOMER   → Trang chủ
-   * - Guest      → Trang chủ
+   * - ADMIN    → Dashboard quản trị
+   * - CUSTOMER → Trang chủ
+   * - Guest    → Trang chủ
    */
   const logoHref =
     session?.user?.role === 'ADMIN'
@@ -96,42 +96,7 @@ export async function SiteHeader() {
             ACCOUNT
         ======================================================= */}
         <div className="hidden items-center gap-3 sm:flex">
-          {session ? (
-            <>
-              {/* Tài khoản */}
-              <Link
-                href="/tai-khoan"
-                className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5"
-              >
-                {session.user.role === 'ADMIN'
-                  ? 'Administrator'
-                  : session.user.name ?? 'Tài khoản'}
-              </Link>
-
-              {/* Đăng xuất */}
-              <SignOutButton
-                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
-              />
-            </>
-          ) : (
-            <>
-              {/* Đăng nhập */}
-              <Link
-                href="/dang-nhap"
-                className="rounded-full border border-white/10 px-4 py-2 text-sm text-slate-100 transition hover:border-white/20 hover:bg-white/5"
-              >
-                Đăng nhập
-              </Link>
-
-              {/* Đăng ký */}
-              <Link
-                href="/dang-ky"
-                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
-              >
-                Đăng ký
-              </Link>
-            </>
-          )}
+          <HeaderAccount />
         </div>
       </div>
     </header>
@@ -139,3 +104,4 @@ export async function SiteHeader() {
 }
 
 export default SiteHeader;
+

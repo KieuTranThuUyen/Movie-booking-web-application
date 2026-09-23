@@ -172,7 +172,7 @@ export default async function HomePage() {
         <MovieRowCarousel
           movies={nowShowing}
           emptyMessage="Hiện chưa có phim đang chiếu."
-          pageSize={3}
+          pageSize={5}
         />
       </section>
 
@@ -198,7 +198,7 @@ export default async function HomePage() {
         <MovieRowCarousel
           movies={upcoming}
           emptyMessage="Hiện chưa có phim sắp chiếu."
-          pageSize={3}
+          pageSize={5}
         />
       </section>
     </main>

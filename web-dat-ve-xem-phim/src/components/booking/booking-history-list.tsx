@@ -68,7 +68,7 @@ export function BookingHistoryList({ bookings }: Props) {
       <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-sm text-slate-400">Chưa có đơn đặt vé nào.</p>
         <Link
-          href="/suat-chieu"
+          href="/"
           className="mt-4 inline-flex rounded-xl border border-sky-400/30 px-4 py-2 text-sm font-semibold text-sky-300 transition hover:bg-sky-400/10"
         >
           Đặt vé ngay

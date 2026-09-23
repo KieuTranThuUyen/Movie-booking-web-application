@@ -17,13 +17,17 @@ export default async function MoviesPage({
   const status = params.status?.trim() ?? '';
 
   const where: {
-    title?: { contains: string };
+    title?: {
+      contains: string;
+    };
     isNowShowing?: boolean;
     isComingSoon?: boolean;
   } = {};
 
   if (search) {
-    where.title = { contains: search };
+    where.title = {
+      contains: search,
+    };
   }
 
   if (status === 'now' || status === 'dang-chieu') {
@@ -35,8 +39,12 @@ export default async function MoviesPage({
   const movies = await prisma.movie.findMany({
     where: Object.keys(where).length > 0 ? where : undefined,
     orderBy: [
-      { isNowShowing: 'desc' },
-      { releaseDate: 'desc' },
+      {
+        isNowShowing: 'desc',
+      },
+      {
+        releaseDate: 'desc',
+      },
     ],
   });
 
@@ -59,36 +67,47 @@ export default async function MoviesPage({
           : 'Phim đang chiếu và sắp chiếu';
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div>
-        <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
-          Phim
-        </p>
+    <main className="min-h-screen bg-slate-950 px-4 py-10">
+      <div className="mx-auto max-w-7xl sm:px-2 lg:px-4">
+        {/* Tiêu đề */}
+        <div>
+          <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
+            Phim
+          </p>
 
-        <h1 className="mt-2 text-3xl font-semibold text-white">{title}</h1>
+          <h1 className="mt-2 text-3xl font-semibold text-white">
+            {title}
+          </h1>
 
-        <p className="mt-2 text-slate-400">{subtitle}</p>
+          <p className="mt-2 text-slate-400">
+            {subtitle}
+          </p>
+        </div>
+
+        {/* Danh sách phim */}
+        {movies.length === 0 ? (
+          <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
+            <p className="text-lg font-medium text-white">
+              Không tìm thấy phim phù hợp
+            </p>
+
+            <p className="mt-2 text-sm text-slate-400">
+              {search
+                ? 'Thử tìm kiếm với tên phim khác.'
+                : 'Hiện chưa có phim trong danh mục này.'}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {movies.map((movie) => (
+              <MovieCard
+                key={movie.id}
+                movie={movie}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {movies.length === 0 ? (
-        <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
-          <p className="text-lg font-medium text-white">
-            Không tìm thấy phim phù hợp
-          </p>
-
-          <p className="mt-2 text-sm text-slate-400">
-            {search
-              ? 'Thử tìm kiếm với tên phim khác.'
-              : 'Hiện chưa có phim trong danh mục này.'}
-          </p>
-        </div>
-      ) : (
-        <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {movies.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))}
-        </div>
-      )}
     </main>
   );
 }
