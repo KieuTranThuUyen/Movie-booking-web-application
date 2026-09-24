@@ -57,7 +57,26 @@ export async function POST(request: Request) {
       });
 
       if (!ticket) {
-        throw new Error('TICKET_NOT_FOUND');
+        const combo = await tx.bookingCombo.findUnique({
+          where: { qrCode: code },
+          include: { combo: true, booking: { include: { showtime: { include: { movie: true, hall: { include: { cinema: true } } } } } } },
+        });
+        if (!combo) throw new Error('TICKET_NOT_FOUND');
+        if (combo.status === TicketStatus.USED) throw new Error('TICKET_ALREADY_USED');
+        if (combo.status === TicketStatus.CANCELED) throw new Error('TICKET_CANCELED');
+        const claimedCombo = await tx.bookingCombo.updateMany({
+          where: { id: combo.id, status: TicketStatus.ACTIVE },
+          data: { status: TicketStatus.USED, checkedInAt: new Date() },
+        });
+        if (claimedCombo.count !== 1) throw new Error('TICKET_ALREADY_USED');
+        return {
+          expired: false as const,
+          ticket: {
+            id: combo.id,
+            seatCode: `Combo: ${combo.combo.name}`,
+            booking: combo.booking,
+          },
+        };
       }
 
       if (ticket.status === TicketStatus.USED) {
