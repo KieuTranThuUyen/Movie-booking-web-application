@@ -73,6 +73,10 @@ export async function GET(request: Request) {
             seatCode: 'asc',
           },
         },
+        combos: {
+          include: { combo: true },
+          orderBy: { id: 'asc' },
+        },
         user: {
           select: {
             id: true,
