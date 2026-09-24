@@ -274,6 +274,9 @@ model BookingCombo {
   comboId   String
   quantity  Int    @default(1)
   unitPrice Int
+  qrCode    String? @unique
+  status    TicketStatus @default(ACTIVE)
+  checkedInAt DateTime?
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   combo   Combo   @relation(fields: [comboId], references: [id], onDelete: Restrict)
