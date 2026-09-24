@@ -19,6 +19,15 @@ type BookingTicket = {
   qrCode: string | null;
 };
 
+type BookingCombo = {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  status: TicketStatus;
+  qrCode: string | null;
+  combo: { id: string; name: string };
+};
+
 type BookingItem = {
   id: string;
   bookingCode: string;
@@ -43,6 +52,7 @@ type BookingItem = {
     };
   };
   tickets: BookingTicket[];
+  combos?: BookingCombo[];
 };
 
 type DialogMode = 'view' | 'print';
@@ -115,9 +125,13 @@ function getPaymentStatusClass(status: PaymentStatus) {
   }
 }
 
-async function printTicketPageMarkup(booking: BookingItem, seatCode?: string) {
+async function printTicketPageMarkup(
+  booking: BookingItem,
+  options?: { seatCode?: string; comboId?: string },
+) {
   const params = new URLSearchParams({ print: '1' });
-  if (seatCode) params.set('seat', seatCode);
+  if (options?.seatCode) params.set('seat', options.seatCode);
+  if (options?.comboId) params.set('combo', options.comboId);
 
   const response = await fetch(`/ve/${booking.id}?${params.toString()}`, {
     credentials: 'same-origin',
@@ -127,24 +141,41 @@ async function printTicketPageMarkup(booking: BookingItem, seatCode?: string) {
 
   const html = await response.text();
   const parsed = new DOMParser().parseFromString(html, 'text/html');
+  // Lấy cả khối vé + combo (combo nằm ngoài #electronic-ticket)
   const ticketContent = parsed.querySelector('#electronic-ticket');
-  if (!ticketContent) throw new Error('TICKET_CONTENT_UNAVAILABLE');
+  const comboSection = parsed.querySelector('.combo-print-section');
+  if (!ticketContent && !comboSection) throw new Error('TICKET_CONTENT_UNAVAILABLE');
 
   const root = document.createElement('div');
   root.id = 'ticket-print-root';
-  root.innerHTML = ticketContent.outerHTML;
+  root.innerHTML =
+    (ticketContent?.outerHTML ?? '') + (comboSection?.outerHTML ?? '');
 
   const pageStyles = Array.from(parsed.querySelectorAll('style'))
     .map((style) => style.textContent ?? '')
     .join('\n');
   const style = document.createElement('style');
   style.id = 'ticket-print-style';
-  style.textContent = `${pageStyles}\n#ticket-print-root{display:none}@media print{body>*:not(#ticket-print-root){display:none!important}#ticket-print-root{display:block!important}#ticket-print-root .ticket-item{page-break-inside:avoid}}`;
+  style.textContent = `${pageStyles}
+#ticket-print-root{display:none}
+@media print{
+  body>*:not(#ticket-print-root){display:none!important}
+  #ticket-print-root{display:block!important;color:#000!important;background:#fff!important}
+  #ticket-print-root .ticket-item,
+  #ticket-print-root .combo-ticket-item{
+    page-break-inside:avoid;break-inside:avoid;
+    border:2px solid #000!important;border-radius:16px!important;
+    background:#fff!important;color:#000!important;margin-bottom:16px!important;
+  }
+  #ticket-print-root *{color:#000!important;border-color:#000!important}
+}`;
 
   const ticketItems = Array.from(root.querySelectorAll('.ticket-item'));
-  const ticketsToPrint = seatCode
-    ? booking.tickets.filter((ticket) => ticket.seatCode === seatCode)
-    : booking.tickets.filter((ticket) => ticket.status === TicketStatus.ACTIVE);
+  const ticketsToPrint = options?.seatCode
+    ? booking.tickets.filter((ticket) => ticket.seatCode === options.seatCode)
+    : options?.comboId
+      ? []
+      : booking.tickets.filter((ticket) => ticket.status === TicketStatus.ACTIVE);
 
   await Promise.all(
     ticketItems.map(async (item) => {
@@ -153,13 +184,38 @@ async function printTicketPageMarkup(booking: BookingItem, seatCode?: string) {
       );
       if (!ticket) return;
       const qrValue = ticket.qrCode ?? `${booking.bookingCode}-${ticket.id}-${ticket.seatCode}`;
-      const qrImage = await QRCode.toDataURL(qrValue, { width: 220, margin: 2 });
+      const qrImage = await QRCode.toDataURL(qrValue, { width: 220, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
       const placeholder = Array.from(item.querySelectorAll('*')).find(
         (element) =>
           element.textContent?.replace(/\s+/g, ' ').trim() === 'Đang tạo QR...',
       );
       if (placeholder) {
         placeholder.innerHTML = `<img src="${qrImage}" alt="QR ${escapeHtml(ticket.seatCode)}" style="height:180px;width:180px" />`;
+      }
+    }),
+  );
+
+  // QR cho combo
+  const comboItems = Array.from(root.querySelectorAll('.combo-ticket-item'));
+  const combos = booking.combos ?? [];
+  const combosToPrint = options?.comboId
+    ? combos.filter((c) => c.id === options.comboId)
+    : options?.seatCode
+      ? []
+      : combos.filter((c) => c.status === TicketStatus.ACTIVE && c.qrCode);
+
+  await Promise.all(
+    comboItems.map(async (item) => {
+      const combo = combosToPrint.find((c) => item.textContent?.includes(c.combo.name));
+      if (!combo?.qrCode) return;
+      const qrImage = await QRCode.toDataURL(combo.qrCode, {
+        width: 220,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      const qrWrap = item.querySelector('.combo-qr-wrap');
+      if (qrWrap) {
+        qrWrap.innerHTML = `<img src="${qrImage}" alt="QR combo" style="height:180px;width:180px" />`;
       }
     }),
   );
@@ -206,6 +262,7 @@ export function TicketLookupForm() {
   const [selectedSeatCodes, setSelectedSeatCodes] = useState<string[]>(
     [],
   );
+  const [selectedComboIds, setSelectedComboIds] = useState<string[]>([]);
   const [printing, setPrinting] = useState(false);
 
   const handleSearch = async (event?: FormEvent) => {
@@ -264,26 +321,40 @@ export function TicketLookupForm() {
   const getActiveTickets = (booking: BookingItem) =>
     booking.tickets.filter((t) => t.status === TicketStatus.ACTIVE);
 
+  const getActiveCombos = (booking: BookingItem) =>
+    (booking.combos ?? []).filter((c) => c.status === TicketStatus.ACTIVE);
+
   const openDialog = (booking: BookingItem, mode: DialogMode) => {
     const active = getActiveTickets(booking);
+    const activeCombos = getActiveCombos(booking);
 
-    if (active.length === 0) {
-      setError('Đơn này không còn vé hiệu lực.');
+    if (active.length === 0 && activeCombos.length === 0) {
+      setError('Đơn này không còn vé / combo hiệu lực.');
       return;
     }
 
-    // Xem vé → vào thẳng trang vé, không chọn ghế
+    // Xem vé → vào thẳng trang vé
     if (mode === 'view') {
       router.push(`/ve/${booking.id}`);
       return;
     }
 
-    // In vé: 1 ghế → in luôn; nhiều ghế → dialog chọn
-    if (active.length === 1) {
+    // 1 ghế, không combo → in luôn
+    if (active.length === 1 && activeCombos.length === 0) {
       setPrinting(true);
       setMessage('Đang mở hộp thoại in...');
-      void printTicketPageMarkup(booking, active[0].seatCode)
+      void printTicketPageMarkup(booking, { seatCode: active[0].seatCode })
         .catch(() => setMessage('Không thể tạo bản in vé. Vui lòng thử lại.'))
+        .finally(() => setPrinting(false));
+      return;
+    }
+
+    // 1 combo, không ghế → in combo
+    if (active.length === 0 && activeCombos.length === 1) {
+      setPrinting(true);
+      setMessage('Đang mở hộp thoại in...');
+      void printTicketPageMarkup(booking, { comboId: activeCombos[0].id })
+        .catch(() => setMessage('Không thể tạo bản in. Vui lòng thử lại.'))
         .finally(() => setPrinting(false));
       return;
     }
@@ -291,11 +362,13 @@ export function TicketLookupForm() {
     setDialogBooking(booking);
     setDialogMode('print');
     setSelectedSeatCodes(active.map((t) => t.seatCode));
+    setSelectedComboIds(activeCombos.map((c) => c.id));
   };
 
   const closeDialog = () => {
     setDialogBooking(null);
     setSelectedSeatCodes([]);
+    setSelectedComboIds([]);
   };
 
   const toggleSeat = (seatCode: string) => {
@@ -306,24 +379,46 @@ export function TicketLookupForm() {
     );
   };
 
+  const toggleCombo = (comboId: string) => {
+    setSelectedComboIds((current) =>
+      current.includes(comboId)
+        ? current.filter((c) => c !== comboId)
+        : [...current, comboId],
+    );
+  };
+
   const selectAllSeats = () => {
     if (!dialogBooking) return;
     setSelectedSeatCodes(
       getActiveTickets(dialogBooking).map((t) => t.seatCode),
     );
+    setSelectedComboIds(getActiveCombos(dialogBooking).map((c) => c.id));
   };
 
   const confirmDialog = () => {
-    if (!dialogBooking || selectedSeatCodes.length === 0) return;
+    if (
+      !dialogBooking ||
+      (selectedSeatCodes.length === 0 && selectedComboIds.length === 0)
+    ) {
+      return;
+    }
 
     closeDialog();
 
     if (dialogMode === 'print') {
       setPrinting(true);
       setMessage('Đang mở hộp thoại in...');
+      const onlyOneSeat =
+        selectedSeatCodes.length === 1 && selectedComboIds.length === 0;
+      const onlyOneCombo =
+        selectedComboIds.length === 1 && selectedSeatCodes.length === 0;
       void printTicketPageMarkup(
         dialogBooking,
-        selectedSeatCodes.length === 1 ? selectedSeatCodes[0] : undefined,
+        onlyOneSeat
+          ? { seatCode: selectedSeatCodes[0] }
+          : onlyOneCombo
+            ? { comboId: selectedComboIds[0] }
+            : undefined, // in tất cả (vé + combo)
       )
         .catch(() => setMessage('Không thể tạo bản in vé. Vui lòng thử lại.'))
         .finally(() => setPrinting(false));
@@ -395,9 +490,10 @@ export function TicketLookupForm() {
       <div className="grid gap-4">
         {bookings.map((booking) => {
           const activeTickets = getActiveTickets(booking);
+          const activeCombos = getActiveCombos(booking);
           const canUse =
             booking.status !== BookingStatus.CANCELED &&
-            activeTickets.length > 0;
+            (activeTickets.length > 0 || activeCombos.length > 0);
 
           return (
             <article
@@ -516,7 +612,7 @@ export function TicketLookupForm() {
                   className="text-lg font-semibold text-white"
                 >
                   {dialogMode === 'print'
-                    ? 'Chọn vé cần in'
+                    ? 'Chọn vé / combo cần in'
                     : 'Chọn vé cần xem'}
                 </h3>
                 <p className="mt-1 text-sm text-slate-400">
@@ -534,7 +630,7 @@ export function TicketLookupForm() {
               </button>
             </div>
 
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 max-h-72 space-y-2 overflow-y-auto">
               {getActiveTickets(dialogBooking).map((ticket) => {
                 const checked = selectedSeatCodes.includes(ticket.seatCode);
 
@@ -564,6 +660,35 @@ export function TicketLookupForm() {
                   </label>
                 );
               })}
+
+              {getActiveCombos(dialogBooking).map((c) => {
+                const checked = selectedComboIds.includes(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition ${
+                      checked
+                        ? 'border-amber-400/40 bg-amber-500/10'
+                        : 'border-white/10 bg-white/5 hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCombo(c.id)}
+                        className="h-4 w-4 rounded border-white/20 bg-slate-900 text-amber-500 focus:ring-amber-400"
+                      />
+                      <span className="font-semibold text-white">
+                        Combo {c.combo.name} ×{c.quantity}
+                      </span>
+                    </div>
+                    <span className="text-sm text-slate-400">
+                      {formatMoney(c.unitPrice * c.quantity)}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -587,12 +712,19 @@ export function TicketLookupForm() {
               <button
                 type="button"
                 onClick={confirmDialog}
-                disabled={selectedSeatCodes.length === 0}
+                disabled={
+                  selectedSeatCodes.length === 0 &&
+                  selectedComboIds.length === 0
+                }
                 className="flex-1 rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {dialogMode === 'print' ? 'In' : 'Xem'}{' '}
-                {selectedSeatCodes.length > 0
-                  ? `(${selectedSeatCodes.length} vé)`
+                {selectedSeatCodes.length + selectedComboIds.length > 0
+                  ? `(${selectedSeatCodes.length} vé${
+                      selectedComboIds.length
+                        ? ` + ${selectedComboIds.length} combo`
+                        : ''
+                    })`
                   : ''}
               </button>
               <button
@@ -606,8 +738,8 @@ export function TicketLookupForm() {
 
             <p className="mt-3 text-xs text-slate-500">
               {dialogMode === 'print'
-                ? 'In ngay tại đây, không chuyển trang. Chọn 1 ghế hoặc chọn hết.'
-                : 'Chuyển sang trang vé để xem chi tiết, có thể in thêm từ đó.'}
+                ? 'In trắng đen tại đây. Có thể chọn ghế và/hoặc combo.'
+                : 'Chuyển sang trang vé để xem chi tiết.'}
             </p>
           </div>
         </div>

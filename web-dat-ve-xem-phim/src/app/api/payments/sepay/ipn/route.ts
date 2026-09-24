@@ -381,61 +381,49 @@ export async function POST(
      * ==========================================================
      */
 
-    const paidAmount =
+    const paidAmount = Math.round(
       Number(
-        transaction
-          ?.transaction_amount ??
+        transaction?.transaction_amount ??
           order.order_amount ??
           0,
-      );
-
-    const requiredAmount =
-      Number(
-        booking.totalPrice,
-      );
-
-    console.log(
-      '[SePay IPN] Amount check:',
-      {
-        bookingCode,
-
-        paidAmount,
-
-        requiredAmount,
-      },
+      ),
     );
 
+    const requiredAmount = Math.round(
+      Number(booking.totalPrice ?? booking.payment?.amount ?? 0),
+    );
+
+    console.log('[SePay IPN] Amount check:', {
+      bookingCode,
+      paidAmount,
+      requiredAmount,
+      paymentAmount: booking.payment?.amount,
+      totalPrice: booking.totalPrice,
+    });
+
     /*
-     * Chỉ xác nhận nếu số tiền chính xác.
+     * Chỉ xác nhận nếu số tiền khớp (cho phép lệch 1đ do làm tròn).
+     * Trước đây return success:true khi mismatch → SePay không retry,
+     * đơn "thanh toán" nhưng không tạo vé.
      */
-
-    if (
-      !Number.isFinite(
+    if (!Number.isFinite(paidAmount) || Math.abs(paidAmount - requiredAmount) > 1) {
+      console.warn('[SePay IPN] Amount mismatch — will not confirm tickets:', {
+        bookingCode,
         paidAmount,
-      ) ||
-      paidAmount !==
-        requiredAmount
-    ) {
-      console.warn(
-        '[SePay IPN] Amount mismatch:',
-        {
-          bookingCode,
-
-          paidAmount,
-
-          requiredAmount,
-        },
-      );
-
-      return NextResponse.json({
-        success: true,
-
-        amountMismatch: true,
-
-        paidAmount,
-
         requiredAmount,
       });
+
+      // 409 để SePay có thể retry / admin biết có vấn đề
+      return NextResponse.json(
+        {
+          success: false,
+          amountMismatch: true,
+          paidAmount,
+          requiredAmount,
+          message: 'Số tiền IPN không khớp đơn.',
+        },
+        { status: 409 },
+      );
     }
 
     /*

@@ -240,6 +240,7 @@ export default async function ElectronicTicketPage({
 
   const {
     seat,
+    combo: comboParam,
     checking,
     print,
   } =
@@ -538,6 +539,21 @@ export default async function ElectronicTicketPage({
         TicketStatus.CANCELED,
     );
 
+  const activeCombos = booking.combos.filter(
+    (c) => c.status === TicketStatus.ACTIVE || c.status === 'ACTIVE',
+  );
+  const usedCombos = booking.combos.filter(
+    (c) => c.status === TicketStatus.USED || c.status === 'USED',
+  );
+  const comboQtyTotal = booking.combos.reduce(
+    (sum, c) => sum + Number(c.quantity || 0),
+    0,
+  );
+  const activeComboQty = activeCombos.reduce(
+    (sum, c) => sum + Number(c.quantity || 0),
+    0,
+  );
+
   /* ==========================================================
      SHOWTIME
      ========================================================== */
@@ -560,14 +576,15 @@ export default async function ElectronicTicketPage({
         )
       : null;
 
-  const isAllTickets =
-    !seat;
+  const selectedCombo =
+    comboParam
+      ? booking.combos.find((c) => c.id === comboParam)
+      : null;
 
-  const invalidSeat =
-    Boolean(
-      seat &&
-        !selectedTicket,
-    );
+  const isAllTickets = !seat && !comboParam;
+
+  const invalidSeat = Boolean(seat && !selectedTicket);
+  const invalidCombo = Boolean(comboParam && !selectedCombo);
 
   const selectedTicketIsCanceled =
     Boolean(
@@ -577,43 +594,60 @@ export default async function ElectronicTicketPage({
     );
 
   /* ==========================================================
-     VISIBLE TICKETS
+     VISIBLE TICKETS / COMBOS
      ========================================================== */
 
   const visibleTickets =
-    isAllTickets ||
-    invalidSeat
-      ? booking.tickets
-      : selectedTicket
-        ? [selectedTicket]
-        : booking.tickets;
+    comboParam && !seat
+      ? [] // chỉ xem combo
+      : isAllTickets || invalidSeat
+        ? booking.tickets
+        : selectedTicket
+          ? [selectedTicket]
+          : booking.tickets;
+
+  const visibleCombos =
+    seat && !comboParam
+      ? [] // chỉ xem ghế
+      : isAllTickets || invalidCombo
+        ? booking.combos
+        : selectedCombo
+          ? [selectedCombo]
+          : booking.combos;
 
   const selectedLabel =
-    isAllTickets ||
-    invalidSeat
-      ? `Tất cả (${booking.tickets.length} vé)`
-      : `Ghế ${selectedTicket?.seatCode}`;
+    selectedCombo
+      ? `Combo ${selectedCombo.combo.name}`
+      : isAllTickets || invalidSeat
+        ? `Tất cả (${booking.tickets.length} vé)`
+        : `Ghế ${selectedTicket?.seatCode}`;
 
   /* ==========================================================
-     PRINT RULE
+     PRINT RULE — chỉ ADMIN
      ========================================================== */
 
+  const hasActiveCombo = booking.combos.some(
+    (c) => c.status === 'ACTIVE' && c.qrCode,
+  );
   const canPrint =
     isAdmin &&
+    booking.status === 'CONFIRMED' &&
+    booking.paymentStatus === 'PAID' &&
     (selectedTicket
       ? selectedTicket.status === TicketStatus.ACTIVE
-      : activeTickets.length > 0);
+      : selectedCombo
+        ? selectedCombo.status === 'ACTIVE'
+        : activeTickets.length > 0 || hasActiveCombo);
 
   /* ==========================================================
      TICKET URL
      ========================================================== */
 
-  const getTicketUrl = (
-    seatCode: string,
-  ) =>
-    `/ve/${booking.id}?seat=${encodeURIComponent(
-      seatCode,
-    )}`;
+  const getTicketUrl = (seatCode: string) =>
+    `/ve/${booking.id}?seat=${encodeURIComponent(seatCode)}`;
+
+  const getComboUrl = (comboId: string) =>
+    `/ve/${booking.id}?combo=${encodeURIComponent(comboId)}`;
 
   /* ==========================================================
      RENDER
@@ -653,26 +687,18 @@ export default async function ElectronicTicketPage({
             ) : null}
 
             {canPrint ? (
-              <PrintTicketButton />
+              <PrintTicketButton
+                label={
+                  selectedCombo
+                    ? '🖨 In combo'
+                    : hasActiveCombo && isAllTickets
+                      ? '🖨 In vé & combo'
+                      : '🖨 In vé'
+                }
+              />
             ) : null}
           </div>
         </div>
-
-        {booking.combos.length > 0 ? (
-          <section className="mt-8 space-y-4 print:hidden">
-            <h2 className="text-xl font-bold text-white">Combo bắp nước</h2>
-            {booking.combos.map((combo) => (
-              <div key={combo.id} className="flex flex-wrap items-center justify-between gap-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
-                <div>
-                  <p className="font-semibold text-white">{combo.combo.name}</p>
-                  <p className="mt-1 text-sm text-slate-400">Số lượng: {combo.quantity} · {Number(combo.unitPrice).toLocaleString('vi-VN')} đ</p>
-                  <p className="mt-2 text-sm text-slate-300">Trạng thái: {combo.status === 'USED' ? 'Đã sử dụng' : 'Còn hiệu lực'}</p>
-                </div>
-                {combo.qrCode && combo.status === 'ACTIVE' ? <BookingQR value={combo.qrCode} /> : null}
-              </div>
-            ))}
-          </section>
-        ) : null}
 
         {/* ====================================================
             BOOKING HEADER
@@ -715,17 +741,25 @@ export default async function ElectronicTicketPage({
 
           {/* SUMMARY */}
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-4">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs text-slate-500">
                 Tổng số vé
               </div>
-
               <div className="mt-1 text-lg font-bold">
-                {
-                  booking.tickets
-                    .length
-                }
+                {booking.tickets.length}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-400/20 bg-amber-500/5 p-3">
+              <div className="text-xs text-slate-500">
+                Combo
+              </div>
+              <div className="mt-1 text-lg font-bold text-amber-300">
+                {comboQtyTotal}
+                <span className="ml-1 text-xs font-normal text-slate-500">
+                  ({booking.combos.length} loại)
+                </span>
               </div>
             </div>
 
@@ -733,11 +767,13 @@ export default async function ElectronicTicketPage({
               <div className="text-xs text-slate-500">
                 Còn hiệu lực
               </div>
-
               <div className="mt-1 text-lg font-bold text-emerald-300">
-                {
-                  activeTickets.length
-                }
+                {activeTickets.length}
+                {activeComboQty > 0 ? (
+                  <span className="ml-1 text-sm font-normal text-emerald-400/80">
+                    + {activeComboQty} combo
+                  </span>
+                ) : null}
               </div>
             </div>
 
@@ -745,11 +781,8 @@ export default async function ElectronicTicketPage({
               <div className="text-xs text-slate-500">
                 Đã hủy
               </div>
-
               <div className="mt-1 text-lg font-bold text-rose-300">
-                {
-                  canceledTickets.length
-                }
+                {canceledTickets.length}
               </div>
             </div>
 
@@ -757,13 +790,8 @@ export default async function ElectronicTicketPage({
               <div className="text-xs text-slate-500">
                 Đã hoàn
               </div>
-
               <div className="mt-1 text-lg font-bold text-purple-300">
-                {formatPrice(
-                  Number(
-                    booking.refundedAmount,
-                  ),
-                )}
+                {formatPrice(Number(booking.refundedAmount))}
               </div>
             </div>
           </div>
@@ -811,7 +839,7 @@ export default async function ElectronicTicketPage({
 
           <div className="mt-6">
             <p className="mb-3 text-sm font-semibold text-slate-300">
-              Chọn vé để xem
+              Chọn vé / combo để xem
             </p>
 
             <div className="flex flex-wrap gap-2">
@@ -825,10 +853,10 @@ export default async function ElectronicTicketPage({
                 }`}
               >
                 Tất cả (
-                {
-                  booking.tickets
-                    .length
-                }
+                {booking.tickets.length}
+                {booking.combos.length > 0
+                  ? ` + ${booking.combos.length} combo`
+                  : ''}
                 )
               </Link>
 
@@ -837,6 +865,7 @@ export default async function ElectronicTicketPage({
                   const isSelected =
                     !isAllTickets &&
                     !invalidSeat &&
+                    !comboParam &&
                     selectedTicket?.id ===
                       ticket.id;
 
@@ -868,6 +897,27 @@ export default async function ElectronicTicketPage({
                   );
                 },
               )}
+
+              {booking.combos.map((c) => {
+                const isSelected = selectedCombo?.id === c.id;
+                const isUsed = c.status === 'USED';
+                return (
+                  <Link
+                    key={c.id}
+                    href={getComboUrl(c.id)}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                      isSelected
+                        ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                        : isUsed
+                          ? 'border border-white/10 bg-white/5 text-slate-500'
+                          : 'border border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20'
+                    }`}
+                  >
+                    Combo {c.combo.name}
+                    {isUsed ? ' · Đã dùng' : ''}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -906,7 +956,7 @@ export default async function ElectronicTicketPage({
                   data-ticket-status={
                     ticket.status
                   }
-                  className={`ticket-item overflow-hidden rounded-[32px] border shadow-2xl print:rounded-none print:shadow-none ${
+                  className={`ticket-item overflow-hidden rounded-[32px] border shadow-2xl print:rounded-2xl print:shadow-none ${
                     isInactive
                       ? 'border-rose-400/20 bg-slate-900/70 print:hidden'
                       : 'border-white/10 bg-slate-900'
@@ -1315,19 +1365,119 @@ export default async function ElectronicTicketPage({
           )}
         </div>
 
-        {booking.combos.length > 0 ? (
-          <section className="mt-8 space-y-4 print:hidden">
-            <h2 className="text-xl font-bold text-white">Combo bắp nước</h2>
-            {booking.combos.map((combo) => (
-              <div key={combo.id} className="flex flex-wrap items-center justify-between gap-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
-                <div>
-                  <p className="font-semibold text-white">{combo.combo.name}</p>
-                  <p className="mt-1 text-sm text-slate-400">Số lượng: {combo.quantity} · {Number(combo.unitPrice).toLocaleString('vi-VN')} đ</p>
-                  <p className="mt-2 text-sm text-slate-300">Trạng thái: {combo.status === 'USED' ? 'Đã sử dụng' : 'Còn hiệu lực'}</p>
-                </div>
-                {combo.qrCode && combo.status === 'ACTIVE' ? <BookingQR value={combo.qrCode} /> : null}
+        {/* ====================================================
+            COMBO (chỉ hiện 1 lần — dưới cùng, trước tóm tắt)
+            ==================================================== */}
+        {visibleCombos.length > 0 ? (
+          <section className="combo-print-section mt-8 space-y-5 print:mt-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-sm uppercase tracking-[0.3em] text-amber-300/80">
+                  Ưu đãi kèm vé
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-white">
+                  Combo bắp nước
+                </h2>
               </div>
-            ))}
+              <p className="text-sm text-slate-400">
+                Xuất trình QR combo tại quầy
+              </p>
+            </div>
+
+            <div className="grid gap-5">
+              {visibleCombos.map((combo) => {
+                const isUsed = combo.status === 'USED';
+                const lineTotal =
+                  Number(combo.unitPrice) * Number(combo.quantity);
+                return (
+                  <div
+                    key={combo.id}
+                    className={`combo-ticket-item overflow-hidden rounded-[28px] border shadow-xl print:rounded-xl print:shadow-none ${
+                      isUsed
+                        ? 'border-slate-600/40 bg-slate-950/80 opacity-80 print:hidden'
+                        : 'border-amber-400/20 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 print:border-2 print:border-black print:bg-white print:from-white print:to-white'
+                    }`}
+                  >
+                    <div className="grid gap-0 md:grid-cols-[1fr_auto]">
+                      <div className="p-6 sm:p-8">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-amber-400/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+                            Combo
+                          </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              isUsed
+                                ? 'bg-slate-500/20 text-slate-400'
+                                : 'bg-emerald-500/15 text-emerald-300'
+                            }`}
+                          >
+                            {isUsed ? 'Đã sử dụng' : 'Còn hiệu lực'}
+                          </span>
+                        </div>
+
+                        <h3 className="mt-4 text-2xl font-bold text-white print:text-black">
+                          {combo.combo.name}
+                        </h3>
+                        {combo.combo.description ? (
+                          <p className="mt-2 text-sm text-slate-400">
+                            {combo.combo.description}
+                          </p>
+                        ) : null}
+
+                        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Số lượng
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-white">
+                              × {combo.quantity}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Đơn giá
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-white">
+                              {Number(combo.unitPrice).toLocaleString('vi-VN')} đ
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Thành tiền
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-amber-300">
+                              {lineTotal.toLocaleString('vi-VN')} đ
+                            </p>
+                          </div>
+                        </div>
+
+                        <p className="mt-5 text-xs text-slate-500">
+                          Mã đơn {booking.bookingCode}
+                          {combo.qrCode ? ` · QR: ${combo.qrCode}` : ''}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-center justify-center gap-3 border-t border-white/10 bg-black/20 p-6 md:border-l md:border-t-0 md:px-8">
+                        {combo.qrCode && !isUsed ? (
+                          <>
+                            <div className="combo-qr-wrap rounded-2xl bg-white p-3 shadow-lg print:border print:border-black print:shadow-none">
+                              <BookingQR value={combo.qrCode} />
+                            </div>
+                            <p className="max-w-[140px] text-center text-xs text-slate-400 print:text-black">
+                              Quét tại quầy để nhận combo
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-slate-500">
+                            {isUsed ? 'Combo đã đổi' : 'Chưa có mã QR'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         ) : null}
 
@@ -1337,57 +1487,50 @@ export default async function ElectronicTicketPage({
 
         {isAllTickets ? (
           <section className="mt-8 rounded-[28px] border border-white/10 bg-slate-900 p-6 shadow-xl print:hidden sm:p-8">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <div>
-                <p className="text-sm text-slate-500">
-                  Tổng số vé
-                </p>
-
+                <p className="text-sm text-slate-500">Tổng số vé</p>
                 <p className="mt-1 text-2xl font-bold">
-                  {
-                    booking.tickets
-                      .length
-                  }
+                  {booking.tickets.length}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
-                  Còn hiệu lực
+                <p className="text-sm text-slate-500">Combo</p>
+                <p className="mt-1 text-2xl font-bold text-amber-300">
+                  {comboQtyTotal}
                 </p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {booking.combos.length} loại · {activeComboQty} còn hiệu lực
+                  {usedCombos.length > 0
+                    ? ` · ${usedCombos.reduce((s, c) => s + Number(c.quantity || 0), 0)} đã dùng`
+                    : ''}
+                </p>
+              </div>
 
+              <div>
+                <p className="text-sm text-slate-500">Còn hiệu lực</p>
                 <p className="mt-1 text-2xl font-bold text-emerald-300">
-                  {
-                    activeTickets.length
-                  }
+                  {activeTickets.length}
+                  {activeComboQty > 0 ? (
+                    <span className="ml-1 text-base font-normal text-emerald-400/80">
+                      +{activeComboQty} combo
+                    </span>
+                  ) : null}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
-                  Tổng tiền
-                </p>
-
+                <p className="text-sm text-slate-500">Tổng tiền</p>
                 <p className="mt-1 text-2xl font-bold text-sky-300">
-                  {formatPrice(
-                    Number(
-                      booking.totalPrice,
-                    ),
-                  )}
+                  {formatPrice(Number(booking.totalPrice))}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
-                  Đã hoàn
-                </p>
-
+                <p className="text-sm text-slate-500">Đã hoàn</p>
                 <p className="mt-1 text-2xl font-bold text-purple-300">
-                  {formatPrice(
-                    Number(
-                      booking.refundedAmount,
-                    ),
-                  )}
+                  {formatPrice(Number(booking.refundedAmount))}
                 </p>
               </div>
             </div>
@@ -1427,13 +1570,18 @@ export default async function ElectronicTicketPage({
             padding: 0 !important;
           }
 
-          .ticket-item[data-ticket-status="ACTIVE"] {
+          .ticket-item[data-ticket-status="ACTIVE"],
+          .combo-ticket-item {
             display: block !important;
             width: 100% !important;
             max-width: none !important;
-            margin: 0 !important;
-            border-radius: 0 !important;
+            margin: 0 0 16px 0 !important;
+            border: 2px solid #000 !important;
+            border-radius: 16px !important;
             box-shadow: none !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            overflow: hidden !important;
             break-inside: avoid;
             page-break-inside: avoid;
           }
@@ -1443,23 +1591,38 @@ export default async function ElectronicTicketPage({
           }
 
           .ticket-item[data-ticket-status="ACTIVE"]
-            + .ticket-item[data-ticket-status="ACTIVE"] {
+            + .ticket-item[data-ticket-status="ACTIVE"],
+          .combo-ticket-item + .combo-ticket-item,
+          .ticket-item[data-ticket-status="ACTIVE"] + .combo-ticket-item {
             break-before: page;
             page-break-before: always;
           }
 
           .ticket-item[data-ticket-status="ACTIVE"],
-          .ticket-item[data-ticket-status="ACTIVE"] * {
+          .ticket-item[data-ticket-status="ACTIVE"] *,
+          .combo-ticket-item,
+          .combo-ticket-item * {
             color: #000000 !important;
+            border-color: #000000 !important;
+            background-image: none !important;
           }
 
-          .ticket-item[data-ticket-status="ACTIVE"] {
+          .ticket-item[data-ticket-status="ACTIVE"],
+          .combo-ticket-item {
             background: #ffffff !important;
           }
 
-          .ticket-item[data-ticket-status="ACTIVE"] img {
+          .ticket-item[data-ticket-status="ACTIVE"] img,
+          .combo-ticket-item img {
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
+          }
+
+          .combo-ticket-item .combo-qr-wrap {
+            border: 1px solid #000 !important;
+            background: #fff !important;
+            border-radius: 12px !important;
+            padding: 8px !important;
           }
 
           a {

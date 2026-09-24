@@ -236,6 +236,32 @@ export function CheckoutForm({
               {seats.join(', ')}
             </span>
           </div>
+
+          {combos.filter((c) => (selectedCombos[c.id] ?? 0) > 0).length > 0 ? (
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <p className="text-sm text-slate-400">Combo đã chọn</p>
+              <div className="mt-3 space-y-2">
+                {combos
+                  .filter((c) => (selectedCombos[c.id] ?? 0) > 0)
+                  .map((combo) => (
+                    <div
+                      key={combo.id}
+                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
+                    >
+                      <div>
+                        <span className="font-semibold text-white">{combo.name}</span>
+                        <span className="ml-2 text-slate-400">
+                          · {combo.price.toLocaleString('vi-VN')} đ
+                        </span>
+                      </div>
+                      <span className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-200">
+                        × {selectedCombos[combo.id]}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {message ? (
@@ -271,59 +297,67 @@ export function CheckoutForm({
             {vouchers.length > 0 ? <div className="mt-3 flex flex-wrap gap-2">{vouchers.map((voucher) => <button key={voucher.code} type="button" onClick={() => setVoucherCode(voucher.code)} className="rounded-lg border border-sky-400/30 px-2 py-1 text-xs text-sky-300">{voucher.code} · {voucher.discountType === 'PERCENT' ? `${voucher.discountValue}%` : `${voucher.discountValue.toLocaleString('vi-VN')} đ`}</button>)}</div> : null}
           </div>
 
-          {combos.length > 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-              <p className="text-xs text-slate-400">Combo bắp nước</p>
-              <div className="mt-2 space-y-2">
-                {combos.map((combo) => (
-                  <label key={combo.id} className="flex items-center justify-between gap-3 text-sm text-slate-200">
-                    <span>{combo.name} · {combo.price.toLocaleString('vi-VN')} đ</span>
-                    <input type="number" min={0} max={combo.stock} value={selectedCombos[combo.id] ?? 0} onChange={(event) => setSelectedCombos({ ...selectedCombos, [combo.id]: Math.min(combo.stock, Math.max(0, Number(event.target.value))) })} className="w-20 rounded-lg bg-slate-900 px-2 py-1 text-white" />
-                  </label>
-                ))}
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">Tiền vé</span>
+            <span className="text-white">
+              {subtotal.toLocaleString('vi-VN')} đ
+            </span>
+          </div>
+
+          {comboTotal > 0 ? (
+            <div className="space-y-1.5">
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-400">Tiền combo</span>
+                <span className="text-white">
+                  {comboTotal.toLocaleString('vi-VN')} đ
+                </span>
               </div>
+              {combos
+                .filter((c) => (selectedCombos[c.id] ?? 0) > 0)
+                .map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex justify-between gap-4 pl-2 text-xs text-slate-500"
+                  >
+                    <span>
+                      {c.name} × {selectedCombos[c.id]}
+                    </span>
+                    <span>
+                      {(c.price * (selectedCombos[c.id] ?? 0)).toLocaleString('vi-VN')} đ
+                    </span>
+                  </div>
+                ))}
             </div>
           ) : null}
-          <div className="flex justify-between gap-4">
-            <span className="text-slate-400">
-              Tiền vé
-            </span>
 
-            <span className="text-white">
-              {subtotal.toLocaleString(
-                'vi-VN',
-              )}{' '}
-              đ
-            </span>
-          </div>
-
-          <div className="flex justify-between gap-4">
-            <span className="text-slate-400">
-              Phí dịch vụ
-            </span>
-
-            <span className="text-white">
-              {bookingFee.toLocaleString(
-                'vi-VN',
-              )}{' '}
-              đ
-            </span>
-          </div>
-
-          <div className="border-t border-white/10 pt-4">
-            {discount > 0 ? <div className="mb-3 flex justify-between gap-4 text-emerald-300"><span>Giảm voucher</span><span>-{discount.toLocaleString('vi-VN')} đ</span></div> : null}
-            <div className="flex items-end justify-between gap-4">
-              <span className="font-medium text-white">
-                Tổng cộng
-              </span>
-
-              <span className="text-2xl font-bold text-sky-300">
-                {total.toLocaleString(
-                  'vi-VN',
-                )}{' '}
-                đ
+          {bookingFee > 0 ? (
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-400">Phí dịch vụ</span>
+              <span className="text-white">
+                {bookingFee.toLocaleString('vi-VN')} đ
               </span>
             </div>
+          ) : null}
+
+          <div className="flex justify-between gap-4 border-t border-white/10 pt-3 font-medium text-white">
+            <span>Tạm tính (vé + combo)</span>
+            <span>
+              {(subtotal + bookingFee + comboTotal).toLocaleString('vi-VN')} đ
+            </span>
+          </div>
+
+          {discount > 0 ? (
+            <div className="flex justify-between gap-4 text-emerald-300">
+              <span>Giảm voucher</span>
+              <span>-{discount.toLocaleString('vi-VN')} đ</span>
+            </div>
+          ) : null}
+
+          <div className="flex items-end justify-between gap-4 border-t border-white/10 pt-4">
+            <span className="font-medium text-white">Tổng cộng</span>
+            <span className="text-2xl font-bold text-sky-300">
+              {total.toLocaleString('vi-VN')} đ
+            </span>
           </div>
         </div>
 

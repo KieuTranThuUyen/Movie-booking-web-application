@@ -419,197 +419,80 @@ export default async function CartPage({
         </div>
       )}
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-10 grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+        {/* Cột trái: phim + ghế */}
         <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="font-semibold text-white">
-              {
-                showtime.movie
-                  .title
-              }
+            <div className="text-xl font-semibold text-white">
+              {showtime.movie.title}
             </div>
-
             <div className="mt-2 text-sm text-slate-300">
-              {
-                showtime
-                  .hall
-                  .cinema
-                  .name
-              }
+              {showtime.hall.cinema.name}
               {' · '}
-              {
-                showtime
-                  .hall
-                  .name
-              }
+              {showtime.hall.name}
             </div>
-
             <div className="mt-2 text-sm text-slate-300">
-              {new Date(
-                showtime.startTime,
-              ).toLocaleString(
-                'vi-VN',
-              )}
+              {new Date(showtime.startTime).toLocaleString('vi-VN')}
             </div>
 
             <div className="mt-6">
-              <div className="text-sm font-semibold text-white">
-                Ghế đã chọn
-              </div>
-
+              <div className="text-sm font-semibold text-white">Ghế đã chọn</div>
               <div className="mt-3 space-y-2">
-                {seatDetails.length >
-                0 ? (
-                  seatDetails.map(
-                    (
-                      seat,
-                    ) => (
-                      <div
-                        key={
-                          seat.code
-                        }
-                        className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-semibold text-white">
-                            {
-                              seat.code
-                            }
-                          </span>
-
-                          <span className="rounded-lg bg-slate-700/60 px-2 py-1 text-xs text-slate-300">
-                            {
-                              seat.type
-                            }
-                          </span>
-                        </div>
-
-                        <span className="font-semibold text-white">
-                          {seat.price.toLocaleString(
-                            'vi-VN',
-                          )}{' '}
-                          đ
+                {seatDetails.length > 0 ? (
+                  seatDetails.map((seat) => (
+                    <div
+                      key={seat.code}
+                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-white">{seat.code}</span>
+                        <span className="rounded-lg bg-slate-700/60 px-2 py-1 text-xs text-slate-300">
+                          {seat.type}
                         </span>
                       </div>
-                    ),
-                  )
+                      <span className="font-semibold text-white">
+                        {seat.price.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                  ))
                 ) : (
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                    Không còn ghế nào
-                    được bạn giữ.
+                    Không còn ghế nào được bạn giữ.
                   </div>
                 )}
               </div>
             </div>
           </div>
-        </section>
 
-        {seatDetails.length > 0 ? (
-          <CartCombos
-            combos={combos}
-            showtimeId={showtime.id}
-            seats={validSelectedSeats}
-          />
-        ) : null}
-
-        <aside className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-          <div className="text-lg font-semibold text-white">
-            Tóm tắt
-          </div>
-
-          <div className="mt-4 space-y-3 text-sm text-slate-200">
-            <div className="flex items-center justify-between">
-              <span>
-                Số vé
-              </span>
-
-              <span>
-                {
-                  seatDetails.length
-                }
-              </span>
-            </div>
-
-            <div className="border-t border-white/10 pt-3">
-              <div className="mb-3 font-semibold text-white">
-                Chi tiết giá
-              </div>
-
-              <div className="space-y-2">
-                {seatDetails.map(
-                  (
-                    seat,
-                  ) => (
-                    <div
-                      key={
-                        seat.code
-                      }
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="text-slate-300">
-                        {
-                          seat.code
-                        }{' '}
-                        <span className="text-slate-500">
-                          (
-                          {
-                            seat.type
-                          }
-                          )
-                        </span>
-                      </span>
-
-                      <span className="text-white">
-                        {seat.price.toLocaleString(
-                          'vi-VN',
-                        )}{' '}
-                        đ
-                      </span>
-                    </div>
-                  ),
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-white/10 pt-4 text-base font-semibold">
-              <span className="text-white">
-                Tổng cộng
-              </span>
-
-              <span className="text-white">
-                {subtotal.toLocaleString(
-                  'vi-VN',
-                )}{' '}
-                đ
-              </span>
-            </div>
-          </div>
-
-          {seatDetails.length >
-          0 ? (
+          {seatDetails.length === 0 ? (
             <Link
-              href={`/thanh-toan?showtime=${encodeURIComponent(
-                showtime.id,
-              )}&seats=${encodeURIComponent(
-                validSelectedSeats.join(
-                  ',',
-                ),
-              )}`}
-              className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
-            >
-              Sang thanh toán
-            </Link>
-          ) : (
-            <Link
-              href={`/dat-ve?showtime=${encodeURIComponent(
-                showtime.id,
-              )}`}
-              className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100"
+              href={`/dat-ve?showtime=${encodeURIComponent(showtime.id)}`}
+              className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950"
             >
               Quay lại chọn ghế
             </Link>
-          )}
-        </aside>
+          ) : null}
+        </section>
+
+        {/* Cột phải: combo + tóm tắt (live total) */}
+        {seatDetails.length > 0 ? (
+          <CartCombos
+            combos={combos.map((c) => ({
+              id: c.id,
+              name: c.name,
+              price: Number(c.price),
+              stock: c.stock,
+            }))}
+            showtimeId={showtime.id}
+            seats={validSelectedSeats}
+            seatDetails={seatDetails}
+            seatSubtotal={subtotal}
+          />
+        ) : (
+          <aside className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 text-sm text-slate-400">
+            Chọn ghế để tiếp tục đặt vé và combo.
+          </aside>
+        )}
       </div>
     </main>
   );

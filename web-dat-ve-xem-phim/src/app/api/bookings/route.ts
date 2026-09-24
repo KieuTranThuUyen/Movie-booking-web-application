@@ -668,9 +668,9 @@ export async function POST(
           const comboTotal = selectedCombos.reduce((sum, combo) => {
             const item = comboItems.find((candidate) => candidate.id === combo.id)!;
             if (combo.stock < item.quantity) throw new Error('COMBO_OUT_OF_STOCK');
-            return sum + combo.price * item.quantity;
+            return sum + Math.floor(Number(combo.price)) * Math.floor(Number(item.quantity));
           }, 0);
-          const orderTotal = payableTotal + comboTotal;
+          const orderTotal = Math.floor(Number(payableTotal)) + comboTotal;
 
           const bookingRecord =
             await tx.booking.create({
@@ -809,7 +809,7 @@ export async function POST(
           for (const combo of selectedCombos) {
             const item = comboItems.find((candidate) => candidate.id === combo.id)!;
             await tx.combo.update({ where: { id: combo.id }, data: { stock: { decrement: item.quantity } } });
-            await tx.bookingCombo.create({ data: { bookingId: bookingRecord.id, comboId: combo.id, quantity: item.quantity, unitPrice: combo.price } });
+            await tx.bookingCombo.create({ data: { bookingId: bookingRecord.id, comboId: combo.id, quantity: item.quantity, unitPrice: Math.floor(Number(combo.price)) } });
           }
 
           return tx.booking.findUniqueOrThrow({

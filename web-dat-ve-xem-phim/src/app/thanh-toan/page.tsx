@@ -1,4 +1,7 @@
+import { getServerSession } from 'next-auth/next';
+
 import { CheckoutForm } from '@/components/forms/checkout-form';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 
 type CheckoutPageProps = {
@@ -167,16 +170,49 @@ export default async function CheckoutPage({
     where: { isActive: true, stock: { gt: 0 } },
     orderBy: { createdAt: 'asc' },
   });
-  const vouchers = await prisma.voucher.findMany({
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id ?? null;
+  const now = new Date();
+
+  // Chỉ lấy voucher còn dùng được: active, trong hạn, đủ min order,
+  // chưa hết usageLimit global, và user chưa vượt perUserLimit
+  const candidateVouchers = await prisma.voucher.findMany({
     where: {
       isActive: true,
-      startsAt: { lte: new Date() },
-      endsAt: { gte: new Date() },
+      startsAt: { lte: now },
+      endsAt: { gte: now },
       minOrderAmount: { lte: subtotal },
     },
     orderBy: { discountValue: 'desc' },
-    take: 10,
+    take: 40,
   });
+
+  let userRedemptionCounts = new Map<string, number>();
+  if (userId && candidateVouchers.length > 0) {
+    const redemptions = await prisma.voucherRedemption.groupBy({
+      by: ['voucherId'],
+      where: {
+        userId,
+        voucherId: { in: candidateVouchers.map((v) => v.id) },
+      },
+      _count: { _all: true },
+    });
+    userRedemptionCounts = new Map(
+      redemptions.map((r) => [r.voucherId, r._count._all]),
+    );
+  }
+
+  const vouchers = (!userId
+    ? []
+    : candidateVouchers.filter((v) => {
+        // Hết lượt toàn hệ thống
+        if (v.usageLimit !== null && v.usedCount >= v.usageLimit) return false;
+        // User đã dùng hết lượt cá nhân
+        const usedByUser = userRedemptionCounts.get(v.id) ?? 0;
+        if (usedByUser >= v.perUserLimit) return false;
+        return true;
+      })
+  ).slice(0, 10);
 
   return (
     <main className="page-shell py-12 lg:py-16">
