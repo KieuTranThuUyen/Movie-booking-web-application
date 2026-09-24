@@ -45,6 +45,7 @@ export async function confirmBookingPayment(
             payment: true,
 
             tickets: true,
+            combos: true,
 
             seatHolds: {
               include: {
@@ -349,6 +350,15 @@ export async function confirmBookingPayment(
           },
         ),
       });
+
+      for (const combo of booking.combos) {
+        if (!combo.qrCode) {
+          await tx.bookingCombo.update({
+            where: { id: combo.id },
+            data: { qrCode: `${booking.bookingCode}-COMBO-${combo.id}` },
+          });
+        }
+      }
 
       /*
        * Payment -> PAID

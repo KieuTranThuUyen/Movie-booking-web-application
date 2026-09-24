@@ -65,6 +65,32 @@ function getBookingStatusClass(
   }
 }
 
+function getTicketStatusLabel(status: TicketStatus) {
+  switch (status) {
+    case TicketStatus.USED:
+      return 'Đã sử dụng';
+    case TicketStatus.CANCELED:
+      return 'Đã hủy';
+    case TicketStatus.EXPIRED:
+      return 'Đã hết hạn';
+    default:
+      return 'Còn hiệu lực';
+  }
+}
+
+function getTicketStatusClass(status: TicketStatus) {
+  switch (status) {
+    case TicketStatus.USED:
+      return 'bg-sky-500/10 text-sky-300';
+    case TicketStatus.CANCELED:
+      return 'bg-rose-500/10 text-rose-300';
+    case TicketStatus.EXPIRED:
+      return 'bg-slate-500/20 text-slate-300';
+    default:
+      return 'bg-emerald-500/10 text-emerald-300';
+  }
+}
+
 /* ============================================================
    TICKET PAYMENT STATUS
    ============================================================ */
@@ -274,6 +300,11 @@ export default async function ElectronicTicketPage({
           orderBy: {
             seatCode: 'asc',
           },
+        },
+
+        combos: {
+          include: { combo: true },
+          orderBy: { id: 'asc' },
         },
 
         payment: true,
@@ -569,9 +600,9 @@ export default async function ElectronicTicketPage({
 
   const canPrint =
     isAdmin &&
-    activeTickets.length >
-      0 &&
-    !selectedTicketIsCanceled;
+    (selectedTicket
+      ? selectedTicket.status === TicketStatus.ACTIVE
+      : activeTickets.length > 0);
 
   /* ==========================================================
      TICKET URL
@@ -626,6 +657,22 @@ export default async function ElectronicTicketPage({
             ) : null}
           </div>
         </div>
+
+        {booking.combos.length > 0 ? (
+          <section className="mt-8 space-y-4 print:hidden">
+            <h2 className="text-xl font-bold text-white">Combo bắp nước</h2>
+            {booking.combos.map((combo) => (
+              <div key={combo.id} className="flex flex-wrap items-center justify-between gap-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
+                <div>
+                  <p className="font-semibold text-white">{combo.combo.name}</p>
+                  <p className="mt-1 text-sm text-slate-400">Số lượng: {combo.quantity} · {Number(combo.unitPrice).toLocaleString('vi-VN')} đ</p>
+                  <p className="mt-2 text-sm text-slate-300">Trạng thái: {combo.status === 'USED' ? 'Đã sử dụng' : 'Còn hiệu lực'}</p>
+                </div>
+                {combo.qrCode && combo.status === 'ACTIVE' ? <BookingQR value={combo.qrCode} /> : null}
+              </div>
+            ))}
+          </section>
+        ) : null}
 
         {/* ====================================================
             BOOKING HEADER
@@ -793,9 +840,7 @@ export default async function ElectronicTicketPage({
                     selectedTicket?.id ===
                       ticket.id;
 
-                  const isCanceled =
-                    ticket.status ===
-                    TicketStatus.CANCELED;
+                  const isInactive = ticket.status !== TicketStatus.ACTIVE;
 
                   return (
                     <Link
@@ -808,8 +853,8 @@ export default async function ElectronicTicketPage({
                       className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
                         isSelected
                           ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
-                          : isCanceled
-                            ? 'border border-rose-400/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
+                          : isInactive
+                            ? `border border-white/10 ${getTicketStatusClass(ticket.status)} hover:opacity-80`
                             : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
                       }`}
                     >
@@ -818,9 +863,7 @@ export default async function ElectronicTicketPage({
                         ticket.seatCode
                       }
 
-                      {isCanceled
-                        ? ' · Đã hủy'
-                        : ''}
+                      {isInactive ? ` · ${getTicketStatusLabel(ticket.status)}` : ''}
                     </Link>
                   );
                 },
@@ -842,9 +885,8 @@ export default async function ElectronicTicketPage({
               ticket,
               index,
             ) => {
-              const isCanceled =
-                ticket.status ===
-                TicketStatus.CANCELED;
+              const isCanceled = ticket.status === TicketStatus.CANCELED;
+              const isInactive = ticket.status !== TicketStatus.ACTIVE;
 
               const ticketPaymentStatus =
                 getTicketPaymentStatus(
@@ -865,8 +907,8 @@ export default async function ElectronicTicketPage({
                     ticket.status
                   }
                   className={`ticket-item overflow-hidden rounded-[32px] border shadow-2xl print:rounded-none print:shadow-none ${
-                    isCanceled
-                      ? 'border-rose-400/20 bg-slate-900/70'
+                    isInactive
+                      ? 'border-rose-400/20 bg-slate-900/70 print:hidden'
                       : 'border-white/10 bg-slate-900'
                   }`}
                 >
@@ -874,7 +916,7 @@ export default async function ElectronicTicketPage({
 
                   <div
                     className={`border-b p-6 sm:p-8 ${
-                      isCanceled
+                      isInactive
                         ? 'border-rose-400/20 bg-rose-500/5'
                         : 'border-white/10 bg-gradient-to-r from-sky-500/20 via-slate-900 to-purple-500/20'
                     } print:border-slate-300 print:bg-white`}
@@ -939,14 +981,10 @@ export default async function ElectronicTicketPage({
 
                         <div
                           className={`mt-2 inline-flex rounded-full px-4 py-2 text-sm font-semibold ${
-                            isCanceled
-                              ? 'bg-rose-500/10 text-rose-300'
-                              : 'bg-emerald-500/10 text-emerald-300'
+                            getTicketStatusClass(ticket.status)
                           } print:border print:border-slate-300 print:bg-white print:text-black`}
                         >
-                          {isCanceled
-                            ? 'Đã hủy'
-                            : 'Còn hiệu lực'}
+                          {getTicketStatusLabel(ticket.status)}
                         </div>
                       </div>
                     </div>
@@ -1219,14 +1257,14 @@ export default async function ElectronicTicketPage({
                     {/* QR */}
 
                     <div className="flex flex-col items-center">
-                      {isCanceled ? (
-                        <div className="flex h-[220px] w-[220px] flex-col items-center justify-center rounded-[28px] border border-rose-400/20 bg-rose-500/5 text-center">
+                      {isInactive ? (
+                        <div className="flex h-[220px] w-[220px] flex-col items-center justify-center rounded-[28px] border border-white/10 bg-white/5 text-center">
                           <div className="text-5xl">
-                            🚫
+                            {isCanceled ? '🚫' : ticket.status === TicketStatus.USED ? '✓' : '⌛'}
                           </div>
 
-                          <p className="mt-3 font-bold text-rose-300">
-                            VÉ ĐÃ HỦY
+                          <p className={`mt-3 font-bold ${getTicketStatusClass(ticket.status).split(' ')[1]}`}>
+                            {getTicketStatusLabel(ticket.status).toUpperCase()}
                           </p>
 
                           <p className="mt-1 px-5 text-xs text-slate-500">
@@ -1268,7 +1306,7 @@ export default async function ElectronicTicketPage({
                     }`}
                   >
                     {isCanceled
-                      ? 'Vé đã hủy — không được phép sử dụng hoặc in vé.'
+                      ? `Vé ${getTicketStatusLabel(ticket.status).toLowerCase()} — không được phép sử dụng hoặc in vé.`
                       : 'Vui lòng xuất trình vé điện tử hoặc mã QR khi vào phòng chiếu.'}
                   </div>
                 </section>
@@ -1276,6 +1314,22 @@ export default async function ElectronicTicketPage({
             },
           )}
         </div>
+
+        {booking.combos.length > 0 ? (
+          <section className="mt-8 space-y-4 print:hidden">
+            <h2 className="text-xl font-bold text-white">Combo bắp nước</h2>
+            {booking.combos.map((combo) => (
+              <div key={combo.id} className="flex flex-wrap items-center justify-between gap-5 rounded-3xl border border-white/10 bg-slate-900 p-5">
+                <div>
+                  <p className="font-semibold text-white">{combo.combo.name}</p>
+                  <p className="mt-1 text-sm text-slate-400">Số lượng: {combo.quantity} · {Number(combo.unitPrice).toLocaleString('vi-VN')} đ</p>
+                  <p className="mt-2 text-sm text-slate-300">Trạng thái: {combo.status === 'USED' ? 'Đã sử dụng' : 'Còn hiệu lực'}</p>
+                </div>
+                {combo.qrCode && combo.status === 'ACTIVE' ? <BookingQR value={combo.qrCode} /> : null}
+              </div>
+            ))}
+          </section>
+        ) : null}
 
         {/* ====================================================
             ORDER SUMMARY

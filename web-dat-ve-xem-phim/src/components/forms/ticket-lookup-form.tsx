@@ -5,6 +5,7 @@ import {
   PaymentStatus,
   TicketStatus,
 } from '@prisma/client';
+import QRCode from 'qrcode';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -15,6 +16,7 @@ type BookingTicket = {
   seatId: string;
   status: TicketStatus;
   canceledAt: string | null;
+  qrCode: string | null;
 };
 
 type BookingItem = {
@@ -47,6 +49,18 @@ type DialogMode = 'view' | 'print';
 
 function formatMoney(value: number) {
   return `${value.toLocaleString('vi-VN')} đ`;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>'"]/g, (character) =>
+    ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;',
+    })[character] ?? character,
+  );
 }
 
 function getBookingStatusLabel(status: BookingStatus) {
@@ -101,49 +115,78 @@ function getPaymentStatusClass(status: PaymentStatus) {
   }
 }
 
-function buildTicketUrl(
-  bookingId: string,
-  seatCodes: string[],
-  withPrint: boolean,
-) {
-  const params = new URLSearchParams();
+async function printTicketPageMarkup(booking: BookingItem, seatCode?: string) {
+  const params = new URLSearchParams({ print: '1' });
+  if (seatCode) params.set('seat', seatCode);
 
-  if (seatCodes.length === 1) {
-    params.set('seat', seatCodes[0]);
-  }
+  const response = await fetch(`/ve/${booking.id}?${params.toString()}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('TICKET_PAGE_UNAVAILABLE');
 
-  if (withPrint) {
-    params.set('print', '1');
-  }
+  const html = await response.text();
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const ticketContent = parsed.querySelector('#electronic-ticket');
+  if (!ticketContent) throw new Error('TICKET_CONTENT_UNAVAILABLE');
 
-  const qs = params.toString();
-  return qs ? `/ve/${bookingId}?${qs}` : `/ve/${bookingId}`;
-}
+  const root = document.createElement('div');
+  root.id = 'ticket-print-root';
+  root.innerHTML = ticketContent.outerHTML;
 
-/** In vé ngay, không chuyển trang — load trang vé trong iframe ẩn */
-function printViaIframe(url: string) {
-  document
-    .querySelectorAll('iframe[data-ticket-print="1"]')
-    .forEach((el) => el.remove());
+  const pageStyles = Array.from(parsed.querySelectorAll('style'))
+    .map((style) => style.textContent ?? '')
+    .join('\n');
+  const style = document.createElement('style');
+  style.id = 'ticket-print-style';
+  style.textContent = `${pageStyles}\n#ticket-print-root{display:none}@media print{body>*:not(#ticket-print-root){display:none!important}#ticket-print-root{display:block!important}#ticket-print-root .ticket-item{page-break-inside:avoid}}`;
 
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('data-ticket-print', '1');
-  iframe.setAttribute('title', 'In vé');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.style.opacity = '0';
-  iframe.style.pointerEvents = 'none';
-  iframe.src = url;
+  const ticketItems = Array.from(root.querySelectorAll('.ticket-item'));
+  const ticketsToPrint = seatCode
+    ? booking.tickets.filter((ticket) => ticket.seatCode === seatCode)
+    : booking.tickets.filter((ticket) => ticket.status === TicketStatus.ACTIVE);
 
-  document.body.appendChild(iframe);
+  await Promise.all(
+    ticketItems.map(async (item) => {
+      const ticket = ticketsToPrint.find((candidate) =>
+        item.textContent?.includes(candidate.seatCode),
+      );
+      if (!ticket) return;
+      const qrValue = ticket.qrCode ?? `${booking.bookingCode}-${ticket.id}-${ticket.seatCode}`;
+      const qrImage = await QRCode.toDataURL(qrValue, { width: 220, margin: 2 });
+      const placeholder = Array.from(item.querySelectorAll('*')).find(
+        (element) =>
+          element.textContent?.replace(/\s+/g, ' ').trim() === 'Đang tạo QR...',
+      );
+      if (placeholder) {
+        placeholder.innerHTML = `<img src="${qrImage}" alt="QR ${escapeHtml(ticket.seatCode)}" style="height:180px;width:180px" />`;
+      }
+    }),
+  );
 
+  document.head.appendChild(style);
+  document.body.appendChild(root);
+  await Promise.all(
+    Array.from(root.querySelectorAll<HTMLImageElement>('img')).map(
+      (image) =>
+        image.complete
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              image.addEventListener('load', () => resolve(), { once: true });
+              image.addEventListener('error', () => resolve(), { once: true });
+            }),
+    ),
+  );
+  const cleanup = () => {
+    root.remove();
+    style.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup, { once: true });
   window.setTimeout(() => {
-    iframe.remove();
-  }, 60_000);
+    window.print();
+    window.setTimeout(cleanup, 1000);
+  }, 100);
 }
 
 export function TicketLookupForm() {
@@ -237,15 +280,11 @@ export function TicketLookupForm() {
 
     // In vé: 1 ghế → in luôn; nhiều ghế → dialog chọn
     if (active.length === 1) {
-      const url = buildTicketUrl(
-        booking.id,
-        [active[0].seatCode],
-        true,
-      );
       setPrinting(true);
       setMessage('Đang mở hộp thoại in...');
-      printViaIframe(url);
-      window.setTimeout(() => setPrinting(false), 2000);
+      void printTicketPageMarkup(booking, active[0].seatCode)
+        .catch(() => setMessage('Không thể tạo bản in vé. Vui lòng thử lại.'))
+        .finally(() => setPrinting(false));
       return;
     }
 
@@ -277,21 +316,19 @@ export function TicketLookupForm() {
   const confirmDialog = () => {
     if (!dialogBooking || selectedSeatCodes.length === 0) return;
 
-    const url = buildTicketUrl(
-      dialogBooking.id,
-      selectedSeatCodes,
-      dialogMode === 'print',
-    );
-
     closeDialog();
 
     if (dialogMode === 'print') {
       setPrinting(true);
       setMessage('Đang mở hộp thoại in...');
-      printViaIframe(url);
-      window.setTimeout(() => setPrinting(false), 2000);
+      void printTicketPageMarkup(
+        dialogBooking,
+        selectedSeatCodes.length === 1 ? selectedSeatCodes[0] : undefined,
+      )
+        .catch(() => setMessage('Không thể tạo bản in vé. Vui lòng thử lại.'))
+        .finally(() => setPrinting(false));
     } else {
-      router.push(url);
+      router.push(`/ve/${dialogBooking.id}`);
     }
   };
 

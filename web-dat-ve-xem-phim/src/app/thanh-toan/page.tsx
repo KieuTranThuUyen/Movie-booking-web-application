@@ -5,6 +5,7 @@ type CheckoutPageProps = {
   searchParams: Promise<{
     showtime?: string;
     seats?: string;
+    combos?: string;
   }>;
 };
 
@@ -25,6 +26,13 @@ export default async function CheckoutPage({
         .filter(Boolean),
     ),
   ];
+  const requestedCombos = (resolvedSearchParams.combos ?? '')
+    .split(',')
+    .map((value) => {
+      const [id, quantity] = value.split(':');
+      return { id, quantity: Number(quantity) };
+    })
+    .filter((item) => item.id && item.quantity > 0);
 
   if (!showtimeId || seats.length === 0) {
     return (
@@ -155,6 +163,20 @@ export default async function CheckoutPage({
   );
 
   const bookingFee = 0;
+  const combos = await prisma.combo.findMany({
+    where: { isActive: true, stock: { gt: 0 } },
+    orderBy: { createdAt: 'asc' },
+  });
+  const vouchers = await prisma.voucher.findMany({
+    where: {
+      isActive: true,
+      startsAt: { lte: new Date() },
+      endsAt: { gte: new Date() },
+      minOrderAmount: { lte: subtotal },
+    },
+    orderBy: { discountValue: 'desc' },
+    take: 10,
+  });
 
   return (
     <main className="page-shell py-12 lg:py-16">
@@ -182,6 +204,18 @@ export default async function CheckoutPage({
           seats={seats}
           subtotal={subtotal}
           bookingFee={bookingFee}
+          combos={combos.map((combo) => ({
+            id: combo.id,
+            name: combo.name,
+            price: combo.price,
+            stock: combo.stock,
+          }))}
+          initialCombos={requestedCombos}
+          vouchers={vouchers.map((voucher) => ({
+            code: voucher.code,
+            discountType: voucher.discountType,
+            discountValue: voucher.discountValue,
+          }))}
         />
       </div>
     </main>

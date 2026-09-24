@@ -15,6 +15,8 @@ type CreateBookingBody = {
   showtimeId?: string;
   seats?: string;
   note?: string;
+  voucherCode?: string;
+  combos?: Array<{ id: string; quantity: number }>;
 };
 
 function createBookingCode(): string {
@@ -457,8 +459,10 @@ export async function POST(
               ),
           },
 
-          // Chỉ tính vé còn hiệu lực — vé admin đã hủy thì ghế được bán lại
-          status: 'ACTIVE',
+          // Chỉ vé CANCELED mới giải phóng ghế; USED/EXPIRED vẫn là vé đã bán.
+          status: {
+            not: 'CANCELED',
+          },
 
           booking: {
             showtimeId,
@@ -617,6 +621,30 @@ export async function POST(
         0,
       );
 
+    const subtotalPrice = totalPrice;
+    const voucherCode = body.voucherCode?.trim().toUpperCase();
+    let voucherId: string | undefined;
+    let discountAmount = 0;
+    if (voucherCode) {
+      const voucher = await prisma.voucher.findUnique({ where: { code: voucherCode } });
+      const now = new Date();
+      if (!voucher || !voucher.isActive || now < voucher.startsAt || now > voucher.endsAt) {
+        return NextResponse.json({ message: 'Voucher không tồn tại hoặc đã hết hạn.' }, { status: 400 });
+      }
+      const usedByUser = await prisma.voucherRedemption.count({ where: { voucherId: voucher.id, userId: user.id } });
+      if (subtotalPrice < voucher.minOrderAmount || (voucher.usageLimit !== null && voucher.usedCount >= voucher.usageLimit) || usedByUser >= voucher.perUserLimit) {
+        return NextResponse.json({ message: 'Voucher không đủ điều kiện sử dụng.' }, { status: 400 });
+      }
+      voucherId = voucher.id;
+      discountAmount = voucher.discountType === 'PERCENT'
+        ? Math.min(subtotalPrice, Math.floor(subtotalPrice * voucher.discountValue / 100))
+        : Math.min(subtotalPrice, voucher.discountValue);
+    }
+    const payableTotal = subtotalPrice - discountAmount;
+    const comboItems = (body.combos ?? []).filter(
+      (item) => item?.id && Number.isInteger(item.quantity) && item.quantity > 0,
+    );
+
     /* ========================================================
        10. TẠO BOOKING MỚI
        
@@ -629,6 +657,21 @@ export async function POST(
     const booking =
       await prisma.$transaction(
         async (tx) => {
+          const selectedCombos = comboItems.length
+            ? await tx.combo.findMany({
+                where: { id: { in: comboItems.map((item) => item.id) }, isActive: true },
+              })
+            : [];
+          if (selectedCombos.length !== comboItems.length) {
+            throw new Error('COMBO_NOT_FOUND');
+          }
+          const comboTotal = selectedCombos.reduce((sum, combo) => {
+            const item = comboItems.find((candidate) => candidate.id === combo.id)!;
+            if (combo.stock < item.quantity) throw new Error('COMBO_OUT_OF_STOCK');
+            return sum + combo.price * item.quantity;
+          }, 0);
+          const orderTotal = payableTotal + comboTotal;
+
           const bookingRecord =
             await tx.booking.create({
               data: {
@@ -659,7 +702,10 @@ export async function POST(
                 paymentMethod:
                   PAYMENT_METHOD,
 
-                totalPrice,
+                totalPrice: orderTotal,
+                subtotalPrice,
+                discountAmount,
+                voucherId,
 
                 status:
                   BookingStatus.PENDING,
@@ -696,6 +742,7 @@ export async function POST(
             data: {
               bookingId:
                 bookingRecord.id,
+              expiresAt: new Date(Date.now() + 15 * 60 * 1000),
             },
           });
 
@@ -747,12 +794,23 @@ export async function POST(
                 PAYMENT_METHOD,
 
               amount:
-                totalPrice,
+                orderTotal,
 
               status:
                 'PENDING',
             },
           });
+
+          if (voucherId) {
+            await tx.voucher.update({ where: { id: voucherId }, data: { usedCount: { increment: 1 } } });
+            await tx.voucherRedemption.create({ data: { voucherId, userId: user.id, bookingId: bookingRecord.id } });
+          }
+
+          for (const combo of selectedCombos) {
+            const item = comboItems.find((candidate) => candidate.id === combo.id)!;
+            await tx.combo.update({ where: { id: combo.id }, data: { stock: { decrement: item.quantity } } });
+            await tx.bookingCombo.create({ data: { bookingId: bookingRecord.id, comboId: combo.id, quantity: item.quantity, unitPrice: combo.price } });
+          }
 
           return tx.booking.findUniqueOrThrow({
             where: {
@@ -805,7 +863,7 @@ export async function POST(
           PAYMENT_METHOD,
 
         amount:
-          totalPrice,
+          booking.totalPrice,
 
         paymentDescription:
           `${

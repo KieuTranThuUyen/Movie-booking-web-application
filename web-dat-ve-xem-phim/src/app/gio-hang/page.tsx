@@ -17,6 +17,7 @@ import {
 import {
   authOptions,
 } from '@/lib/auth';
+import { CartCombos } from '@/components/booking/cart-combos';
 
 type CartPageProps = {
   searchParams: Promise<{
@@ -373,6 +374,11 @@ export default async function CartPage({
       0,
     );
 
+  const combos = await prisma.combo.findMany({
+    where: { isActive: true, stock: { gt: 0 } },
+    orderBy: { createdAt: 'asc' },
+  });
+
   /*
    * ============================================================
    * RENDER
@@ -497,6 +503,14 @@ export default async function CartPage({
             </div>
           </div>
         </section>
+
+        {seatDetails.length > 0 ? (
+          <CartCombos
+            combos={combos}
+            showtimeId={showtime.id}
+            seats={validSelectedSeats}
+          />
+        ) : null}
 
         <aside className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
           <div className="text-lg font-semibold text-white">
