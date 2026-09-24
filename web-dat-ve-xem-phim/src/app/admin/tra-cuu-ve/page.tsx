@@ -10,6 +10,13 @@ export default function AdminTicketLookupPage() {
       <div className="mt-6">
         <TicketLookupForm />
       </div>
+
+      <a
+        href="/admin/quet-qr"
+        className="mt-6 inline-flex rounded-xl border border-sky-400/30 px-4 py-2.5 text-sm font-semibold text-sky-300 transition hover:bg-sky-400/10"
+      >
+        Mở quét QR check-in
+      </a>
     </section>
   );
 }
