@@ -40,6 +40,18 @@ export async function POST(
       );
     }
 
+    if (user.role !== 'ADMIN') {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Chỉ quản trị viên mới có quyền hủy vé.',
+        },
+        {
+          status: 403,
+        },
+      );
+    }
+
     const {
       id,
     } = await context.params;
@@ -75,16 +87,6 @@ export async function POST(
         if (!booking) {
           throw new Error(
             'BOOKING_NOT_FOUND',
-          );
-        }
-
-        if (
-          booking.userId !==
-            user.id &&
-          user.role !== 'ADMIN'
-        ) {
-          throw new Error(
-            'FORBIDDEN',
           );
         }
 

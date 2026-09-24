@@ -124,7 +124,6 @@ export function OrdersBookingList({ bookings }: Props) {
           const canPay =
             booking.status === 'PENDING' &&
             booking.paymentStatus === 'UNPAID';
-
           return (
             <article
               key={booking.id}

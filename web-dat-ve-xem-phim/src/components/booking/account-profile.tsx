@@ -6,6 +6,10 @@ type AccountProfileProps = {
   name: string;
   email: string;
   phone: string;
+  address: string;
+  city: string;
+  district: string;
+  image: string;
   role: string;
 };
 
@@ -13,6 +17,10 @@ export function AccountProfile({
   name,
   email,
   phone,
+  address,
+  city,
+  district,
+  image,
   role,
 }: AccountProfileProps) {
   const [editing, setEditing] = useState(false);
@@ -20,6 +28,9 @@ export function AccountProfile({
   const [form, setForm] = useState({
     name,
     phone,
+    address,
+    city,
+    district,
   });
 
   const [loading, setLoading] = useState(false);
@@ -30,6 +41,9 @@ export function AccountProfile({
     setForm({
       name,
       phone,
+      address,
+      city,
+      district,
     });
 
     setMessage('');
@@ -41,6 +55,9 @@ export function AccountProfile({
     setForm({
       name,
       phone,
+      address,
+      city,
+      district,
     });
 
     setMessage('');
@@ -64,6 +81,9 @@ export function AccountProfile({
         body: JSON.stringify({
           name: form.name,
           phone: form.phone,
+          address: form.address,
+          city: form.city,
+          district: form.district,
         }),
       });
 
@@ -72,6 +92,9 @@ export function AccountProfile({
         user?: {
           name: string | null;
           phone: string | null;
+            address: string | null;
+            city: string | null;
+            district: string | null;
         };
       };
 
@@ -179,6 +202,32 @@ export function AccountProfile({
             />
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(
+              [
+                ['address', 'Địa chỉ'],
+                ['district', 'Quận / huyện'],
+                ['city', 'Tỉnh / thành phố'],
+              ] as const
+            ).map(([field, label]) => (
+              <label key={field} className="block space-y-2 text-sm text-slate-300">
+                <span>{label}</span>
+                <input
+                  type="text"
+                  value={form[field]}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      [field]: event.target.value,
+                    }))
+                  }
+                  placeholder={`Nhập ${label.toLowerCase()}`}
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400"
+                />
+              </label>
+            ))}
+          </div>
+
           {/* Vai trò */}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -225,8 +274,18 @@ export function AccountProfile({
   return (
     <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-lg font-semibold text-white">
-          Hồ sơ
+        <div className="flex items-center gap-3">
+          {image ? (
+            <img src={image} alt="" className="h-12 w-12 rounded-full object-cover" />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-500/20 text-lg font-bold text-sky-300">
+              {(name.trim()[0] ?? '?').toUpperCase()}
+            </div>
+          )}
+          <div>
+            <div className="text-lg font-semibold text-white">Hồ sơ</div>
+            <p className="text-sm text-slate-400">Thông tin cá nhân</p>
+          </div>
         </div>
 
         <button
@@ -280,6 +339,13 @@ export function AccountProfile({
 
           <span className="text-right font-medium text-white">
             {phone || 'Chưa cập nhật'}
+          </span>
+        </div>
+
+        <div className="flex items-start justify-between gap-4 border-b border-white/5 pb-3">
+          <span className="text-slate-400">Địa chỉ</span>
+          <span className="text-right font-medium text-white">
+            {[address, district, city].filter(Boolean).join(', ') || 'Chưa cập nhật'}
           </span>
         </div>
 

@@ -46,6 +46,20 @@ export default async function AccountPage() {
     redirect('/dang-nhap?callbackUrl=/tai-khoan');
   }
 
+  const profile = await prisma.user.findUniqueOrThrow({
+    where: { id: session.user.id },
+    select: {
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      city: true,
+      district: true,
+      image: true,
+      role: true,
+    },
+  });
+
   const rawBookings = await prisma.booking.findMany({
     where: {
       userId: session.user.id,
@@ -111,14 +125,18 @@ export default async function AccountPage() {
         <div className="mt-10 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-6">
             <AccountProfile
-              name={session.user.name ?? ''}
-              email={session.user.email ?? ''}
-              phone={session.user.phone ?? ''}
-              role={session.user.role}
+              name={profile.name}
+              email={profile.email}
+              phone={profile.phone ?? ''}
+              address={profile.address ?? ''}
+              city={profile.city ?? ''}
+              district={profile.district ?? ''}
+              image={profile.image ?? ''}
+              role={profile.role}
             />
 
             <Link
-              href="doi-mat-khau"
+              href="/doi-mat-khau"
               className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400"
             >
               Đổi mật khẩu

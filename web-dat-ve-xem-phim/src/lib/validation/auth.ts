@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   emailSchema,
   nameSchema,
+  optionalPhoneSchema,
   passwordSchema,
   phoneSchema,
   strongPasswordSchema,
@@ -46,7 +47,7 @@ export const changePasswordSchema = z
 
 export const updateProfileSchema = z.object({
   name: nameSchema,
-  phone: phoneSchema.optional().nullable(),
+  phone: optionalPhoneSchema,
   address: z.string().trim().max(255).optional().nullable(),
   city: z.string().trim().max(100).optional().nullable(),
   district: z.string().trim().max(100).optional().nullable(),
