@@ -34,6 +34,22 @@ const adminLinks = [
     href: '/admin/tra-cuu-ve',
     label: 'Tra cứu & in vé',
   },
+  {
+    href: '/admin/quet-qr',
+    label: 'Quét QR check-in',
+  },
+  {
+    href: '/admin/voucher',
+    label: 'Voucher / khuyến mãi',
+  },
+  {
+    href: '/admin/combos',
+    label: 'Combo bắp nước',
+  },
+  {
+    href: '/admin/bao-cao',
+    label: 'Báo cáo / Export',
+  },
 ];
 
 export function AdminSidebar() {

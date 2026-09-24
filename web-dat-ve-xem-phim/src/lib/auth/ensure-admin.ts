@@ -21,10 +21,16 @@ export async function ensureAdminUser(): Promise<void> {
 
   const existing = await prisma.user.findUnique({
     where: { email },
-    select: { id: true },
+    select: { id: true, role: true, emailVerified: true },
   });
 
   if (existing) {
+    if (existing.role === UserRole.ADMIN && !existing.emailVerified) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { emailVerified: new Date() },
+      });
+    }
     return;
   }
 
@@ -36,6 +42,7 @@ export async function ensureAdminUser(): Promise<void> {
       email,
       password: hashedPassword,
       role: UserRole.ADMIN,
+      emailVerified: new Date(),
     },
   });
 

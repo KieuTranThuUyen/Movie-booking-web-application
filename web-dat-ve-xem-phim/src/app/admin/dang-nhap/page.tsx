@@ -39,8 +39,12 @@ export default function AdminLoginPage() {
       return;
     }
 
-    // success
-    router.push('/admin');
+    const callbackUrl = new URLSearchParams(window.location.search).get('callbackUrl');
+    const destination = callbackUrl?.startsWith('/admin/')
+      ? callbackUrl
+      : '/admin';
+
+    router.push(destination);
   };
 
   return (

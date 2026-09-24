@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 
 /** Rate-limit in-memory đơn giản (Edge-safe) */
@@ -26,6 +27,25 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const method = request.method;
   const ip = clientIp(request);
+
+  if (
+    pathname.startsWith('/admin') &&
+    pathname !== '/admin/dang-nhap'
+  ) {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+
+    if (token?.role !== 'ADMIN') {
+      const loginUrl = new URL('/admin/dang-nhap', request.url);
+      loginUrl.searchParams.set(
+        'callbackUrl',
+        `${pathname}${request.nextUrl.search}`,
+      );
+      return NextResponse.redirect(loginUrl);
+    }
+  }
 
   // ── Rate limit các API nhạy cảm ───────────────────────────
   const limits: Array<{ test: boolean; key: string; limit: number }> = [
