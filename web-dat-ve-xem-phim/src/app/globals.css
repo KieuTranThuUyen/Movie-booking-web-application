@@ -91,6 +91,46 @@ body {
     border-radius: 0 !important;
     box-shadow: none !important;
   }
+
+  /* Viền bo tròn + in trắng đen cho vé ghế & combo */
+  .ticket-item,
+  .combo-ticket-item {
+    border: 2px solid #000 !important;
+    border-radius: 16px !important;
+    margin-bottom: 18px !important;
+    padding: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ticket-item *,
+  .combo-ticket-item * {
+    color: #000 !important;
+    border-color: #000 !important;
+    background-image: none !important;
+  }
+
+  .ticket-item .bg-gradient-to-br,
+  .combo-ticket-item {
+    background: #fff !important;
+  }
+
+  .combo-ticket-item .combo-qr-wrap,
+  .ticket-item [class*="rounded"] img {
+    border: 1px solid #000 !important;
+    background: #fff !important;
+  }
+
+  .combo-ticket-item .combo-qr-wrap {
+    padding: 8px !important;
+    border-radius: 12px !important;
+  }
 }
 /* Banner poster chạy ngang liên tục */
 @keyframes poster-marquee {
