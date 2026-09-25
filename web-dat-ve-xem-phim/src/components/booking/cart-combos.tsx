@@ -1,9 +1,10 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
-type Combo = { id: string; name: string; price: number; stock: number };
+type Combo = { id: string; name: string; imageUrl: string | null; price: number; stock: number };
 
 type SeatLine = { code: string; type: string; price: number };
 
@@ -74,6 +75,15 @@ export function CartCombos({
                   key={combo.id}
                   className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-slate-200"
                 >
+                  {combo.imageUrl ? (
+                    <Image
+                      src={combo.imageUrl}
+                      alt={combo.name}
+                      width={96}
+                      height={80}
+                      className="h-20 w-24 shrink-0 rounded-xl border border-white/10 object-cover"
+                    />
+                  ) : null}
                   <span>
                     <span className="font-medium text-white">{combo.name}</span>
                     <br />

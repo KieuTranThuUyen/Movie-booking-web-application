@@ -47,21 +47,21 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  bookings  Booking[]
-  seatHolds SeatHold[]
-  authTokens AuthToken[]
+  bookings           Booking[]
+  seatHolds          SeatHold[]
+  authTokens         AuthToken[]
   voucherRedemptions VoucherRedemption[]
 }
 
 /// Token dùng cho quên mật khẩu / xác thực email
 model AuthToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  token     String   @unique
-  type      String   // PASSWORD_RESET | EMAIL_VERIFY
+  token     String    @unique
+  type      String // PASSWORD_RESET | EMAIL_VERIFY
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -203,10 +203,10 @@ model Booking {
   paymentStatus PaymentStatus @default(UNPAID)
 
   totalPrice     Int
-  subtotalPrice  Int       @default(0)
-  discountAmount Int       @default(0)
+  subtotalPrice  Int     @default(0)
+  discountAmount Int     @default(0)
   voucherId      String?
-  refundedAmount Int @default(0)
+  refundedAmount Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -214,11 +214,11 @@ model Booking {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   showtime Showtime @relation(fields: [showtimeId], references: [id], onDelete: Cascade)
 
-  tickets   Ticket[]
-  payment   Payment?
-  seatHolds SeatHold[]
-  voucher   Voucher? @relation(fields: [voucherId], references: [id], onDelete: SetNull)
-  combos    BookingCombo[]
+  tickets           Ticket[]
+  payment           Payment?
+  seatHolds         SeatHold[]
+  voucher           Voucher?           @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  combos            BookingCombo[]
   voucherRedemption VoucherRedemption?
 }
 
@@ -259,6 +259,7 @@ model Combo {
   id          String   @id @default(cuid())
   name        String
   description String?
+  imageUrl    String?
   price       Int
   stock       Int      @default(0)
   isActive    Boolean  @default(true)
@@ -269,13 +270,13 @@ model Combo {
 }
 
 model BookingCombo {
-  id        String @id @default(cuid())
-  bookingId String
-  comboId   String
-  quantity  Int    @default(1)
-  unitPrice Int
-  qrCode    String? @unique
-  status    TicketStatus @default(ACTIVE)
+  id          String       @id @default(cuid())
+  bookingId   String
+  comboId     String
+  quantity    Int          @default(1)
+  unitPrice   Int
+  qrCode      String?      @unique
+  status      TicketStatus @default(ACTIVE)
   checkedInAt DateTime?
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
@@ -294,8 +295,8 @@ model Ticket {
   price     Int
   qrCode    String?
 
-  status     TicketStatus @default(ACTIVE)
-  canceledAt DateTime?
+  status      TicketStatus @default(ACTIVE)
+  canceledAt  DateTime?
   checkedInAt DateTime?
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)

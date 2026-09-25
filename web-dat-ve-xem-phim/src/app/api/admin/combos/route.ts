@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       data: {
         name,
         description: String(body.description ?? '').trim() || null,
+        imageUrl: String(body.imageUrl ?? '').trim() || null,
         price,
         stock,
         isActive: body.isActive === undefined ? true : Boolean(body.isActive),
@@ -65,6 +66,7 @@ export async function PATCH(request: Request) {
       price?: number;
       name?: string;
       description?: string | null;
+      imageUrl?: string | null;
       isActive?: boolean;
     } = {};
     if (body.stock !== undefined) {
@@ -82,6 +84,9 @@ export async function PATCH(request: Request) {
     }
     if (body.description !== undefined) {
       data.description = String(body.description).trim() || null;
+    }
+    if (body.imageUrl !== undefined) {
+      data.imageUrl = String(body.imageUrl).trim() || null;
     }
     if (body.isActive !== undefined) {
       data.isActive = Boolean(body.isActive);
