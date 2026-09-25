@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 
-const adminLinks = [
+const systemLinks = [
   {
     href: '/admin',
     label: 'Tổng quan',
@@ -30,6 +30,9 @@ const adminLinks = [
     href: '/admin/bookings',
     label: 'Quản lý đặt vé',
   },
+];
+
+const businessLinks = [
   {
     href: '/admin/tra-cuu-ve',
     label: 'Tra cứu & in vé',
@@ -54,10 +57,37 @@ const adminLinks = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const { data: session, status } = useSession();
-  const [open, setOpen] = useState(false);
 
-  // Chưa đăng nhập hoặc không phải Admin
+  const {
+    data: session,
+    status,
+  } = useSession();
+
+  const systemActive =
+    systemLinks.some((item) =>
+      item.href === '/admin'
+        ? pathname === '/admin'
+        : pathname.startsWith(
+            item.href,
+          ),
+    );
+
+  const businessActive =
+    businessLinks.some((item) =>
+      pathname.startsWith(
+        item.href,
+      ),
+    );
+
+  const [open, setOpen] =
+    useState(false);
+
+  const [openSystem, setOpenSystem] =
+    useState(systemActive);
+
+  const [openBusiness, setOpenBusiness] =
+    useState(businessActive);
+
   if (
     status === 'loading' ||
     !session?.user ||
@@ -66,16 +96,75 @@ export function AdminSidebar() {
     return null;
   }
 
+  /*
+   * ============================================================
+   * MENU ITEM
+   * ============================================================
+   */
+
+  const renderMenuItem = (
+    item: {
+      href: string;
+      label: string;
+    },
+  ) => {
+    const isActive =
+      item.href === '/admin'
+        ? pathname === '/admin'
+        : pathname.startsWith(
+            item.href,
+          );
+
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={() =>
+          setOpen(false)
+        }
+        className={`block rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+          isActive
+            ? 'border-sky-400/30 bg-sky-500/15 text-white'
+            : 'border-transparent bg-white/[0.03] text-slate-300 hover:border-white/10 hover:bg-white/10 hover:text-white'
+        }`}
+      >
+        {item.label}
+      </Link>
+    );
+  };
+
   return (
     <>
-      {/* =========================
+      {/* ======================================================
           NÚT 3 GẠCH
-          ========================= */}
+         ====================================================== */}
+
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() =>
+          setOpen(true)
+        }
         aria-label="Mở menu quản trị"
-        className="fixed left-5 top-5 z-50 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/90 shadow-lg backdrop-blur-xl transition hover:border-sky-400/30 hover:bg-slate-800"
+        className="
+          fixed
+          left-5
+          top-5
+          z-50
+          flex
+          h-12
+          w-12
+          items-center
+          justify-center
+          rounded-2xl
+          border
+          border-white/10
+          bg-slate-950/90
+          shadow-lg
+          backdrop-blur-xl
+          transition
+          hover:border-sky-400/30
+          hover:bg-slate-800
+        "
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -89,10 +178,12 @@ export function AdminSidebar() {
             strokeLinecap="round"
             d="M4 6h16"
           />
+
           <path
             strokeLinecap="round"
             d="M4 12h16"
           />
+
           <path
             strokeLinecap="round"
             d="M4 18h16"
@@ -100,27 +191,60 @@ export function AdminSidebar() {
         </svg>
       </button>
 
-      {/* =========================
+      {/* ======================================================
           LỚP NỀN
-          ========================= */}
+         ====================================================== */}
+
       {open && (
         <button
           type="button"
           aria-label="Đóng menu"
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          onClick={() =>
+            setOpen(false)
+          }
+          className="
+            fixed
+            inset-0
+            z-40
+            bg-black/50
+            backdrop-blur-sm
+          "
         />
       )}
 
-      {/* =========================
+      {/* ======================================================
           SIDEBAR
-          ========================= */}
+         ====================================================== */}
+
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-screen w-[310px] flex-col border-r border-white/10 bg-slate-950 p-5 shadow-2xl backdrop-blur-xl transition-transform duration-300 ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`
+          fixed
+          left-0
+          top-0
+          z-50
+          flex
+          h-screen
+          w-[310px]
+          flex-col
+          border-r
+          border-white/10
+          bg-slate-950
+          p-5
+          shadow-2xl
+          backdrop-blur-xl
+          transition-transform
+          duration-300
+          ${
+            open
+              ? 'translate-x-0'
+              : '-translate-x-full'
+          }
+        `}
       >
-        {/* Header */}
+        {/* ====================================================
+            HEADER
+           ==================================================== */}
+
         <div className="flex items-center justify-between border-b border-white/10 pb-5">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-sky-300">
@@ -134,49 +258,200 @@ export function AdminSidebar() {
 
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() =>
+              setOpen(false)
+            }
             aria-label="Đóng menu"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 text-2xl leading-none text-slate-300 transition hover:bg-white/10 hover:text-white"
+            className="
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-xl
+              border
+              border-white/10
+              text-2xl
+              leading-none
+              text-slate-300
+              transition
+              hover:bg-white/10
+              hover:text-white
+            "
           >
             ×
           </button>
         </div>
 
-        {/* Menu */}
-        <nav className="mt-6 flex-1 space-y-2 overflow-y-auto">
-          {adminLinks.map((item) => {
-            const isActive =
-              item.href === '/admin'
-                ? pathname === '/admin'
-                : pathname.startsWith(item.href);
+        {/* ====================================================
+            MENU
+           ==================================================== */}
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className={`block rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                  isActive
-                    ? 'border-sky-400/30 bg-sky-500/15 text-white'
-                    : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10 hover:text-white'
+        <nav className="mt-6 flex-1 space-y-3 overflow-y-auto">
+          {/* ==================================================
+              NHÓM 1
+             ================================================== */}
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-2">
+            <button
+              type="button"
+              onClick={() =>
+                setOpenSystem(
+                  (value) =>
+                    !value,
+                )
+              }
+              className="
+                flex
+                w-full
+                items-center
+                justify-between
+                rounded-xl
+                px-3
+                py-3
+                text-left
+                transition
+                hover:bg-white/10
+              "
+            >
+              <div>
+                <div className="text-sm font-bold text-white">
+                  Quản lý hệ thống
+                </div>
+              </div>
+
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${
+                  openSystem
+                    ? 'rotate-180'
+                    : ''
                 }`}
               >
-                {item.label}
-              </Link>
-            );
-          })}
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m6 9 6 6 6-6"
+                />
+              </svg>
+            </button>
+
+            {openSystem && (
+              <div className="mt-1 space-y-1 border-t border-white/5 pt-2">
+                {systemLinks.map(
+                  (
+                    item,
+                  ) =>
+                    renderMenuItem(
+                      item,
+                    ),
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ==================================================
+              NHÓM 2
+             ================================================== */}
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-2">
+            <button
+              type="button"
+              onClick={() =>
+                setOpenBusiness(
+                  (value) =>
+                    !value,
+                )
+              }
+              className="
+                flex
+                w-full
+                items-center
+                justify-between
+                rounded-xl
+                px-3
+                py-3
+                text-left
+                transition
+                hover:bg-white/10
+              "
+            >
+              <div>
+                <div className="text-sm font-bold text-white">
+                  Vé & kinh doanh
+                </div>
+              </div>
+
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${
+                  openBusiness
+                    ? 'rotate-180'
+                    : ''
+                }`}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m6 9 6 6 6-6"
+                />
+              </svg>
+            </button>
+
+            {openBusiness && (
+              <div className="mt-1 space-y-1 border-t border-white/5 pt-2">
+                {businessLinks.map(
+                  (
+                    item,
+                  ) =>
+                    renderMenuItem(
+                      item,
+                    ),
+                )}
+              </div>
+            )}
+          </div>
         </nav>
 
-        {/* Tài khoản + Trang chủ */}
+        {/* ====================================================
+            TÀI KHOẢN + TRANG CHỦ
+           ==================================================== */}
+
         <div className="mt-5 space-y-2 border-t border-white/10 pt-5">
+          {/* TÀI KHOẢN */}
+
           <Link
             href="/tai-khoan"
-            onClick={() => setOpen(false)}
-            className={`group flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition-all ${
-              pathname === '/tai-khoan'
-                ? 'border-sky-400/30 bg-sky-500/15 text-white'
-                : 'border-white/10 bg-white/5 text-slate-300 hover:border-sky-400/30 hover:bg-sky-500/10 hover:text-sky-300'
-            }`}
+            onClick={() =>
+              setOpen(false)
+            }
+            className={`
+              group
+              flex
+              items-center
+              gap-3
+              rounded-2xl
+              border
+              px-4
+              py-3
+              text-sm
+              font-semibold
+              transition-all
+              ${
+                pathname ===
+                '/tai-khoan'
+                  ? 'border-sky-400/30 bg-sky-500/15 text-white'
+                  : 'border-white/10 bg-white/5 text-slate-300 hover:border-sky-400/30 hover:bg-sky-500/10 hover:text-sky-300'
+              }
+            `}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -191,6 +466,7 @@ export function AdminSidebar() {
                 strokeLinejoin="round"
                 d="M15.75 6.75a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
               />
+
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -198,13 +474,37 @@ export function AdminSidebar() {
               />
             </svg>
 
-            <span>Tài khoản</span>
+            <span>
+              Tài khoản
+            </span>
           </Link>
+
+          {/* TRANG CHỦ */}
 
           <Link
             href="/"
-            onClick={() => setOpen(false)}
-            className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition-all hover:border-sky-400/30 hover:bg-sky-500/10 hover:text-sky-300"
+            onClick={() =>
+              setOpen(false)
+            }
+            className="
+              group
+              flex
+              items-center
+              gap-3
+              rounded-2xl
+              border
+              border-white/10
+              bg-white/5
+              px-4
+              py-3
+              text-sm
+              font-semibold
+              text-slate-300
+              transition-all
+              hover:border-sky-400/30
+              hover:bg-sky-500/10
+              hover:text-sky-300
+            "
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -219,11 +519,13 @@ export function AdminSidebar() {
                 strokeLinejoin="round"
                 d="m3 10.5 9-7.5 9 7.5"
               />
+
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M5.25 9.75v9a1.5 1.5 0 0 0 1.5 1.5h10.5a1.5 1.5 0 0 0 1.5-1.5v-9"
               />
+
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -231,7 +533,9 @@ export function AdminSidebar() {
               />
             </svg>
 
-            <span>Trang chủ</span>
+            <span>
+              Trang chủ
+            </span>
           </Link>
         </div>
       </aside>

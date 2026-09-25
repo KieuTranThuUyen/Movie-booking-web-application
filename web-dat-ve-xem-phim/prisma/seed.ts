@@ -894,57 +894,65 @@ const cinemas = [
 const combos = [
   {
     name: 'CGV Combo',
-    description: '01 Bắp ngọt lớn + 02 Nước ngọt siêu lớn + 01 Snack',
-    imageUrl: '/images/combos/cgv-combo.jpg',
+    description:
+      '01 Bắp ngọt lớn + 02 Nước ngọt siêu lớn + 01 Snack',
+    imageUrl: '/images/combos/cgv-combo.svg',
     price: 135000,
     stock: 100,
   },
   {
     name: 'Toy Story Blindbox',
-    description: '01 Hộp mù Toy Story + 01 Nước ngọt siêu lớn + 01 Bắp ngọt lớn',
-    imageUrl: '/images/combos/toy-story-blindbox.jpg',
+    description:
+      '01 Hộp mù Toy Story + 01 Nước ngọt siêu lớn + 01 Bắp ngọt lớn',
+    imageUrl: '/images/combos/toy-story-blindbox.svg',
     price: 249000,
     stock: 50,
   },
   {
     name: 'Conan Blindbox 2026',
-    description: '01 Blindbox Conan Dango Mascot + 01 Bắp ngọt + 01 Nước ngọt',
-    imageUrl: '/images/combos/conan-blindbox.jpg',
+    description:
+      '01 Blindbox Conan Dango Mascot + 01 Bắp ngọt + 01 Nước ngọt',
+    imageUrl: '/images/combos/conan-blindbox.svg',
     price: 229000,
     stock: 50,
   },
   {
     name: 'NCT Special Deal',
-    description: '01 Ly nhân vật NCT + 01 Bắp ngọt lớn + 01 Nước ngọt siêu lớn',
-    imageUrl: '/images/combos/nct-special-deal.jpg',
+    description:
+      '01 Ly nhân vật NCT + 01 Bắp ngọt lớn + 01 Nước ngọt siêu lớn',
+    imageUrl: '/images/combos/nct-special.svg',
     price: 219000,
     stock: 50,
   },
   {
     name: 'BTS Special Offer',
-    description: '01 Ly BTS + 01 Nước ngọt siêu lớn + tùy chọn thêm bắp',
-    imageUrl: '/images/combos/bts-special-offer.jpg',
+    description:
+      '01 Ly BTS + 01 Nước ngọt siêu lớn + tùy chọn thêm bắp',
+    imageUrl: '/images/combos/bts-special.svg',
     price: 199000,
     stock: 50,
   },
   {
     name: 'BT21 VN Single',
-    description: '01 Ly BT21 Vietnam Edition + 01 Nước ngọt siêu lớn + 01 Bắp ngọt lớn',
-    imageUrl: '/images/combos/bt21-vietnam.jpg',
+    description:
+      '01 Ly BT21 Vietnam Edition + 01 Nước ngọt siêu lớn + 01 Bắp ngọt lớn',
+    imageUrl: '/images/combos/bt21-vietnam.svg',
     price: 299000,
     stock: 50,
   },
   {
     name: 'Michael Combo',
-    description: '01 Hộp bắp nón fedora Michael + 01 Nước ngọt siêu lớn + 01 Bắp ngọt lớn',
-    imageUrl: '/images/combos/michael-combo.jpg',
+    description:
+      '01 Hộp bắp nón fedora Michael + 01 Nước ngọt siêu lớn + 01 Bắp ngọt lớn',
+    imageUrl: '/images/combos/michael-combo.svg',
     price: 259000,
     stock: 50,
   },
   {
     name: 'Supergirl Combo',
-    description: '01 Bình nước Supergirl + 01 Bắp ngọt lớn + 01 Nước ngọt siêu lớn',
-    imageUrl: '/images/combos/supergirl-combo.jpg',
+    description:
+      '01 Bình nước Supergirl + 01 Bắp ngọt lớn + 01 Nước ngọt siêu lớn',
+    imageUrl: '/images/combos/supergirl-combo.svg',
     price: 239000,
     stock: 50,
   },
@@ -1039,8 +1047,8 @@ async function main() {
   console.log(`✓ ${cinemaRecords.length} cinemas`);
 
   /* -------------------------------------------------------
-   * 3. HALLS + SEATS
-   * ----------------------------------------------------- */
+  * 3. HALLS + SEATS
+  * ----------------------------------------------------- */
 
   console.log('\nSeeding halls and seats...');
 
@@ -1068,10 +1076,22 @@ async function main() {
             layoutPreset: 'STANDARD',
           },
         });
+      } else {
+        // Đảm bảo phòng hiện tại luôn là layout tiêu chuẩn
+        hall = await prisma.hall.update({
+          where: { id: hall.id },
+          data: {
+            capacity: 80,
+            layoutWidth: 1000,
+            layoutHeight: 650,
+            layoutPreset: 'STANDARD',
+          },
+        });
       }
 
       hallRecords.push(hall);
 
+      // 10 hàng × 8 ghế = 80 ghế
       for (let rowIndex = 0; rowIndex < 10; rowIndex++) {
         for (let seatNumber = 1; seatNumber <= 8; seatNumber++) {
           const code = createSeatCode(rowIndex, seatNumber);
@@ -1104,48 +1124,11 @@ async function main() {
           });
         }
       }
-
-      const existingScreen = await prisma.hallLayoutBlock.findFirst({
-        where: { hallId: hall.id, type: 'SCREEN' },
-      });
-
-      if (!existingScreen) {
-        await prisma.hallLayoutBlock.create({
-          data: {
-            hallId: hall.id,
-            type: 'SCREEN',
-            x: 100,
-            y: 20,
-            width: 760,
-            height: 40,
-            label: 'MÀN HÌNH',
-          },
-        });
-      }
-
-      const existingAisle = await prisma.hallLayoutBlock.findFirst({
-        where: { hallId: hall.id, type: 'AISLE' },
-      });
-
-      if (!existingAisle) {
-        await prisma.hallLayoutBlock.create({
-          data: {
-            hallId: hall.id,
-            type: 'AISLE',
-            x: 455,
-            y: 100,
-            width: 50,
-            height: 500,
-            label: 'LỐI ĐI',
-          },
-        });
-      }
     }
   }
 
   console.log(`✓ ${hallRecords.length} halls`);
   console.log(`✓ ${hallRecords.length * 80} seats`);
-
   /* -------------------------------------------------------
    * 4. SHOWTIMES
    * ----------------------------------------------------- */

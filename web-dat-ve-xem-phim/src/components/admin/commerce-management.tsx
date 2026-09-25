@@ -20,6 +20,7 @@ type Combo = {
   id: string;
   name: string;
   description: string | null;
+  imageUrl: string | null;
   price: number;
   stock: number;
   isActive: boolean;
@@ -313,6 +314,7 @@ export function ComboManagement() {
   const emptyForm = {
     name: '',
     description: '',
+    imageUrl: '',
     price: '79000',
     stock: '50',
     isActive: true,
@@ -343,6 +345,7 @@ export function ComboManagement() {
     setForm({
       name: item.name,
       description: item.description ?? '',
+      imageUrl: item.imageUrl ?? '',
       price: String(item.price),
       stock: String(item.stock),
       isActive: item.isActive,
@@ -358,6 +361,7 @@ export function ComboManagement() {
         ...(editingId ? { id: editingId } : {}),
         name: form.name,
         description: form.description,
+        imageUrl: form.imageUrl,
         price: Number(form.price),
         stock: Number(form.stock),
         isActive: form.isActive,
@@ -454,6 +458,22 @@ export function ComboManagement() {
           onChange={(event) => setForm({ ...form, description: event.target.value })}
           className="rounded-xl bg-slate-950 px-3 py-2 text-white"
         />
+        <div className="space-y-2">
+          <input
+            type="url"
+            placeholder="URL ảnh combo"
+            value={form.imageUrl ?? ''}
+            onChange={(event) => setForm({ ...form, imageUrl: event.target.value })}
+            className="w-full rounded-xl bg-slate-950 px-3 py-2 text-white"
+          />
+          {form.imageUrl?.trim() ? (
+            <img
+              src={form.imageUrl ?? ''}
+              alt="Xem trước combo"
+              className="h-20 w-full rounded-xl border border-white/10 object-cover"
+            />
+          ) : null}
+        </div>
         <input
           type="number"
           min={0}
@@ -499,14 +519,27 @@ export function ComboManagement() {
               key={item.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 p-4 text-slate-300"
             >
-              <div className="min-w-[100px]">
-                <span className="font-semibold text-white">{item.name}</span>
+              <div className="flex min-w-[240px] items-center gap-3">
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.name}
+                    className="h-16 w-24 shrink-0 rounded-xl border border-white/10 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-xs text-slate-500">
+                    Chưa có ảnh
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <span className="font-semibold text-white">{item.name}</span>
                 {item.description ? (
                   <p className="mt-1 text-xs text-slate-500">{item.description}</p>
                 ) : null}
                 <p className="mt-1 text-xs text-slate-500">
                   {item.isActive ? 'Đang bán' : 'Đã tắt'} · Tồn: {item.stock}
                 </p>
+                </div>
               </div>
               <span>{Number(item.price).toLocaleString('vi-VN')} đ</span>
               <div className="flex flex-wrap gap-2">

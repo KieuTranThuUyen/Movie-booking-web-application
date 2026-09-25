@@ -17,14 +17,15 @@ import {
 import {
   authOptions,
 } from '@/lib/auth';
-import { CartCombos } from '@/components/booking/cart-combos';
+
+import {
+  CartCombos,
+} from '@/components/booking/cart-combos';
 
 type CartPageProps = {
   searchParams: Promise<{
     movie?: string;
-
     showtime?: string;
-
     seats?: string;
   }>;
 };
@@ -68,8 +69,7 @@ export default async function CartPage({
           </h1>
 
           <p className="mt-3 text-slate-400">
-            Vui lòng quay lại chọn suất
-            chiếu.
+            Vui lòng quay lại chọn suất chiếu.
           </p>
 
           <Link
@@ -83,11 +83,16 @@ export default async function CartPage({
     );
   }
 
+  /*
+   * ============================================================
+   * LẤY SUẤT CHIẾU
+   * ============================================================
+   */
+
   const showtime =
     await prisma.showtime.findUnique({
       where: {
-        id:
-          showtimeId,
+        id: showtimeId,
       },
 
       include: {
@@ -96,7 +101,6 @@ export default async function CartPage({
         hall: {
           include: {
             cinema: true,
-
             seats: true,
           },
         },
@@ -123,22 +127,18 @@ export default async function CartPage({
 
   const requestedSeats = [
     ...new Set(
-      (params.seats ??
-        '')
+      (params.seats ?? '')
         .split(',')
-        .map(
-          (seat) =>
-            seat.trim(),
+        .map((seat) =>
+          seat.trim(),
         )
-        .filter(
-          Boolean,
-        ),
+        .filter(Boolean),
     ),
   ];
 
   /*
    * ============================================================
-   * USER
+   * KIỂM TRA ĐĂNG NHẬP
    * ============================================================
    */
 
@@ -147,9 +147,7 @@ export default async function CartPage({
       `/gio-hang?showtime=${encodeURIComponent(
         showtimeId,
       )}&seats=${encodeURIComponent(
-        requestedSeats.join(
-          ',',
-        ),
+        requestedSeats.join(','),
       )}`;
 
     return (
@@ -160,8 +158,7 @@ export default async function CartPage({
           </h1>
 
           <p className="mt-3 text-slate-400">
-            Vui lòng đăng nhập để tiếp
-            tục đặt vé.
+            Vui lòng đăng nhập để tiếp tục đặt vé.
           </p>
 
           <Link
@@ -182,9 +179,10 @@ export default async function CartPage({
 
   /*
    * ============================================================
-   * XÓA HOLD HẾT HẠN
+   * XÓA SEAT HOLD HẾT HẠN
    * ============================================================
    */
+
   await prisma.seatHold.deleteMany({
     where: {
       showtimeId,
@@ -197,9 +195,10 @@ export default async function CartPage({
 
   /*
    * ============================================================
-   * XÓA HOLD CANCELED
+   * XÓA SEAT HOLD CỦA BOOKING ĐÃ CANCELED
    * ============================================================
    */
+
   await prisma.seatHold.deleteMany({
     where: {
       showtimeId,
@@ -214,13 +213,9 @@ export default async function CartPage({
   /*
    * ============================================================
    * LẤY HOLD CỦA USER
-   *
-   * Có thể:
-   *
-   * - bookingId = null
-   * - bookingId = Booking PENDING
    * ============================================================
    */
+
   const myHolds =
     await prisma.seatHold.findMany({
       where: {
@@ -234,8 +229,7 @@ export default async function CartPage({
 
         OR: [
           {
-            bookingId:
-              null,
+            bookingId: null,
           },
 
           {
@@ -248,22 +242,17 @@ export default async function CartPage({
       },
 
       select: {
-        seatId:
-          true,
+        seatId: true,
 
-        expiresAt:
-          true,
+        expiresAt: true,
 
-        bookingId:
-          true,
+        bookingId: true,
 
         seat: {
           select: {
-            code:
-              true,
+            code: true,
 
-            isActive:
-              true,
+            isActive: true,
           },
         },
       },
@@ -271,9 +260,10 @@ export default async function CartPage({
 
   /*
    * ============================================================
-   * SEAT CODE USER ĐANG GIỮ
+   * GHẾ USER ĐANG GIỮ
    * ============================================================
    */
+
   const myHeldCodes =
     myHolds
       .filter(
@@ -287,9 +277,10 @@ export default async function CartPage({
 
   /*
    * ============================================================
-   * CHỈ DÙNG NHỮNG GHẾ SERVER XÁC NHẬN
+   * GHẾ HỢP LỆ
    * ============================================================
    */
+
   const validSelectedSeats =
     requestedSeats.filter(
       (seatCode) =>
@@ -300,9 +291,10 @@ export default async function CartPage({
 
   /*
    * ============================================================
-   * GHẾ KHÔNG CÒN ĐƯỢC GIỮ
+   * GHẾ KHÔNG CÒN GIỮ
    * ============================================================
    */
+
   const missingSeats =
     requestedSeats.filter(
       (seatCode) =>
@@ -316,6 +308,7 @@ export default async function CartPage({
    * CHI TIẾT GHẾ
    * ============================================================
    */
+
   const seatDetails =
     showtime.hall.seats
       .filter(
@@ -334,9 +327,7 @@ export default async function CartPage({
           let price =
             showtime.standardPrice;
 
-          switch (
-            type
-          ) {
+          switch (type) {
             case 'VIP':
               price =
                 showtime.vipPrice;
@@ -363,6 +354,12 @@ export default async function CartPage({
         },
       );
 
+  /*
+   * ============================================================
+   * TỔNG TIỀN VÉ
+   * ============================================================
+   */
+
   const subtotal =
     seatDetails.reduce(
       (
@@ -371,21 +368,43 @@ export default async function CartPage({
       ) =>
         total +
         seat.price,
+
       0,
     );
 
-  const combos = await prisma.combo.findMany({
-    where: { isActive: true, stock: { gt: 0 } },
-    orderBy: { createdAt: 'asc' },
-  });
+  /*
+   * ============================================================
+   * LẤY COMBO
+   * ============================================================
+   */
+
+  const combos =
+    await prisma.combo.findMany({
+      where: {
+        isActive: true,
+
+        stock: {
+          gt: 0,
+        },
+      },
+
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
 
   /*
    * ============================================================
    * RENDER
    * ============================================================
    */
+
   return (
     <main className="page-shell py-12 lg:py-16">
+      {/* ======================================================
+          HEADER
+         ====================================================== */}
+
       <div className="space-y-3">
         <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
           Giỏ vé
@@ -396,17 +415,18 @@ export default async function CartPage({
         </h1>
 
         <p className="text-slate-400">
-          Hệ thống đã kiểm tra lại ghế
-          trước khi thanh toán.
+          Hệ thống đã kiểm tra lại ghế trước khi thanh toán.
         </p>
       </div>
 
-      {missingSeats.length >
-        0 && (
+      {/* ======================================================
+          GHẾ KHÔNG CÒN ĐƯỢC GIỮ
+         ====================================================== */}
+
+      {missingSeats.length > 0 && (
         <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-500/5 p-4">
           <p className="text-sm font-semibold text-amber-300">
-            Một số ghế không còn được
-            giữ
+            Một số ghế không còn được giữ
           </p>
 
           <p className="mt-1 text-sm text-slate-400">
@@ -419,80 +439,57 @@ export default async function CartPage({
         </div>
       )}
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
-        {/* Cột trái: phim + ghế */}
-        <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-xl font-semibold text-white">
-              {showtime.movie.title}
-            </div>
-            <div className="mt-2 text-sm text-slate-300">
-              {showtime.hall.cinema.name}
-              {' · '}
-              {showtime.hall.name}
-            </div>
-            <div className="mt-2 text-sm text-slate-300">
-              {new Date(showtime.startTime).toLocaleString('vi-VN')}
-            </div>
+      {/* ======================================================
+          CART COMPONENT
+         ====================================================== */}
 
-            <div className="mt-6">
-              <div className="text-sm font-semibold text-white">Ghế đã chọn</div>
-              <div className="mt-3 space-y-2">
-                {seatDetails.length > 0 ? (
-                  seatDetails.map((seat) => (
-                    <div
-                      key={seat.code}
-                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-white">{seat.code}</span>
-                        <span className="rounded-lg bg-slate-700/60 px-2 py-1 text-xs text-slate-300">
-                          {seat.type}
-                        </span>
-                      </div>
-                      <span className="font-semibold text-white">
-                        {seat.price.toLocaleString('vi-VN')} đ
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                    Không còn ghế nào được bạn giữ.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+      <div className="mt-10">
+        <CartCombos
+          movieTitle={
+            showtime.movie.title
+          }
+          cinemaName={
+            showtime.hall.cinema.name
+          }
+          hallName={
+            showtime.hall.name
+          }
+          startTime={
+            showtime.startTime
+          }
+          combos={combos.map(
+            (combo) => ({
+              id: combo.id,
 
-          {seatDetails.length === 0 ? (
-            <Link
-              href={`/dat-ve?showtime=${encodeURIComponent(showtime.id)}`}
-              className="mt-6 inline-flex w-full items-center justify-center rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950"
-            >
-              Quay lại chọn ghế
-            </Link>
-          ) : null}
-        </section>
+              name: combo.name,
 
-        {/* Cột phải: combo + tóm tắt (live total) */}
-        {seatDetails.length > 0 ? (
-          <CartCombos
-            combos={combos.map((c) => ({
-              id: c.id,
-              name: c.name,
-              price: Number(c.price),
-              stock: c.stock,
-            }))}
-            showtimeId={showtime.id}
-            seats={validSelectedSeats}
-            seatDetails={seatDetails}
-            seatSubtotal={subtotal}
-          />
-        ) : (
-          <aside className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 text-sm text-slate-400">
-            Chọn ghế để tiếp tục đặt vé và combo.
-          </aside>
-        )}
+              description:
+                combo.description,
+
+              imageUrl:
+                combo.imageUrl,
+
+              price: Number(
+                combo.price,
+              ),
+
+              stock:
+                combo.stock,
+            }),
+          )}
+          showtimeId={
+            showtime.id
+          }
+          seats={
+            validSelectedSeats
+          }
+          seatDetails={
+            seatDetails
+          }
+          seatSubtotal={
+            subtotal
+          }
+        />
       </div>
     </main>
   );

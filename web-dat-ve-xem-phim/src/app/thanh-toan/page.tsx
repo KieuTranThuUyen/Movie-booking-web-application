@@ -243,6 +243,8 @@ export default async function CheckoutPage({
           combos={combos.map((combo) => ({
             id: combo.id,
             name: combo.name,
+            description: combo.description,
+            imageUrl: combo.imageUrl,
             price: combo.price,
             stock: combo.stock,
           }))}
