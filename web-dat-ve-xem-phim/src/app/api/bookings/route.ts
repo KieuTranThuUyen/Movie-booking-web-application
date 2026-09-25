@@ -641,9 +641,12 @@ export async function POST(
         : Math.min(subtotalPrice, voucher.discountValue);
     }
     const payableTotal = subtotalPrice - discountAmount;
-    const comboItems = (body.combos ?? []).filter(
-      (item) => item?.id && Number.isInteger(item.quantity) && item.quantity > 0,
-    );
+    const comboItems = (body.combos ?? [])
+      .map((item) => ({
+        id: String(item?.id ?? '').trim(),
+        quantity: Math.floor(Number(item?.quantity)),
+      }))
+      .filter((item) => item.id && Number.isFinite(item.quantity) && item.quantity > 0);
 
     /* ========================================================
        10. TẠO BOOKING MỚI
@@ -808,8 +811,19 @@ export async function POST(
 
           for (const combo of selectedCombos) {
             const item = comboItems.find((candidate) => candidate.id === combo.id)!;
-            await tx.combo.update({ where: { id: combo.id }, data: { stock: { decrement: item.quantity } } });
-            await tx.bookingCombo.create({ data: { bookingId: bookingRecord.id, comboId: combo.id, quantity: item.quantity, unitPrice: Math.floor(Number(combo.price)) } });
+            const qty = Math.floor(Number(item.quantity));
+            await tx.combo.update({ where: { id: combo.id }, data: { stock: { decrement: qty } } });
+            // Mỗi phần = 1 vé combo riêng (quantity = 1), mỗi cái 1 QR riêng khi thanh toán
+            for (let i = 0; i < qty; i++) {
+              await tx.bookingCombo.create({
+                data: {
+                  bookingId: bookingRecord.id,
+                  comboId: combo.id,
+                  quantity: 1,
+                  unitPrice: Math.floor(Number(combo.price)),
+                },
+              });
+            }
           }
 
           return tx.booking.findUniqueOrThrow({
@@ -887,21 +901,23 @@ export async function POST(
       error,
     );
 
-    if (
-      error instanceof Error
-    ) {
-      if (
-        error.message ===
-        'SEAT_HOLD_ASSIGN_FAILED'
-      ) {
+    if (error instanceof Error) {
+      if (error.message === 'SEAT_HOLD_ASSIGN_FAILED') {
         return NextResponse.json(
-          {
-            message:
-              'Không thể cập nhật ghế cho đơn. Vui lòng chọn lại ghế.',
-          },
-          {
-            status: 409,
-          },
+          { message: 'Không thể cập nhật ghế cho đơn. Vui lòng chọn lại ghế.' },
+          { status: 409 },
+        );
+      }
+      if (error.message === 'COMBO_NOT_FOUND') {
+        return NextResponse.json(
+          { message: 'Combo không tồn tại hoặc đã ngừng bán.' },
+          { status: 400 },
+        );
+      }
+      if (error.message === 'COMBO_OUT_OF_STOCK') {
+        return NextResponse.json(
+          { message: 'Combo đã hết hàng. Vui lòng chọn lại.' },
+          { status: 409 },
         );
       }
     }

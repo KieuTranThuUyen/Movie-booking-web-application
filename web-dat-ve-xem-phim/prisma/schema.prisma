@@ -281,7 +281,9 @@ model BookingCombo {
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   combo   Combo   @relation(fields: [comboId], references: [id], onDelete: Restrict)
 
-  @@unique([bookingId, comboId])
+  @@index([bookingId])
+  @@index([comboId])
+  @@index([qrCode])
 }
 
 model Ticket {

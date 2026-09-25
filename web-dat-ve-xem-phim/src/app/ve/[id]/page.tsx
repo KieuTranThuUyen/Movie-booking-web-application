@@ -1458,7 +1458,15 @@ export default async function ElectronicTicketPage({
                       </div>
 
                       <div className="flex flex-col items-center justify-center gap-3 border-t border-white/10 bg-black/20 p-6 md:border-l md:border-t-0 md:px-8">
-                        {combo.qrCode && !isUsed ? (
+                        {isUsed ? (
+                          <div className="flex h-[180px] w-[180px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-center">
+                            <div className="text-5xl">✓</div>
+                            <p className="mt-3 font-bold text-slate-400">ĐÃ SỬ DỤNG</p>
+                            <p className="mt-1 px-4 text-xs text-slate-500">
+                              QR không còn hiệu lực
+                            </p>
+                          </div>
+                        ) : combo.qrCode ? (
                           <>
                             <div className="combo-qr-wrap rounded-2xl bg-white p-3 shadow-lg print:border print:border-black print:shadow-none">
                               <BookingQR value={combo.qrCode} />
@@ -1468,9 +1476,7 @@ export default async function ElectronicTicketPage({
                             </p>
                           </>
                         ) : (
-                          <p className="text-sm text-slate-500">
-                            {isUsed ? 'Combo đã đổi' : 'Chưa có mã QR'}
-                          </p>
+                          <p className="text-sm text-slate-500">Chưa có mã QR</p>
                         )}
                       </div>
                     </div>
