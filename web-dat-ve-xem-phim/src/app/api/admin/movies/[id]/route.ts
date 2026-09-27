@@ -148,7 +148,10 @@ export async function PATCH(
         duration,
         ageRating,
         synopsis,
-        posterUrl,
+        posterUrl:
+          body.posterUrl !== undefined
+            ? posterUrl || ''
+            : undefined,
         imageUrl,
         trailerUrl:
           body.trailerUrl !== undefined

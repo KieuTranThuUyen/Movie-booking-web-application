@@ -480,9 +480,8 @@ export function MovieManagementForm({
               posterUrl: event.target.value,
             }))
           }
-          placeholder="Poster URL"
+          placeholder="Poster URL (banner) - không bắt buộc"
           className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400"
-          required
         />
 
         {/* ẢNH PHIM */}

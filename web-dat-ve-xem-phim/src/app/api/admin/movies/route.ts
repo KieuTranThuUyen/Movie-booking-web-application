@@ -82,7 +82,6 @@ export async function POST(request: Request) {
       !genre ||
       !ageRating ||
       !synopsis ||
-      !posterUrl ||
       !imageUrl ||
       !body.releaseDate
     ) {
@@ -125,7 +124,7 @@ export async function POST(request: Request) {
         duration,
         ageRating,
         synopsis,
-        posterUrl,
+        posterUrl: posterUrl || '',
         imageUrl,
         trailerUrl: trailerUrl || null,
         releaseDate,

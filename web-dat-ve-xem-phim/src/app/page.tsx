@@ -58,9 +58,7 @@ export default async function HomePage() {
       }),
 
       prisma.movie.findMany({
-        where: {
-          OR: [{ isNowShowing: true }, { isComingSoon: true }],
-        },
+        where: { isNowShowing: true },
         orderBy: { releaseDate: 'desc' },
         select: movieListSelect,
         take: 8,

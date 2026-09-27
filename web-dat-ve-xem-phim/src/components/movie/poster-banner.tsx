@@ -10,10 +10,18 @@ type PosterBannerProps = {
   movies: Movie[];
 };
 
+const PLACEHOLDER_POSTER =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400"><rect fill="#0f172a" width="1200" height="400"/><text x="50%" y="50%" fill="#64748b" font-family="system-ui,sans-serif" font-size="28" text-anchor="middle" dy=".3em">Chưa có poster</text></svg>`,
+  );
+
 export function PosterBanner({ movies }: PosterBannerProps) {
   const [current, setCurrent] = useState(0);
 
-  const total = movies.length;
+  // Chỉ hiển thị phim đang chiếu (đã lọc từ server), bỏ qua phim không có poster nếu muốn
+  const bannerMovies = movies.filter((m) => m.isNowShowing !== false);
+  const total = bannerMovies.length;
 
   const goNext = useCallback(() => {
     if (total <= 1) return;
@@ -42,7 +50,7 @@ export function PosterBanner({ movies }: PosterBannerProps) {
     <section className="relative mb-10 w-full overflow-hidden border border-white/10 bg-black shadow-xl">
       {/* Banner - giữ nguyên kích thước */}
       <div className="relative aspect-[21/9] w-full sm:aspect-[3/1]">
-        {movies.map((movie, index) => (
+        {bannerMovies.map((movie, index) => (
           <Link
             key={movie.id}
             href={`/phim/${movie.slug}`}
@@ -55,7 +63,7 @@ export function PosterBanner({ movies }: PosterBannerProps) {
             tabIndex={index === current ? 0 : -1}
           >
             <Image
-              src={movie.posterUrl}
+              src={movie.posterUrl?.trim() ? movie.posterUrl : PLACEHOLDER_POSTER}
               alt={movie.title}
               fill
               unoptimized
@@ -159,7 +167,7 @@ export function PosterBanner({ movies }: PosterBannerProps) {
 
           {/* Dots */}
           <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 gap-2">
-            {movies.map((movie, index) => (
+            {bannerMovies.map((movie, index) => (
               <button
                 key={movie.id}
                 type="button"
