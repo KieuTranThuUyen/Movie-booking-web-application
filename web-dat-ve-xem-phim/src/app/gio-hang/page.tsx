@@ -344,11 +344,9 @@ export default async function CartPage({
           }
 
           return {
-            code:
-              seat.code,
-
+            id: seat.id,
+            code: seat.code,
             type,
-
             price,
           };
         },

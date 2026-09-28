@@ -1,9 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { PAGE_SIZE, Pagination } from '@/components/ui/pagination';
+
+/** Khách chỉ được hủy trước giờ chiếu ít nhất 30 phút */
+const MIN_MINUTES_BEFORE_SHOWTIME = 30;
 
 export type OrdersBooking = {
   id: string;
@@ -84,14 +88,62 @@ function getPaymentStatusClass(status: string) {
 
 type Props = { bookings: OrdersBooking[] };
 
+function canCustomerCancel(booking: OrdersBooking): boolean {
+  if (booking.status === 'CANCELED') return false;
+  if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
+    return false;
+  }
+
+  const start = new Date(booking.showtime.startTime).getTime();
+  const minutesLeft = (start - Date.now()) / (60 * 1000);
+  return minutesLeft >= MIN_MINUTES_BEFORE_SHOWTIME;
+}
+
 export function OrdersBookingList({ bookings }: Props) {
+  const router = useRouter();
   const [page, setPage] = useState(1);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+
   const totalPages = Math.max(1, Math.ceil(bookings.length / PAGE_SIZE));
   const paged = useMemo(() => {
     const safe = Math.min(page, totalPages);
     const start = (safe - 1) * PAGE_SIZE;
     return bookings.slice(start, start + PAGE_SIZE);
   }, [bookings, page, totalPages]);
+
+  const handleCancel = async (bookingId: string) => {
+    const confirmed = window.confirm(
+      'Bạn có chắc muốn hủy đơn đặt vé này?\n\nLưu ý: Chỉ hủy được trước giờ chiếu ít nhất 30 phút. Nếu đã thanh toán, hoàn tiền sẽ được ghi nhận trong hệ thống (xử lý thực tế qua cổng thanh toán có thể cần liên hệ hỗ trợ).',
+    );
+
+    if (!confirmed) return;
+
+    setCancelingId(bookingId);
+    setMessage('');
+
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}/cancel`, {
+        method: 'POST',
+      });
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !data.success) {
+        setMessage(data.message || 'Không thể hủy đơn đặt vé.');
+        return;
+      }
+
+      setMessage(data.message || 'Đã hủy đơn thành công.');
+      router.refresh();
+    } catch {
+      setMessage('Không thể kết nối đến máy chủ.');
+    } finally {
+      setCancelingId(null);
+    }
+  };
 
   if (bookings.length === 0) {
     return (
@@ -111,6 +163,12 @@ export function OrdersBookingList({ bookings }: Props) {
 
   return (
     <div>
+      {message ? (
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+          {message}
+        </div>
+      ) : null}
+
       <div className="grid gap-4">
         {paged.map((booking) => {
           const activeTickets = booking.tickets.filter(
@@ -124,6 +182,7 @@ export function OrdersBookingList({ bookings }: Props) {
           const canPay =
             booking.status === 'PENDING' &&
             booking.paymentStatus === 'UNPAID';
+          const canCancel = canCustomerCancel(booking);
           return (
             <article
               key={booking.id}
@@ -232,6 +291,16 @@ export function OrdersBookingList({ bookings }: Props) {
                   >
                     Xem vé điện tử
                   </Link>
+                ) : null}
+                {canCancel ? (
+                  <button
+                    type="button"
+                    disabled={cancelingId === booking.id}
+                    onClick={() => handleCancel(booking.id)}
+                    className="inline-flex items-center justify-center rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {cancelingId === booking.id ? 'Đang hủy…' : 'Hủy vé'}
+                  </button>
                 ) : null}
                 {booking.status === 'CANCELED' ? (
                   <span className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-400">

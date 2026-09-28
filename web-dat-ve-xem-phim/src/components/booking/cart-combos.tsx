@@ -1,88 +1,135 @@
 'use client';
 
 import Link from 'next/link';
-
-import {
-  useMemo,
-  useState,
-} from 'react';
+import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';
 
 type Combo = {
   id: string;
-
   name: string;
-
   description: string;
-
   imageUrl: string | null;
-
   price: number;
-
   stock: number;
 };
 
 type SeatLine = {
+  id: string;
   code: string;
-
   type: string;
-
   price: number;
 };
 
 type Props = {
   movieTitle: string;
-
   cinemaName: string;
-
   hallName: string;
-
   startTime: Date | string;
-
   combos: Combo[];
-
   showtimeId: string;
-
   seats: string[];
-
   seatDetails: SeatLine[];
-
   seatSubtotal: number;
 };
 
 export function CartCombos({
   movieTitle,
-
   cinemaName,
-
   hallName,
-
   startTime,
-
   combos,
-
   showtimeId,
-
-  seats,
-
-  seatDetails,
-
-  seatSubtotal,
+  seats: initialSeats,
+  seatDetails: initialSeatDetails,
+  seatSubtotal: _initialSeatSubtotal,
 }: Props) {
+  const router = useRouter();
+
+  const [seatDetails, setSeatDetails] =
+    useState<SeatLine[]>(initialSeatDetails);
+  const [removingCode, setRemovingCode] = useState<string | null>(null);
+  const [seatMessage, setSeatMessage] = useState('');
+
   /*
    * ============================================================
    * QUANTITY COMBO
    * ============================================================
    */
 
-  const [
-    quantities,
-    setQuantities,
-  ] = useState<
-    Record<
-      string,
-      number
-    >
+  const [quantities, setQuantities] = useState<
+    Record<string, number>
   >({});
+
+  const seats = useMemo(
+    () => seatDetails.map((s) => s.code),
+    [seatDetails],
+  );
+
+  const seatSubtotal = useMemo(
+    () => seatDetails.reduce((sum, s) => sum + s.price, 0),
+    [seatDetails],
+  );
+
+  const removeSeat = async (seat: SeatLine) => {
+    if (removingCode) return;
+
+    const confirmed = window.confirm(
+      `Bỏ ghế ${seat.code} khỏi giỏ hàng?`,
+    );
+    if (!confirmed) return;
+
+    setRemovingCode(seat.code);
+    setSeatMessage('');
+
+    try {
+      const response = await fetch('/api/seat-holds', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          showtimeId,
+          seatIds: [seat.id],
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        deletedCount?: number;
+      };
+
+      if (!response.ok) {
+        setSeatMessage(data.message || 'Không thể bỏ ghế.');
+        return;
+      }
+
+      const nextDetails = seatDetails.filter(
+        (s) => s.code !== seat.code,
+      );
+      setSeatDetails(nextDetails);
+
+      // Cập nhật URL (bỏ mã ghế đã xóa)
+      const nextSeats = nextDetails.map((s) => s.code);
+      const params = new URLSearchParams({
+        showtime: showtimeId,
+      });
+      if (nextSeats.length > 0) {
+        params.set('seats', nextSeats.join(','));
+      }
+      router.replace(`/gio-hang?${params.toString()}`, {
+        scroll: false,
+      });
+
+      setSeatMessage(
+        data.deletedCount && data.deletedCount > 0
+          ? `Đã bỏ ghế ${seat.code}.`
+          : data.message || `Đã bỏ ghế ${seat.code} khỏi giỏ.`,
+      );
+    } catch {
+      setSeatMessage('Không thể kết nối đến máy chủ.');
+    } finally {
+      setRemovingCode(null);
+    }
+  };
 
   /*
    * ============================================================
@@ -289,72 +336,57 @@ export function CartCombos({
                 Ghế đã chọn
               </div>
 
+              {seatMessage ? (
+                <p className="mt-2 text-xs text-slate-400">
+                  {seatMessage}
+                </p>
+              ) : null}
+
               <div className="mt-3 space-y-2">
-                {seatDetails.length >
-                0 ? (
-                  seatDetails.map(
-                    (seat) => (
-                      <div
-                        key={
-                          seat.code
-                        }
-                        className="
-                          flex
-                          items-center
-                          justify-between
-                          rounded-2xl
-                          border
-                          border-white/10
-                          bg-white/5
-                          px-4
-                          py-3
-                        "
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-semibold text-white">
-                            {
-                              seat.code
-                            }
-                          </span>
-
-                          <span
-                            className="
-                              rounded-lg
-                              bg-slate-700/60
-                              px-2
-                              py-1
-                              text-xs
-                              text-slate-300
-                            "
-                          >
-                            {
-                              seat.type
-                            }
-                          </span>
-                        </div>
-
+                {seatDetails.length > 0 ? (
+                  seatDetails.map((seat) => (
+                    <div
+                      key={seat.code}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
                         <span className="font-semibold text-white">
-                          {seat.price.toLocaleString(
-                            'vi-VN',
-                          )}{' '}
-                          đ
+                          {seat.code}
+                        </span>
+                        <span className="rounded-lg bg-slate-700/60 px-2 py-1 text-xs text-slate-300">
+                          {seat.type}
                         </span>
                       </div>
-                    ),
-                  )
+
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="font-semibold text-white">
+                          {seat.price.toLocaleString('vi-VN')} đ
+                        </span>
+                        <button
+                          type="button"
+                          disabled={removingCode === seat.code}
+                          onClick={() => removeSeat(seat)}
+                          className="rounded-lg border border-rose-400/40 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Bỏ ghế ${seat.code}`}
+                        >
+                          {removingCode === seat.code
+                            ? '…'
+                            : 'Xóa'}
+                        </button>
+                      </div>
+                    </div>
+                  ))
                 ) : (
-                  <div
-                    className="
-                      rounded-2xl
-                      border
-                      border-white/10
-                      bg-white/5
-                      p-4
-                      text-sm
-                      text-slate-300
-                    "
-                  >
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
                     Không còn ghế nào được bạn giữ.
+                    <div className="mt-3">
+                      <Link
+                        href={`/dat-ve?showtime=${encodeURIComponent(showtimeId)}`}
+                        className="inline-flex rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400"
+                      >
+                        Chọn lại ghế
+                      </Link>
+                    </div>
                   </div>
                 )}
               </div>
