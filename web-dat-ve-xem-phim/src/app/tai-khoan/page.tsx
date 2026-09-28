@@ -84,6 +84,12 @@ export default async function AccountPage() {
 
       tickets: true,
 
+      combos: {
+        include: {
+          combo: true,
+        },
+      },
+
       payment: true,
     },
   });
@@ -103,6 +109,10 @@ export default async function AccountPage() {
       },
     },
     tickets: booking.tickets.map((t) => ({ seatCode: t.seatCode })),
+    combos: booking.combos.map((c) => ({
+      quantity: c.quantity,
+      combo: { name: c.combo.name },
+    })),
   }));
 
   return (

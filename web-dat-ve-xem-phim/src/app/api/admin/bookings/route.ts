@@ -4,6 +4,8 @@ import type { NextRequest } from 'next/server';
 
 import { prisma } from '@/lib/db/prisma';
 
+export const dynamic = 'force-dynamic';
+
 async function isAdmin(request: Request) {
   const token = await getToken({
     req: request as NextRequest,

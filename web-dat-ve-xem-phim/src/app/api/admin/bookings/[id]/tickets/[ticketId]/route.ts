@@ -59,6 +59,15 @@ function getBookingInclude() {
       },
     },
 
+    combos: {
+      include: {
+        combo: true,
+      },
+      orderBy: {
+        id: 'asc' as const,
+      },
+    },
+
     payment: true,
 
     user: {
@@ -127,6 +136,8 @@ export async function DELETE(
           showtime: true,
 
           tickets: true,
+
+          combos: true,
 
           payment: true,
         },
@@ -241,14 +252,21 @@ export async function DELETE(
      * admin phải dùng Hủy đơn.
      */
 
+    const activeCombosCount =
+      (booking.combos ?? []).filter(
+        (item) =>
+          item.status === TicketStatus.ACTIVE,
+      ).length;
+
     if (
       remainingActiveTickets.length ===
-      0
+      0 &&
+      activeCombosCount === 0
     ) {
       return NextResponse.json(
         {
           message:
-            'Đây là vé cuối cùng còn hiệu lực. Hãy dùng chức năng Hủy đơn.',
+            'Đây là mục cuối cùng còn hiệu lực. Hãy dùng chức năng Hủy đơn.',
         },
         {
           status: 400,
@@ -283,7 +301,13 @@ export async function DELETE(
        8. TOTAL CÒN LẠI
        ======================================================== */
 
-    const remainingTotalPrice =
+    const remainingActiveCombos =
+      (booking.combos ?? []).filter(
+        (item) =>
+          item.status === TicketStatus.ACTIVE,
+      );
+
+    const remainingTicketsTotal =
       remainingActiveTickets.reduce(
         (sum, item) =>
           sum +
@@ -292,6 +316,17 @@ export async function DELETE(
           ),
         0,
       );
+
+    const remainingCombosTotal =
+      remainingActiveCombos.reduce(
+        (sum, item) =>
+          sum +
+          Number(item.unitPrice) * Number(item.quantity),
+        0,
+      );
+
+    const remainingTotalPrice =
+      remainingTicketsTotal + remainingCombosTotal;
 
     /* ========================================================
        9. PAYMENT STATUS

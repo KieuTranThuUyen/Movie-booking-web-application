@@ -18,8 +18,13 @@ type RouteContext = {
 /** Khách chỉ được hủy khi còn ít nhất 30 phút trước giờ chiếu */
 const MIN_MINUTES_BEFORE_SHOWTIME = 30;
 
+type CancelBody = {
+  ticketIds?: string[];
+  comboIds?: string[];
+};
+
 export async function POST(
-  _request: Request,
+  request: Request,
   context: RouteContext,
 ) {
   try {
@@ -47,6 +52,25 @@ export async function POST(
         { status: 400 },
       );
     }
+
+    let body: CancelBody = {};
+    try {
+      const text = await request.text();
+      if (text) {
+        body = JSON.parse(text) as CancelBody;
+      }
+    } catch {
+      body = {};
+    }
+
+    const selectedTicketIds = Array.isArray(body.ticketIds)
+      ? body.ticketIds.filter(Boolean)
+      : [];
+    const selectedComboIds = Array.isArray(body.comboIds)
+      ? body.comboIds.filter(Boolean)
+      : [];
+    const isPartial =
+      selectedTicketIds.length > 0 || selectedComboIds.length > 0;
 
     const booking = await prisma.booking.findUnique({
       where: { id },
@@ -120,7 +144,6 @@ export async function POST(
     const msUntilShow = showtimeStart.getTime() - now.getTime();
     const minutesUntilShow = msUntilShow / (60 * 1000);
 
-    // Khách: chỉ hủy khi còn ≥ 30 phút trước giờ chiếu
     if (!isAdmin && minutesUntilShow < MIN_MINUTES_BEFORE_SHOWTIME) {
       return NextResponse.json(
         {
@@ -134,7 +157,6 @@ export async function POST(
       );
     }
 
-    // Admin: không hủy khi suất đã bắt đầu
     if (isAdmin && minutesUntilShow <= 0) {
       return NextResponse.json(
         {
@@ -149,21 +171,90 @@ export async function POST(
     const activeTickets = booking.tickets.filter(
       (t) => t.status === TicketStatus.ACTIVE,
     );
-
     const activeCombos = booking.combos.filter(
       (c) => c.status === TicketStatus.ACTIVE,
     );
+
+    if (activeTickets.length === 0 && activeCombos.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Đơn không còn vé hoặc combo hiệu lực để hủy.',
+        },
+        { status: 400 },
+      );
+    }
+
+    // Validate partial selection
+    let ticketsToCancel = activeTickets;
+    let combosToCancel = activeCombos;
+
+    if (isPartial) {
+      const activeTicketIdSet = new Set(activeTickets.map((t) => t.id));
+      const activeComboIdSet = new Set(activeCombos.map((c) => c.id));
+
+      for (const tid of selectedTicketIds) {
+        if (!activeTicketIdSet.has(tid)) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Có vé không hợp lệ hoặc đã bị hủy.',
+            },
+            { status: 400 },
+          );
+        }
+      }
+      for (const cid of selectedComboIds) {
+        if (!activeComboIdSet.has(cid)) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Có combo không hợp lệ hoặc đã bị hủy.',
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      ticketsToCancel = activeTickets.filter((t) =>
+        selectedTicketIds.includes(t.id),
+      );
+      combosToCancel = activeCombos.filter((c) =>
+        selectedComboIds.includes(c.id),
+      );
+
+      if (ticketsToCancel.length === 0 && combosToCancel.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Vui lòng chọn ít nhất một vé hoặc combo để hủy.',
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const remainingActiveTickets = activeTickets.filter(
+      (t) => !ticketsToCancel.some((x) => x.id === t.id),
+    );
+    const remainingActiveCombos = activeCombos.filter(
+      (c) => !combosToCancel.some((x) => x.id === c.id),
+    );
+
+    const isFullCancel =
+      remainingActiveTickets.length === 0 &&
+      remainingActiveCombos.length === 0;
 
     const shouldRefund =
       booking.paymentStatus === PaymentStatus.PAID ||
       booking.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
 
     const ticketRefund = shouldRefund
-      ? activeTickets.reduce((sum, t) => sum + Number(t.price), 0)
+      ? ticketsToCancel.reduce((sum, t) => sum + Number(t.price), 0)
       : 0;
 
     const comboRefund = shouldRefund
-      ? activeCombos.reduce(
+      ? combosToCancel.reduce(
           (sum, c) => sum + Number(c.unitPrice) * Number(c.quantity),
           0,
         )
@@ -172,15 +263,40 @@ export async function POST(
     const refundAmount = ticketRefund + comboRefund;
     const nextRefundedAmount =
       Number(booking.refundedAmount) + refundAmount;
-    const nextPaymentStatus = shouldRefund
-      ? PaymentStatus.REFUNDED
-      : booking.paymentStatus;
+
+    const remainingTicketsTotal = remainingActiveTickets.reduce(
+      (sum, t) => sum + Number(t.price),
+      0,
+    );
+    const remainingCombosTotal = remainingActiveCombos.reduce(
+      (sum, c) => sum + Number(c.unitPrice) * Number(c.quantity),
+      0,
+    );
+    const remainingTotalPrice =
+      remainingTicketsTotal + remainingCombosTotal;
+
+    let nextPaymentStatus = booking.paymentStatus;
+    let paymentRecordStatus:
+      | 'PENDING'
+      | 'PAID'
+      | 'PARTIALLY_REFUNDED'
+      | 'REFUNDED' = 'PENDING';
+
+    if (isFullCancel) {
+      nextPaymentStatus = shouldRefund
+        ? PaymentStatus.REFUNDED
+        : booking.paymentStatus;
+      paymentRecordStatus = shouldRefund ? 'REFUNDED' : 'PENDING';
+    } else if (shouldRefund && refundAmount > 0) {
+      nextPaymentStatus = PaymentStatus.PARTIALLY_REFUNDED;
+      paymentRecordStatus = 'PARTIALLY_REFUNDED';
+    }
 
     await prisma.$transaction(async (tx) => {
-      if (activeTickets.length > 0) {
+      if (ticketsToCancel.length > 0) {
         await tx.ticket.updateMany({
           where: {
-            bookingId: id,
+            id: { in: ticketsToCancel.map((t) => t.id) },
             status: TicketStatus.ACTIVE,
           },
           data: {
@@ -190,10 +306,10 @@ export async function POST(
         });
       }
 
-      if (activeCombos.length > 0) {
+      if (combosToCancel.length > 0) {
         await tx.bookingCombo.updateMany({
           where: {
-            bookingId: id,
+            id: { in: combosToCancel.map((c) => c.id) },
             status: TicketStatus.ACTIVE,
           },
           data: {
@@ -202,23 +318,27 @@ export async function POST(
         });
       }
 
-      await tx.seatHold.deleteMany({
-        where: { bookingId: id },
-      });
+      if (isFullCancel) {
+        await tx.seatHold.deleteMany({
+          where: { bookingId: id },
+        });
+      }
 
       await tx.booking.update({
         where: { id },
         data: {
-          status: BookingStatus.CANCELED,
-          totalPrice: shouldRefund ? 0 : booking.totalPrice,
+          status: isFullCancel
+            ? BookingStatus.CANCELED
+            : booking.status,
+          totalPrice: isFullCancel ? 0 : remainingTotalPrice,
           refundedAmount: nextRefundedAmount,
           paymentStatus: nextPaymentStatus,
           ...(booking.payment && refundAmount > 0
             ? {
                 payment: {
                   update: {
-                    status: 'REFUNDED',
-                    paidAt: null,
+                    status: paymentRecordStatus,
+                    ...(isFullCancel ? { paidAt: null } : {}),
                   },
                 },
               }
@@ -232,9 +352,13 @@ export async function POST(
         ? ` Hệ thống ghi nhận hoàn ${refundAmount.toLocaleString('vi-VN')} đ (hoàn tiền thực tế qua cổng thanh toán cần xử lý thủ công).`
         : '';
 
+    const itemNote = isPartial
+      ? `Đã hủy ${ticketsToCancel.length} vé và ${combosToCancel.length} combo.`
+      : 'Đã hủy đơn đặt vé thành công.';
+
     return NextResponse.json({
       success: true,
-      message: `Đã hủy đơn đặt vé thành công.${refundNote}`,
+      message: `${itemNote}${refundNote}`,
       refundAmount,
     });
   } catch (error) {

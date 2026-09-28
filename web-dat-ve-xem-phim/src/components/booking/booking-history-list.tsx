@@ -20,6 +20,10 @@ export type HistoryBooking = {
     };
   };
   tickets: { seatCode: string }[];
+  combos?: {
+    quantity: number;
+    combo: { name: string };
+  }[];
 };
 
 function getBookingStatusLabel(status: string) {
@@ -109,6 +113,14 @@ export function BookingHistoryList({ bookings }: Props) {
                 Ghế:{' '}
                 {booking.tickets.map((t) => t.seatCode).join(', ') || '—'}
               </span>
+              {(booking.combos ?? []).length > 0 ? (
+                <span className="rounded-full bg-violet-500/10 px-3 py-1 text-violet-200">
+                  Combo:{' '}
+                  {(booking.combos ?? [])
+                    .map((c) => `${c.combo.name} x${c.quantity}`)
+                    .join(', ')}
+                </span>
+              ) : null}
               <span className="rounded-full bg-white/10 px-3 py-1 text-slate-300">
                 {booking.totalPrice.toLocaleString('vi-VN')} đ
               </span>

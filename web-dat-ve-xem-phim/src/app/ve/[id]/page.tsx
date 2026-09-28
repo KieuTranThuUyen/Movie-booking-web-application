@@ -900,21 +900,34 @@ export default async function ElectronicTicketPage({
 
               {booking.combos.map((c) => {
                 const isSelected = selectedCombo?.id === c.id;
-                const isUsed = c.status === 'USED';
+                const isUsed =
+                  c.status === TicketStatus.USED || c.status === 'USED';
+                const isCanceled =
+                  c.status === TicketStatus.CANCELED ||
+                  c.status === 'CANCELED';
+                const isInactive = isUsed || isCanceled;
                 return (
                   <Link
                     key={c.id}
                     href={getComboUrl(c.id)}
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
                       isSelected
-                        ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                        : isUsed
-                          ? 'border border-white/10 bg-white/5 text-slate-500'
-                          : 'border border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20'
+                        ? isCanceled
+                          ? 'bg-rose-500/80 text-white shadow-lg shadow-rose-500/20'
+                          : 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                        : isCanceled
+                          ? 'border border-rose-400/30 bg-rose-500/10 text-rose-300 line-through'
+                          : isUsed
+                            ? 'border border-white/10 bg-white/5 text-slate-500'
+                            : 'border border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20'
                     }`}
                   >
                     Combo {c.combo.name}
-                    {isUsed ? ' · Đã dùng' : ''}
+                    {isCanceled
+                      ? ' · Đã hủy'
+                      : isUsed
+                        ? ' · Đã dùng'
+                        : ''}
                   </Link>
                 );
               })}
@@ -1386,36 +1399,63 @@ export default async function ElectronicTicketPage({
 
             <div className="grid gap-5">
               {visibleCombos.map((combo) => {
-                const isUsed = combo.status === 'USED';
+                const isUsed =
+                  combo.status === TicketStatus.USED ||
+                  combo.status === 'USED';
+                const isCanceled =
+                  combo.status === TicketStatus.CANCELED ||
+                  combo.status === 'CANCELED';
+                const isInactive = isUsed || isCanceled;
                 const lineTotal =
                   Number(combo.unitPrice) * Number(combo.quantity);
                 return (
                   <div
                     key={combo.id}
+                    data-ticket-status={combo.status}
                     className={`combo-ticket-item overflow-hidden rounded-[28px] border shadow-xl print:rounded-xl print:shadow-none ${
-                      isUsed
-                        ? 'border-slate-600/40 bg-slate-950/80 opacity-80 print:hidden'
-                        : 'border-amber-400/20 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 print:border-2 print:border-black print:bg-white print:from-white print:to-white'
+                      isCanceled
+                        ? 'border-rose-400/20 bg-slate-900/70 opacity-90 print:hidden'
+                        : isUsed
+                          ? 'border-slate-600/40 bg-slate-950/80 opacity-80 print:hidden'
+                          : 'border-amber-400/20 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 print:border-2 print:border-black print:bg-white print:from-white print:to-white'
                     }`}
                   >
                     <div className="grid gap-0 md:grid-cols-[1fr_auto]">
                       <div className="p-6 sm:p-8">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-amber-400/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                              isCanceled
+                                ? 'bg-rose-400/15 text-rose-300'
+                                : 'bg-amber-400/15 text-amber-300'
+                            }`}
+                          >
                             Combo
                           </span>
                           <span
                             className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                              isUsed
-                                ? 'bg-slate-500/20 text-slate-400'
-                                : 'bg-emerald-500/15 text-emerald-300'
+                              isCanceled
+                                ? 'bg-rose-500/15 text-rose-300'
+                                : isUsed
+                                  ? 'bg-slate-500/20 text-slate-400'
+                                  : 'bg-emerald-500/15 text-emerald-300'
                             }`}
                           >
-                            {isUsed ? 'Đã sử dụng' : 'Còn hiệu lực'}
+                            {isCanceled
+                              ? 'Đã hủy'
+                              : isUsed
+                                ? 'Đã sử dụng'
+                                : 'Còn hiệu lực'}
                           </span>
                         </div>
 
-                        <h3 className="mt-4 text-2xl font-bold text-white print:text-black">
+                        <h3
+                          className={`mt-4 text-2xl font-bold print:text-black ${
+                            isCanceled
+                              ? 'text-slate-400 line-through'
+                              : 'text-white'
+                          }`}
+                        >
                           {combo.combo.name}
                         </h3>
                         {combo.combo.description ? (
@@ -1429,7 +1469,11 @@ export default async function ElectronicTicketPage({
                             <p className="text-xs uppercase tracking-wide text-slate-500">
                               Số lượng
                             </p>
-                            <p className="mt-1 text-lg font-semibold text-white">
+                            <p className={`mt-1 text-lg font-semibold ${
+                                isCanceled
+                                  ? 'text-slate-500 line-through'
+                                  : 'text-white'
+                              }`}>
                               × {combo.quantity}
                             </p>
                           </div>
@@ -1437,7 +1481,11 @@ export default async function ElectronicTicketPage({
                             <p className="text-xs uppercase tracking-wide text-slate-500">
                               Đơn giá
                             </p>
-                            <p className="mt-1 text-lg font-semibold text-white">
+                            <p className={`mt-1 text-lg font-semibold ${
+                                isCanceled
+                                  ? 'text-slate-500 line-through'
+                                  : 'text-white'
+                              }`}>
                               {Number(combo.unitPrice).toLocaleString('vi-VN')} đ
                             </p>
                           </div>
@@ -1445,7 +1493,11 @@ export default async function ElectronicTicketPage({
                             <p className="text-xs uppercase tracking-wide text-slate-500">
                               Thành tiền
                             </p>
-                            <p className="mt-1 text-lg font-semibold text-amber-300">
+                            <p className={`mt-1 text-lg font-semibold ${
+                                isCanceled
+                                  ? 'text-slate-500 line-through'
+                                  : 'text-amber-300'
+                              }`}>
                               {lineTotal.toLocaleString('vi-VN')} đ
                             </p>
                           </div>
@@ -1458,7 +1510,15 @@ export default async function ElectronicTicketPage({
                       </div>
 
                       <div className="flex flex-col items-center justify-center gap-3 border-t border-white/10 bg-black/20 p-6 md:border-l md:border-t-0 md:px-8">
-                        {isUsed ? (
+                        {isCanceled ? (
+                          <div className="flex h-[180px] w-[180px] flex-col items-center justify-center rounded-2xl border border-rose-400/20 bg-rose-500/5 text-center">
+                            <div className="text-5xl text-rose-300">✕</div>
+                            <p className="mt-3 font-bold text-rose-300">ĐÃ HỦY</p>
+                            <p className="mt-1 px-4 text-xs text-slate-500">
+                              Combo không còn hiệu lực
+                            </p>
+                          </div>
+                        ) : isUsed ? (
                           <div className="flex h-[180px] w-[180px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-center">
                             <div className="text-5xl">✓</div>
                             <p className="mt-3 font-bold text-slate-400">ĐÃ SỬ DỤNG</p>
@@ -1593,6 +1653,10 @@ export default async function ElectronicTicketPage({
           }
 
           .ticket-item[data-ticket-status="CANCELED"] {
+            display: none !important;
+          }
+
+          .combo-ticket-item[data-ticket-status="CANCELED"] {
             display: none !important;
           }
 

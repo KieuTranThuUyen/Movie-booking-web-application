@@ -65,6 +65,15 @@ function getBookingInclude() {
       },
     },
 
+    combos: {
+      include: {
+        combo: true,
+      },
+      orderBy: {
+        id: 'asc' as const,
+      },
+    },
+
     user: {
       select: {
         id: true,
@@ -175,6 +184,8 @@ export async function PATCH(
 
           tickets: true,
 
+          combos: true,
+
           payment: true,
         },
       });
@@ -249,6 +260,13 @@ export async function PATCH(
             TicketStatus.ACTIVE,
         );
 
+      const activeCombos =
+        (booking.combos ?? []).filter(
+          (combo) =>
+            combo.status ===
+            TicketStatus.ACTIVE,
+        );
+
       /*
        * Chỉ hoàn tiền nếu đã thực sự
        * được SePay xác nhận PAID.
@@ -260,7 +278,7 @@ export async function PATCH(
         booking.paymentStatus ===
           PaymentStatus.PARTIALLY_REFUNDED;
 
-      const refundAmount =
+      const ticketRefund =
         shouldRefund
           ? activeTickets.reduce(
               (sum, ticket) =>
@@ -271,6 +289,20 @@ export async function PATCH(
               0,
             )
           : 0;
+
+      const comboRefund =
+        shouldRefund
+          ? activeCombos.reduce(
+              (sum, combo) =>
+                sum +
+                Number(combo.unitPrice) *
+                  Number(combo.quantity),
+              0,
+            )
+          : 0;
+
+      const refundAmount =
+        ticketRefund + comboRefund;
 
       const nextRefundedAmount =
         Number(
@@ -309,6 +341,18 @@ export async function PATCH(
 
                   canceledAt:
                     now,
+                },
+              });
+            }
+
+            if (activeCombos.length > 0) {
+              await tx.bookingCombo.updateMany({
+                where: {
+                  bookingId: id,
+                  status: TicketStatus.ACTIVE,
+                },
+                data: {
+                  status: TicketStatus.CANCELED,
                 },
               });
             }

@@ -177,6 +177,15 @@ export default async function OrdersPage() {
           seatCode: 'asc',
         },
       },
+
+      combos: {
+        include: {
+          combo: true,
+        },
+        orderBy: {
+          id: 'asc',
+        },
+      },
     },
   });
 
@@ -200,6 +209,17 @@ export default async function OrdersPage() {
       id: t.id,
       seatCode: t.seatCode,
       status: t.status,
+      price: t.price,
+    })),
+    combos: b.combos.map((c) => ({
+      id: c.id,
+      quantity: c.quantity,
+      unitPrice: c.unitPrice,
+      status: c.status,
+      combo: {
+        id: c.combo.id,
+        name: c.combo.name,
+      },
     })),
   }));
 

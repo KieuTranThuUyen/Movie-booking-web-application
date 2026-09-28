@@ -24,6 +24,18 @@ type BookingTicket = {
   canceledAt: string | null;
 };
 
+type BookingComboItem = {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  status: TicketStatus;
+  qrCode?: string | null;
+  combo: {
+    id: string;
+    name: string;
+  };
+};
+
 type BookingItem = {
   id: string;
   bookingCode: string;
@@ -56,6 +68,7 @@ type BookingItem = {
   };
 
   tickets: BookingTicket[];
+  combos?: BookingComboItem[];
 };
 
 type UpdateBookingPayload = {
@@ -138,6 +151,50 @@ function getPaymentStatusClass(
   }
 }
 
+
+function getItemStatusLabel(status: TicketStatus) {
+  switch (status) {
+    case TicketStatus.ACTIVE:
+      return 'Còn hiệu lực';
+    case TicketStatus.USED:
+      return 'Đã sử dụng';
+    case TicketStatus.CANCELED:
+      return 'Đã hủy';
+    case TicketStatus.EXPIRED:
+      return 'Hết hạn';
+    default:
+      return status;
+  }
+}
+
+function getItemStatusBadgeClass(status: TicketStatus) {
+  switch (status) {
+    case TicketStatus.ACTIVE:
+      return 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300';
+    case TicketStatus.USED:
+      return 'border-sky-400/30 bg-sky-500/10 text-sky-300';
+    case TicketStatus.CANCELED:
+      return 'border-rose-400/30 bg-rose-500/10 text-rose-300';
+    case TicketStatus.EXPIRED:
+      return 'border-slate-400/30 bg-slate-500/10 text-slate-300';
+    default:
+      return 'border-white/10 bg-white/5 text-slate-300';
+  }
+}
+
+function getItemRowClass(status: TicketStatus) {
+  switch (status) {
+    case TicketStatus.CANCELED:
+      return 'border-rose-400/20 bg-rose-500/5';
+    case TicketStatus.USED:
+      return 'border-sky-400/20 bg-sky-500/5';
+    case TicketStatus.EXPIRED:
+      return 'border-slate-400/20 bg-slate-500/5';
+    default:
+      return 'border-white/10 bg-slate-950/40';
+  }
+}
+
 function isShowtimeStarted(
   startTime: string,
   now: number,
@@ -169,6 +226,11 @@ export function BookingManagementForm() {
   const [
     loadingTicketId,
     setLoadingTicketId,
+  ] = useState('');
+
+  const [
+    loadingComboId,
+    setLoadingComboId,
   ] = useState('');
 
   const [loading, setLoading] =
@@ -208,16 +270,30 @@ export function BookingManagementForm() {
             },
           );
 
-        const data =
-          (await response.json()) as {
-            bookings?: BookingItem[];
-            message?: string;
-          };
+        const rawText = await response.text();
+        let data: {
+          bookings?: BookingItem[];
+          message?: string;
+        } = {};
+
+        if (rawText) {
+          try {
+            data = JSON.parse(rawText) as {
+              bookings?: BookingItem[];
+              message?: string;
+            };
+          } catch {
+            setError(
+              `Máy chủ trả về phản hồi không hợp lệ (HTTP ${response.status}). Kiểm tra lại file API /api/admin/bookings/route.ts.`,
+            );
+            return;
+          }
+        }
 
         if (!response.ok) {
           setError(
             data.message ||
-              'Không thể tải danh sách đơn đặt vé.',
+              `Không thể tải danh sách đơn đặt vé. (HTTP ${response.status})`,
           );
 
           return;
@@ -424,6 +500,16 @@ export function BookingManagementForm() {
         return;
       }
 
+      if (
+        ticket.status !==
+        TicketStatus.ACTIVE
+      ) {
+        setError(
+          'Chỉ có thể hủy vé còn hiệu lực. Vé đã sử dụng / hết hạn không thể hủy.',
+        );
+        return;
+      }
+
       const activeTickets =
         booking.tickets.filter(
           (item) =>
@@ -431,11 +517,19 @@ export function BookingManagementForm() {
             TicketStatus.ACTIVE,
         );
 
+      const activeCombos =
+        (booking.combos ?? []).filter(
+          (item) =>
+            item.status ===
+            TicketStatus.ACTIVE,
+        );
+
       if (
-        activeTickets.length <= 1
+        activeTickets.length <= 1 &&
+        activeCombos.length === 0
       ) {
         setError(
-          'Đây là vé cuối cùng còn hiệu lực. Hãy dùng chức năng Hủy đơn.',
+          'Đây là mục cuối cùng còn hiệu lực. Hãy dùng chức năng Hủy đơn.',
         );
 
         return;
@@ -505,6 +599,138 @@ export function BookingManagementForm() {
         );
       } finally {
         setLoadingTicketId('');
+      }
+    };
+
+
+  /* ==========================================================
+     HỦY TỪNG COMBO
+     ========================================================== */
+
+  const handleCancelCombo =
+    async (
+      booking: BookingItem,
+      bookingCombo: BookingComboItem,
+    ) => {
+      if (
+        isShowtimeStarted(
+          booking.showtime.startTime,
+          currentTime,
+        )
+      ) {
+        setError(
+          'Suất chiếu đã bắt đầu hoặc đã kết thúc. Không thể hủy combo.',
+        );
+
+        return;
+      }
+
+      if (
+        bookingCombo.status ===
+        TicketStatus.CANCELED
+      ) {
+        return;
+      }
+
+      if (
+        bookingCombo.status !==
+        TicketStatus.ACTIVE
+      ) {
+        setError(
+          'Chỉ có thể hủy combo còn hiệu lực. Combo đã sử dụng / hết hạn không thể hủy.',
+        );
+        return;
+      }
+
+      const activeTickets =
+        booking.tickets.filter(
+          (item) =>
+            item.status ===
+            TicketStatus.ACTIVE,
+        );
+
+      const activeCombos =
+        (booking.combos ?? []).filter(
+          (item) =>
+            item.status ===
+            TicketStatus.ACTIVE,
+        );
+
+      if (
+        activeTickets.length === 0 &&
+        activeCombos.length <= 1
+      ) {
+        setError(
+          'Đây là mục cuối cùng còn hiệu lực. Hãy dùng chức năng Hủy đơn.',
+        );
+
+        return;
+      }
+
+      if (
+        !window.confirm(
+          `Bạn có chắc muốn hủy combo ${bookingCombo.combo.name} (x${bookingCombo.quantity})?`,
+        )
+      ) {
+        return;
+      }
+
+      setLoadingComboId(
+        bookingCombo.id,
+      );
+
+      setMessage('');
+      setError('');
+
+      try {
+        const response =
+          await fetch(
+            `/api/admin/bookings/${booking.id}/combos/${bookingCombo.id}`,
+            {
+              method: 'DELETE',
+            },
+          );
+
+        const data =
+          (await response.json()) as {
+            message?: string;
+            booking?: BookingItem;
+          };
+
+        if (!response.ok) {
+          setError(
+            data.message ||
+              'Không thể hủy combo.',
+          );
+
+          return;
+        }
+
+        if (data.booking) {
+          setBookings(
+            (current) =>
+              current.map(
+                (item) =>
+                  item.id ===
+                  booking.id
+                    ? data.booking!
+                    : item,
+              ),
+          );
+        }
+
+        setMessage(
+          data.message ||
+            `Đã hủy combo ${bookingCombo.combo.name}.`,
+        );
+      } catch (error) {
+        console.error(error);
+
+        setError(
+          'Có lỗi xảy ra khi hủy combo.',
+        );
+      } finally {
+        setLoadingComboId('');
       }
     };
 
@@ -690,6 +916,13 @@ export function BookingManagementForm() {
                   TicketStatus.ACTIVE,
               );
 
+            const usedTickets =
+              booking.tickets.filter(
+                (ticket) =>
+                  ticket.status ===
+                  TicketStatus.USED,
+              );
+
             const canceledTickets =
               booking.tickets.filter(
                 (ticket) =>
@@ -790,15 +1023,33 @@ export function BookingManagementForm() {
                   </span>
 
                   <span className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-emerald-300">
-                    Còn hiệu lực:{' '}
+                    Vé còn hiệu lực:{' '}
                     {activeTickets.length}
                   </span>
+
+                  {usedTickets.length > 0 ? (
+                    <span className="rounded-xl border border-sky-400/20 bg-sky-500/5 px-3 py-2 text-sky-300">
+                      Vé đã dùng:{' '}
+                      {usedTickets.length}
+                    </span>
+                  ) : null}
 
                   {canceledTickets.length >
                   0 ? (
                     <span className="rounded-xl border border-rose-400/20 bg-rose-500/5 px-3 py-2 text-rose-300">
-                      Đã hủy:{' '}
+                      Vé đã hủy:{' '}
                       {canceledTickets.length}
+                    </span>
+                  ) : null}
+
+                  {(booking.combos ?? []).length > 0 ? (
+                    <span className="rounded-xl border border-violet-400/20 bg-violet-500/5 px-3 py-2 text-violet-200">
+                      🍿 {(booking.combos ?? []).length} combo
+                      {' · '}
+                      còn{' '}
+                      {(booking.combos ?? []).filter(
+                        (c) => c.status === TicketStatus.ACTIVE,
+                      ).length}
                     </span>
                   ) : null}
 
@@ -990,6 +1241,12 @@ export function BookingManagementForm() {
                             const isCanceled =
                               ticket.status ===
                               TicketStatus.CANCELED;
+                            const isUsed =
+                              ticket.status ===
+                              TicketStatus.USED;
+                            const canCancelTicket =
+                              ticket.status ===
+                              TicketStatus.ACTIVE;
 
                             const ticketLoading =
                               loadingTicketId ===
@@ -1000,11 +1257,9 @@ export function BookingManagementForm() {
                                 key={
                                   ticket.id
                                 }
-                                className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${
-                                  isCanceled
-                                    ? 'border-rose-400/20 bg-rose-500/5'
-                                    : 'border-white/10 bg-slate-950/40'
-                                }`}
+                                className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${getItemRowClass(
+                                  ticket.status,
+                                )}`}
                               >
                                 <div>
                                   <div className="flex flex-wrap items-center gap-2">
@@ -1012,7 +1267,9 @@ export function BookingManagementForm() {
                                       className={`font-semibold ${
                                         isCanceled
                                           ? 'text-slate-400 line-through'
-                                          : 'text-white'
+                                          : isUsed
+                                            ? 'text-slate-300'
+                                            : 'text-white'
                                       }`}
                                     >
                                       Ghế{' '}
@@ -1021,15 +1278,15 @@ export function BookingManagementForm() {
                                       }
                                     </span>
 
-                                    {isCanceled ? (
-                                      <span className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2 py-1 text-[11px] font-semibold text-rose-300">
-                                        Đã hủy
-                                      </span>
-                                    ) : (
-                                      <span className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-300">
-                                        Còn hiệu lực
-                                      </span>
-                                    )}
+                                    <span
+                                      className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${getItemStatusBadgeClass(
+                                        ticket.status,
+                                      )}`}
+                                    >
+                                      {getItemStatusLabel(
+                                        ticket.status,
+                                      )}
+                                    </span>
                                   </div>
 
                                   <div className="mt-1 text-xs text-slate-500">
@@ -1067,9 +1324,15 @@ export function BookingManagementForm() {
                                 </div>
 
                                 {canEdit &&
-                                !isCanceled &&
-                                activeTickets.length >
-                                  1 ? (
+                                canCancelTicket &&
+                                !(
+                                  activeTickets.length <= 1 &&
+                                  (booking.combos ?? []).filter(
+                                    (c) =>
+                                      c.status ===
+                                      TicketStatus.ACTIVE,
+                                  ).length === 0
+                                ) ? (
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1095,6 +1358,119 @@ export function BookingManagementForm() {
                         )}
                       </div>
                     </div>
+
+                    {/* COMBOS */}
+
+                    {(booking.combos ?? []).length > 0 ? (
+                      <div>
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Danh sách combo
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            Có thể hủy từng combo (nếu còn mục khác hiệu lực).
+                          </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                          {(booking.combos ?? []).map((item) => {
+                            const isCanceled =
+                              item.status === TicketStatus.CANCELED;
+                            const isUsed =
+                              item.status === TicketStatus.USED;
+                            const comboLoading =
+                              loadingComboId === item.id;
+                            const activeComboCount =
+                              (booking.combos ?? []).filter(
+                                (c) =>
+                                  c.status === TicketStatus.ACTIVE,
+                              ).length;
+                            const canCancelThisCombo =
+                              canEdit &&
+                              item.status === TicketStatus.ACTIVE &&
+                              !(
+                                activeTickets.length === 0 &&
+                                activeComboCount <= 1
+                              );
+
+                            return (
+                              <div
+                                key={item.id}
+                                className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${
+                                  isCanceled
+                                    ? 'border-rose-400/20 bg-rose-500/5'
+                                    : isUsed
+                                      ? 'border-sky-400/20 bg-sky-500/5'
+                                      : 'border-violet-400/20 bg-violet-500/5'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`font-semibold ${
+                                        isCanceled
+                                          ? 'text-slate-400 line-through'
+                                          : isUsed
+                                            ? 'text-slate-300'
+                                            : 'text-white'
+                                      }`}
+                                    >
+                                      {item.combo.name} × {item.quantity}
+                                    </span>
+
+                                    <span
+                                      className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${getItemStatusBadgeClass(
+                                        item.status,
+                                      )}`}
+                                    >
+                                      {getItemStatusLabel(item.status)}
+                                    </span>
+                                  </div>
+
+                                  <div className="mt-1 text-xs text-slate-500">
+                                    Giá:{' '}
+                                    {formatMoney(
+                                      Number(item.unitPrice) *
+                                        Number(item.quantity),
+                                    )}
+                                  </div>
+
+                                  {isCanceled ? (
+                                    <div className="mt-2 text-xs font-semibold text-purple-300">
+                                      Đã hoàn:{' '}
+                                      {formatMoney(
+                                        Number(item.unitPrice) *
+                                          Number(item.quantity),
+                                      )}
+                                    </div>
+                                  ) : null}
+                                </div>
+
+                                {canCancelThisCombo ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleCancelCombo(
+                                        booking,
+                                        item,
+                                      )
+                                    }
+                                    disabled={
+                                      comboLoading || isLoading
+                                    }
+                                    className="rounded-xl border border-rose-400/40 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {comboLoading
+                                      ? 'Đang hủy...'
+                                      : 'Hủy combo này'}
+                                  </button>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
