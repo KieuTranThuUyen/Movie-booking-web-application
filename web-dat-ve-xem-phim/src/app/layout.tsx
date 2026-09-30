@@ -6,6 +6,7 @@ import { SiteHeader } from '@/components/layout/site-header';
 import { SiteFooter } from '@/components/layout/site-footer';
 import { AdminSidebarWrapper } from '@/components/layout/admin-sidebar-wrapper';
 import { AppSessionProvider } from '@/components/layout/session-provider';
+import { AiChatbot } from '@/components/ai/ai-chatbot';
 
 import './globals.css';
 
@@ -53,6 +54,9 @@ export default function RootLayout({
           <div className="print:hidden">
             <SiteFooter />
           </div>
+
+          {/* AI Chatbot – chỉ thêm, không đổi logic cũ */}
+          <AiChatbot />
 
         </AppSessionProvider>
       </body>

@@ -1,4 +1,5 @@
 import { MovieCard } from '@/components/movie/movie-card';
+import { unifiedMovieSearch } from '@/lib/ai/search-movies';
 import { prisma } from '@/lib/db/prisma';
 
 type MoviesPageProps = {
@@ -16,37 +17,33 @@ export default async function MoviesPage({
   const search = params.search?.trim() ?? '';
   const status = params.status?.trim() ?? '';
 
-  const where: {
-    title?: {
-      contains: string;
-    };
-    isNowShowing?: boolean;
-    isComingSoon?: boolean;
-  } = {};
+  let movies: Awaited<ReturnType<typeof prisma.movie.findMany>>;
+  let interpretation = '';
 
   if (search) {
-    where.title = {
-      contains: search,
-    };
-  }
+    const result = await unifiedMovieSearch(search, 40);
+    movies = result.movies;
+    interpretation = result.interpretation;
+  } else {
+    const where: {
+      isNowShowing?: boolean;
+      isComingSoon?: boolean;
+    } = {};
 
-  if (status === 'now' || status === 'dang-chieu') {
-    where.isNowShowing = true;
-  } else if (status === 'coming' || status === 'sap-chieu') {
-    where.isComingSoon = true;
-  }
+    if (status === 'now' || status === 'dang-chieu') {
+      where.isNowShowing = true;
+    } else if (status === 'coming' || status === 'sap-chieu') {
+      where.isComingSoon = true;
+    }
 
-  const movies = await prisma.movie.findMany({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    orderBy: [
-      {
-        isNowShowing: 'desc',
-      },
-      {
-        releaseDate: 'desc',
-      },
-    ],
-  });
+    movies = await prisma.movie.findMany({
+      where: Object.keys(where).length > 0 ? where : undefined,
+      orderBy: [
+        { isNowShowing: 'desc' },
+        { releaseDate: 'desc' },
+      ],
+    });
+  }
 
   const title =
     status === 'now' || status === 'dang-chieu'
@@ -57,19 +54,17 @@ export default async function MoviesPage({
           ? 'Kết quả tìm kiếm'
           : 'Danh sách phim';
 
-  const subtitle =
-    status === 'now' || status === 'dang-chieu'
+  const subtitle = search
+    ? interpretation || `Kết quả cho "${search}"`
+    : status === 'now' || status === 'dang-chieu'
       ? 'Tất cả phim đang chiếu tại rạp'
       : status === 'coming' || status === 'sap-chieu'
         ? 'Tất cả phim sắp ra mắt'
-        : search
-          ? `Các phim phù hợp với "${search}"`
-          : 'Phim đang chiếu và sắp chiếu';
+        : 'Phim đang chiếu và sắp chiếu';
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-10">
       <div className="mx-auto max-w-7xl sm:px-2 lg:px-4">
-        {/* Tiêu đề */}
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
             Phim
@@ -84,26 +79,21 @@ export default async function MoviesPage({
           </p>
         </div>
 
-        {/* Danh sách phim */}
         {movies.length === 0 ? (
           <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
             <p className="text-lg font-medium text-white">
               Không tìm thấy phim phù hợp
             </p>
-
             <p className="mt-2 text-sm text-slate-400">
               {search
-                ? 'Thử tìm kiếm với tên phim khác.'
+                ? 'Thử từ khóa hoặc mô tả khác trên thanh tìm kiếm phía trên.'
                 : 'Hiện chưa có phim trong danh mục này.'}
             </p>
           </div>
         ) : (
           <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {movies.map((movie) => (
-              <MovieCard
-                key={movie.id}
-                movie={movie}
-              />
+              <MovieCard key={movie.id} movie={movie} />
             ))}
           </div>
         )}

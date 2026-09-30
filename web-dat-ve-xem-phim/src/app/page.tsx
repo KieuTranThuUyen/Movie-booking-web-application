@@ -7,6 +7,7 @@ import {
   type ScheduleShowtime,
 } from '@/components/movie/movie-schedule';
 import { PosterBanner } from '@/components/movie/poster-banner';
+import { AiRecommend } from '@/components/ai/ai-recommend';
 import { prisma } from '@/lib/db/prisma';
 import type { Movie } from '@/lib/types';
 
@@ -147,6 +148,11 @@ export default async function HomePage() {
         showtimes={showtimes}
         cities={cities}
       />
+
+      {/* AI đề xuất phim */}
+      <section className="mt-16">
+        <AiRecommend title="AI đề xuất phim cho bạn" />
+      </section>
 
       {/* ĐANG CHIẾU – hiển thị 3 phim + mũi tên chuyển */}
       <section className="mt-16 space-y-6">
