@@ -526,6 +526,152 @@ export async function getPopularMovies(
     .filter(Boolean) as { movie: MovieAi; bookingCount: number }[];
 }
 
+
+/** Câu hỏi / yêu cầu đặt vé */
+export function isBookingQuestion(message: string): boolean {
+  const q = message.toLowerCase().normalize('NFC');
+  return (
+    /đặt\s*vé|mua\s*vé|book(ing)?|chọn\s*ghế|giữ\s*ghế/.test(q) ||
+    /hướng\s*dẫn\s*(đặt|mua)/.test(q) ||
+    /muốn\s*(đặt|mua|xem)\s*vé/.test(q) ||
+    /đặt\s*(cho|giúp|hộ)/.test(q) ||
+    /làm\s*sao\s*(để\s*)?(đặt|mua)\s*vé/.test(q) ||
+    /đặt\s*phim/.test(q)
+  );
+}
+
+/**
+ * Trợ lý đặt vé: gợi ý phim + suất + link đặt.
+ * Không đặt hộ (cần chọn ghế/thanh toán trên web).
+ */
+export async function buildBookingAssistantReply(
+  message: string,
+  movies: MovieAi[],
+): Promise<{ reply: string; movies: MovieAi[] }> {
+  const titled = findMoviesByTitle(message, movies, 3);
+  const genres = extractGenreFromMessage(message);
+  const intent = parseTimeIntent(message);
+
+  // Có tên phim cụ thể
+  if (titled.length > 0) {
+    const m = titled[0];
+    let showtimes = await getShowtimesByIntent(
+      intent.kind === 'none' ? { kind: 'today' } : intent,
+      20,
+    );
+    showtimes = showtimes.filter((st) => st.movie.id === m.id);
+
+    // Nếu hôm nay không có, thử ngày mai
+    if (showtimes.length === 0 && intent.kind === 'none') {
+      showtimes = (
+        await getShowtimesByIntent({ kind: 'tomorrow' }, 20)
+      ).filter((st) => st.movie.id === m.id);
+    }
+
+    const lines: string[] = [
+      `Mình hỗ trợ đặt vé phim: ${m.title} (${m.genre}, ${m.ageRating}).`,
+      '',
+    ];
+
+    if (showtimes.length > 0) {
+      lines.push('Một số suất gần đây:');
+      const seen = new Set<string>();
+      let n = 0;
+      for (const st of showtimes) {
+        const t = formatVnTime(st.startTime);
+        const key = `${t}-${st.cinemaName}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        lines.push(`- ${t} · ${st.cinemaName} (${st.format})`);
+        n++;
+        if (n >= 5) break;
+      }
+      lines.push('');
+    } else {
+      lines.push(
+        'Hiện chưa thấy suất phù hợp khung thời gian này. Bạn xem thêm lịch trên trang Suất chiếu.',
+        '',
+      );
+    }
+
+    lines.push(
+      `Cách đặt vé nhanh:`,
+      `1. Vào trang phim: /phim/${m.slug}`,
+      `2. Chọn suất chiếu → chọn ghế → thanh toán`,
+      `3. Hoặc mở /suat-chieu để xem toàn bộ lịch`,
+      '',
+      'Bạn muốn suất hôm nay, ngày mai, hay rạp cụ thể?',
+    );
+
+    return { reply: lines.join('\n'), movies: [m] };
+  }
+
+  // Có thể loại / thời gian → gợi ý phim + hướng dẫn
+  if (intent.kind !== 'none' && intent.kind !== 'now_showing') {
+    let sts = await getShowtimesByIntent(intent, 30);
+    if (genres.length) {
+      sts = sts.filter((st) =>
+        genres.some((g) => st.movie.genre.toLowerCase().includes(g)),
+      );
+    }
+    if (sts.length === 0) {
+      return {
+        reply:
+          'Chưa có suất khớp yêu cầu đặt vé. Bạn thử khung giờ khác, hoặc vào /suat-chieu xem lịch đầy đủ nhé.',
+        movies: [],
+      };
+    }
+    const byMovie = new Map<string, MovieAi>();
+    for (const st of sts) byMovie.set(st.movie.id, st.movie);
+    const list = Array.from(byMovie.values()).slice(0, 5);
+    const lines = list.map(
+      (m, i) => `${i + 1}. ${m.title} (${m.genre}) → /phim/${m.slug}`,
+    );
+    return {
+      reply: `Các phim có suất để đặt vé:\n\n${lines.join('\n')}\n\nChọn phim → mở link → chọn suất & ghế. Bạn muốn đặt phim nào?`,
+      movies: list,
+    };
+  }
+
+  // Hướng dẫn chung
+  if (genres.length) {
+    const hits = movies
+      .filter(
+        (m) =>
+          m.isNowShowing &&
+          genres.some((g) => m.genre.toLowerCase().includes(g)),
+      )
+      .slice(0, 5);
+    if (hits.length) {
+      const lines = hits.map(
+        (m, i) => `${i + 1}. ${m.title} → /phim/${m.slug}`,
+      );
+      return {
+        reply: `Phim ${genres.join(', ')} đang chiếu – chọn phim để đặt vé:\n\n${lines.join('\n')}\n\nQuy trình: chọn phim → suất chiếu → ghế → thanh toán. Bạn muốn đặt phim nào?`,
+        movies: hits,
+      };
+    }
+  }
+
+  return {
+    reply: [
+      'Mình là trợ lý đặt vé DatVeXemPhim. Có thể giúp bạn:',
+      '- Gợi ý phim theo thể loại / tâm trạng',
+      '- Xem suất hôm nay / ngày mai / khung giờ',
+      '- Hướng dẫn đặt vé từng bước',
+      '',
+      'Quy trình đặt vé:',
+      '1. Chọn phim (trang /phim hoặc nói tên phim cho mình)',
+      '2. Chọn suất chiếu',
+      '3. Chọn ghế',
+      '4. Thanh toán',
+      '',
+      'Bạn muốn đặt phim gì, hoặc xem suất hôm nay?',
+    ].join('\n'),
+    movies: movies.filter((m) => m.isNowShowing).slice(0, 4),
+  };
+}
+
 export async function buildFallbackChatReply(
   message: string,
   movies: MovieAi[],
@@ -536,6 +682,11 @@ export async function buildFallbackChatReply(
   const intent = parseTimeIntent(message);
   const genres = extractGenreFromMessage(message);
   const genreLabel = genres.length ? genres.join(', ') : '';
+
+  // --- Trợ lý đặt vé ---
+  if (isBookingQuestion(message)) {
+    return buildBookingAssistantReply(message, movies);
+  }
 
   // --- Hỏi mô tả / chi tiết 1 phim cụ thể ---
   const titled = findMoviesByTitle(message, movies, 3);
@@ -598,9 +749,54 @@ export async function buildFallbackChatReply(
 
   // --- Hỏi suất / hôm nay / mai / giờ ---
   if (intent.kind !== 'none' && intent.kind !== 'now_showing') {
+    // Nếu user đã nêu tên phim cụ thể → trả suất của phim đó (để chọn)
+    const titled = findMoviesByTitle(message, movies, 3);
+    const nameInMsg =
+      titled.length > 0 &&
+      (isDetailQuestion(message) ||
+        normalizeTitle(message).includes(
+          normalizeTitle(titled[0].title).slice(0, 10),
+        ) ||
+        /chọn\s*phim|suất\s*của|các\s*suất/.test(message.toLowerCase()));
+
+    if (titled.length > 0 && nameInMsg) {
+      const m = titled[0];
+      let showtimes = await getShowtimesByIntent(intent, 40);
+      showtimes = showtimes.filter((st) => st.movie.id === m.id);
+      if (genres.length) {
+        // keep only this movie if genre matches or ignore genre when named
+      }
+      if (showtimes.length === 0) {
+        return {
+          reply: `Hiện chưa có suất chiếu của "${m.title}" ${
+            intent.kind === 'tomorrow' ||
+            (intent.kind === 'hour' && intent.dayOffset === 1)
+              ? 'ngày mai'
+              : intent.kind === 'hour'
+                ? `khoảng ${intent.hour}h`
+                : 'hôm nay'
+          }. Bạn thử ngày khác hoặc chọn phim khác nhé.`,
+          movies: [m],
+        };
+      }
+      const lines = showtimes.slice(0, 8).map((st, i) => {
+        const t = formatVnTime(st.startTime);
+        return `${i + 1}. ${t} – ${st.cinemaName} (${st.format})`;
+      });
+      const dayLabel =
+        intent.kind === 'tomorrow' ||
+        (intent.kind === 'hour' && intent.dayOffset === 1)
+          ? 'ngày mai'
+          : 'hôm nay';
+      return {
+        reply: `Suất chiếu "${m.title}" ${dayLabel}:\n\n${lines.join('\n')}\n\nGõ số suất (vd: "Chọn suất 2") hoặc giờ để đặt vé.`,
+        movies: [m],
+        // showtime meta encoded in reply; chat route booking flow handles "Chọn suất"
+      };
+    }
+
     let showtimes = await getShowtimesByIntent(intent, 60);
 
-    // Lọc theo thể loại nếu user có nêu (vd: "kinh dị ngày mai")
     if (genres.length) {
       showtimes = showtimes.filter((st) =>
         movieMatchesGenres(st.movie, genres),
@@ -621,52 +817,25 @@ export async function buildFallbackChatReply(
     if (showtimes.length === 0) {
       const genrePart = genreLabel ? ` thể loại ${genreLabel}` : '';
       return {
-        reply: `Hiện chưa có suất chiếu nào ${timeLabel}${genrePart} trong hệ thống. Bạn thử hỏi khung giờ khác, hoặc xem lịch tại trang Suất chiếu nhé.`,
-        movies: [], // Không hiện card phim khi không có suất
+        reply: `Hiện chưa có suất chiếu nào ${timeLabel}${genrePart} trong hệ thống. Bạn thử khung giờ khác, hoặc xem lịch tại trang Suất chiếu nhé.`,
+        movies: [],
       };
     }
 
-    const byMovie = new Map<
-      string,
-      { movie: MovieAi; times: { t: string; cinema: string }[] }
-    >();
+    // Chỉ danh sách PHIM (không liệt kê giờ trong text — user chọn phim rồi mới xem suất)
+    const byMovie = new Map<string, MovieAi>();
     for (const st of showtimes) {
-      const key = st.movie.id;
-      if (!byMovie.has(key)) {
-        byMovie.set(key, { movie: st.movie, times: [] });
-      }
-      const entry = byMovie.get(key)!;
-      if (entry.times.length < 4) {
-        entry.times.push({
-          t: formatVnTime(st.startTime),
-          cinema: st.cinemaName,
-        });
-      }
+      if (!byMovie.has(st.movie.id)) byMovie.set(st.movie.id, st.movie);
     }
+    const uniqueMovies = Array.from(byMovie.values()).slice(0, 12);
 
-    const groups = Array.from(byMovie.values()).slice(0, 6);
-
-    let head: string;
-    if (intent.kind === 'hour') {
-      head = genreLabel
-        ? `Suất chiếu khoảng ${intent.hour}h ${dayLabel} – ${genreLabel}:`
-        : `Các suất chiếu khoảng ${intent.hour}h ${dayLabel}:`;
-    } else {
-      head = genreLabel
-        ? `Phim ${genreLabel} có suất chiếu ${dayLabel}:`
-        : `Phim có suất chiếu ${dayLabel}:`;
-    }
-
-    const lines = groups.map((g, i) => {
-      const slots = g.times
-        .map((x) => `${x.t} (${x.cinema})`)
-        .join(', ');
-      return `${i + 1}. ${g.movie.title} (${g.movie.genre}, ${g.movie.ageRating}) – ${slots}`;
-    });
+    const head = genreLabel
+      ? `Có ${uniqueMovies.length} phim ${genreLabel} có suất ${timeLabel}. Chọn một phim bên dưới để xem các suất chiếu.`
+      : `Có ${uniqueMovies.length} phim có suất ${timeLabel}. Chọn một phim bên dưới để xem các suất chiếu.`;
 
     return {
-      reply: `${head}\n\n${lines.join('\n')}\n\nBạn chọn phim nào để đặt vé, hoặc cần lọc rạp khác không?`,
-      movies: groups.map((g) => g.movie),
+      reply: head,
+      movies: uniqueMovies,
     };
   }
 
