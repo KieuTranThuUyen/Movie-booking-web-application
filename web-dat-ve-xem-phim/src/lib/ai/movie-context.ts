@@ -227,16 +227,41 @@ export type TimeIntent =
   | { kind: 'today' }
   | { kind: 'tomorrow' }
   | { kind: 'hour'; dayOffset: number; hour: number; hourEnd?: number }
+  /** Ngày cụ thể theo offset từ hôm nay (thứ trong tuần / ngày 08 / 8/10…) */
+  | { kind: 'day'; dayOffset: number; label: string }
   | { kind: 'now_showing' }
   | { kind: 'none' };
+
+/** Offset ngày VN từ hôm nay tới weekday (0=CN … 6=T7 theo JS) */
+function weekdayOffsetFromNow(targetJsDay: number): number {
+  const p = vnNowParts();
+  // Noon UTC của ngày lịch VN → getUTCDay ổn định, không lệch múi giờ
+  const noon = new Date(Date.UTC(p.y, p.m - 1, p.d, 12, 0, 0));
+  const currentJsDay = noon.getUTCDay();
+  return (targetJsDay - currentJsDay + 7) % 7;
+}
+
+/** Offset tới ngày trong tháng (1–31); nếu đã qua thì tháng sau */
+function dayOfMonthOffsetFromNow(dayOfMonth: number): number | null {
+  if (dayOfMonth < 1 || dayOfMonth > 31) return null;
+  const p = vnNowParts();
+  const startToday = Date.UTC(p.y, p.m - 1, p.d);
+  const startThis = Date.UTC(p.y, p.m - 1, dayOfMonth);
+  if (startThis >= startToday) {
+    return Math.round((startThis - startToday) / 86400000);
+  }
+  const startNext = Date.UTC(p.y, p.m, dayOfMonth);
+  return Math.round((startNext - startToday) / 86400000);
+}
 
 
 /** Trích thể loại từ câu hỏi (kinh dị, hài, hành động…) */
 export function extractGenreFromMessage(message: string): string[] {
   const q = message.toLowerCase().normalize('NFC');
+  // keys ngắn (≤3 ký tự) dùng word-boundary để tránh "ma" khớp trong "mai", "hài" trong từ khác...
   const genres: { keys: string[]; label: string }[] = [
-    { keys: ['kinh dị', 'kinhdi', 'horror', 'ma', 'quỷ', 'quỷ'], label: 'kinh dị' },
-    { keys: ['hài', 'hài hước', 'comedy', 'hài kịch'], label: 'hài' },
+    { keys: ['kinh dị', 'kinhdi', 'horror', 'phim ma', 'quỷ'], label: 'kinh dị' },
+    { keys: ['hài hước', 'hài kịch', 'comedy', 'hài'], label: 'hài' },
     { keys: ['hành động', 'action', 'hànhđộng'], label: 'hành động' },
     { keys: ['tình cảm', 'lãng mạn', 'romance', 'tìnhcảm'], label: 'tình cảm' },
     { keys: ['hoạt hình', 'animation', 'anime', 'hoạthình'], label: 'hoạt hình' },
@@ -248,7 +273,18 @@ export function extractGenreFromMessage(message: string): string[] {
   ];
   const found: string[] = [];
   for (const g of genres) {
-    if (g.keys.some((k) => q.includes(k))) found.push(g.label);
+    const hit = g.keys.some((k) => {
+      if (k.length <= 3) {
+        // từ ngắn: khớp cả từ, không khớp substring (tránh "ma" trong "mai")
+        const re = new RegExp(
+          `(^|[^\\p{L}\\p{N}])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\p{L}\\p{N}]|$)`,
+          'iu',
+        );
+        return re.test(q);
+      }
+      return q.includes(k);
+    });
+    if (hit) found.push(g.label);
   }
   return found;
 }
@@ -261,7 +297,15 @@ function movieMatchesGenres(movie: MovieAi, genres: string[]): boolean {
 
 /** Phân tích câu hỏi có nhắc thời gian chiếu không */
 export function parseTimeIntent(message: string): TimeIntent {
-  const q = message.toLowerCase().normalize('NFC');
+  // Chuẩn hóa lỗi chính tả phổ biến: mau→mai, hom nay→hôm nay
+  const q = message
+    .toLowerCase()
+    .normalize('NFC')
+    .replace(/\bngày\s*mau\b/g, 'ngày mai')
+    .replace(/\bngay\s*mai\b/g, 'ngày mai')
+    .replace(/\bngay\s*mau\b/g, 'ngày mai')
+    .replace(/\bhom\s*nay\b/g, 'hôm nay')
+    .replace(/\bhôm\s*nayy\b/g, 'hôm nay');
 
   const hasToday =
     /\bhôm\s*nay\b/.test(q) ||
@@ -288,6 +332,60 @@ export function parseTimeIntent(message: string): TimeIntent {
     }
   }
 
+  // Thứ trong tuần: T2–T7, CN, thứ 2…thứ 7, thứ hai…chủ nhật
+  const weekdayMap: { re: RegExp; jsDay: number; label: string }[] = [
+    { re: /\b(t2|thứ\s*2|thu\s*2|thứ\s*hai)\b/, jsDay: 1, label: 'thứ Hai' },
+    { re: /\b(t3|thứ\s*3|thu\s*3|thứ\s*ba)\b/, jsDay: 2, label: 'thứ Ba' },
+    { re: /\b(t4|thứ\s*4|thu\s*4|thứ\s*tư|thứ\s*tu)\b/, jsDay: 3, label: 'thứ Tư' },
+    { re: /\b(t5|thứ\s*5|thu\s*5|thứ\s*năm|thứ\s*nam)\b/, jsDay: 4, label: 'thứ Năm' },
+    { re: /\b(t6|thứ\s*6|thu\s*6|thứ\s*sáu|thứ\s*sau)\b/, jsDay: 5, label: 'thứ Sáu' },
+    { re: /\b(t7|thứ\s*7|thu\s*7|thứ\s*bảy|thứ\s*bay)\b/, jsDay: 6, label: 'thứ Bảy' },
+    { re: /\b(cn|chủ\s*nhật|chu\s*nhat)\b/, jsDay: 0, label: 'Chủ nhật' },
+  ];
+  for (const w of weekdayMap) {
+    if (w.re.test(q)) {
+      const offset = weekdayOffsetFromNow(w.jsDay);
+      return { kind: 'day', dayOffset: offset, label: w.label };
+    }
+  }
+
+  // Ngày cụ thể: "ngày 08", "ngày 8", "8/10", "08-10", "ngày 8 tháng 10"
+  const dmy = q.match(
+    /\b(?:ngày\s*)?(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?\b/,
+  );
+  if (dmy) {
+    const day = Number(dmy[1]);
+    const month = Number(dmy[2]);
+    const p = vnNowParts();
+    let year = dmy[3] ? Number(dmy[3]) : p.y;
+    if (year < 100) year += 2000;
+    const startTarget = Date.UTC(year, month - 1, day);
+    const startToday = Date.UTC(p.y, p.m - 1, p.d);
+    const offset = Math.round((startTarget - startToday) / 86400000);
+    if (offset >= 0 && offset <= 60) {
+      return {
+        kind: 'day',
+        dayOffset: offset,
+        label: `ngày ${day}/${month}`,
+      };
+    }
+  }
+  const dayOnly = q.match(/\bngày\s*0?(\d{1,2})\b/);
+  if (dayOnly) {
+    const dom = Number(dayOnly[1]);
+    // Tránh nhầm "ngày 1 người" / giờ — chỉ nhận khi không có "người|vé|ghế"
+    if (dom >= 1 && dom <= 31 && !/\bngày\s*0?\d{1,2}\s*(người|vé|ghế)/.test(q)) {
+      const offset = dayOfMonthOffsetFromNow(dom);
+      if (offset !== null && offset >= 0 && offset <= 45) {
+        return {
+          kind: 'day',
+          dayOffset: offset,
+          label: `ngày ${dom}`,
+        };
+      }
+    }
+  }
+
   if (hour !== null && (hasToday || hasTomorrow || /chiếu|suất|lúc|tầm/.test(q))) {
     return {
       kind: 'hour',
@@ -306,6 +404,17 @@ export function parseTimeIntent(message: string): TimeIntent {
   }
   if (/đang\s*chiếu|now\s*showing/.test(q)) return { kind: 'now_showing' };
   return { kind: 'none' };
+}
+
+/** Nhãn ngày hiển thị từ TimeIntent */
+export function formatIntentDayLabel(intent: TimeIntent): string {
+  if (intent.kind === 'tomorrow') return 'ngày mai';
+  if (intent.kind === 'today') return 'hôm nay';
+  if (intent.kind === 'day') return intent.label;
+  if (intent.kind === 'hour') {
+    return intent.dayOffset === 1 ? 'ngày mai' : 'hôm nay';
+  }
+  return 'hôm nay';
 }
 
 /** Query suất chiếu theo intent thời gian */
@@ -328,7 +437,15 @@ export async function getShowtimesByIntent(
     const r = vnDayRangeUtc(1);
     start = r.start;
     end = r.end;
+  } else if (intent.kind === 'day') {
+    const r = vnDayRangeUtc(intent.dayOffset);
+    start =
+      intent.dayOffset === 0
+        ? new Date(Math.max(r.start.getTime(), Date.now()))
+        : r.start;
+    end = r.end;
   } else {
+    // hour
     const p = vnNowParts();
     const day = p.d + intent.dayOffset;
     const hStart = intent.hour - 1;
@@ -726,24 +843,43 @@ export async function buildFallbackChatReply(
   if (isPopularQuestion(message)) {
     const popular = await getPopularMovies(6);
     if (popular.length === 0) {
-      // Không có booking → fallback đang chiếu
       const showing = movies.filter((m) => m.isNowShowing).slice(0, 5);
       return {
         reply: showing.length
-          ? `Hiện chưa đủ dữ liệu đặt vé để xếp hạng. Một số phim đang chiếu:\n\n${showing
-              .map((m, i) => `${i + 1}. ${m.title} (${m.genre}, ${m.ageRating})`)
-              .join('\n')}`
+          ? 'Hiện chưa đủ dữ liệu đặt vé để xếp hạng. Một số phim đang chiếu:'
           : 'Hiện chưa có dữ liệu đặt vé để thống kê phim nhiều người đặt nhất.',
         movies: showing,
       };
     }
-    const lines = popular.map(
-      (p, i) =>
-        `${i + 1}. ${p.movie.title} (${p.movie.genre}, ${p.movie.ageRating}) – ${p.bookingCount} đơn đặt`,
-    );
+    const popMovies = popular.map((p) => p.movie);
+
+    // "phim hot có suất ngày mai / T5 / ngày 08" → chỉ giữ phim hot CÓ suất ngày đó
+    if (intent.kind !== 'none' && intent.kind !== 'now_showing') {
+      const dayLabel = formatIntentDayLabel(intent);
+      let sts = await getShowtimesByIntent(intent, 100);
+      const popIds = new Set(popMovies.map((m) => m.id));
+      sts = sts.filter((st) => popIds.has(st.movie.id));
+      const byMovie = new Map<string, MovieAi>();
+      for (const st of sts) {
+        if (!byMovie.has(st.movie.id)) byMovie.set(st.movie.id, st.movie);
+      }
+      // Giữ thứ tự ranking hot
+      const ordered = popMovies.filter((m) => byMovie.has(m.id));
+      if (ordered.length === 0) {
+        return {
+          reply: `Top phim hot hiện chưa có suất ${dayLabel}. Bạn thử ngày khác nhé.`,
+          movies: popMovies.slice(0, 4),
+        };
+      }
+      return {
+        reply: `Top phim hot có suất ${dayLabel}:`,
+        movies: ordered,
+      };
+    }
+
     return {
-      reply: `Top phim được đặt nhiều nhất trên hệ thống:\n\n${lines.join('\n')}\n\nBạn muốn xem chi tiết hoặc suất chiếu phim nào?`,
-      movies: popular.map((p) => p.movie),
+      reply: 'Top phim được đặt nhiều nhất trên hệ thống:',
+      movies: popMovies,
     };
   }
 
@@ -760,38 +896,37 @@ export async function buildFallbackChatReply(
         /chọn\s*phim|suất\s*của|các\s*suất/.test(message.toLowerCase()));
 
     if (titled.length > 0 && nameInMsg) {
-      const m = titled[0];
-      let showtimes = await getShowtimesByIntent(intent, 40);
-      showtimes = showtimes.filter((st) => st.movie.id === m.id);
-      if (genres.length) {
-        // keep only this movie if genre matches or ignore genre when named
-      }
+      const wantsMultiple =
+        /cả\s*(2|hai|hai\s*phim)|tất\s*cả|cả\s*các\s*phim|\svà\s+/.test(
+          message.toLowerCase(),
+        );
+      const selected = wantsMultiple ? titled : [titled[0]];
+      const movieIds = new Set(selected.map((m) => m.id));
+      let showtimes = await getShowtimesByIntent(intent, 60);
+      showtimes = showtimes.filter((st) => movieIds.has(st.movie.id));
+      const dayLabel =
+        intent.kind === 'hour'
+          ? `khoảng ${intent.hour}h ${formatIntentDayLabel(intent)}`
+          : formatIntentDayLabel(intent);
       if (showtimes.length === 0) {
+        const names = selected.map((m) => `"${m.title}"`).join(', ');
         return {
-          reply: `Hiện chưa có suất chiếu của "${m.title}" ${
-            intent.kind === 'tomorrow' ||
-            (intent.kind === 'hour' && intent.dayOffset === 1)
-              ? 'ngày mai'
-              : intent.kind === 'hour'
-                ? `khoảng ${intent.hour}h`
-                : 'hôm nay'
-          }. Bạn thử ngày khác hoặc chọn phim khác nhé.`,
-          movies: [m],
+          reply: `Hiện chưa có suất chiếu của ${names} ${dayLabel}. Bạn thử ngày khác hoặc chọn phim khác nhé.`,
+          movies: selected,
         };
       }
-      const lines = showtimes.slice(0, 8).map((st, i) => {
+      const lines = showtimes.slice(0, 12).map((st, i) => {
         const t = formatVnTime(st.startTime);
-        return `${i + 1}. ${t} – ${st.cinemaName} (${st.format})`;
+        return `${i + 1}. ${t} – ${st.cinemaName} · ${st.movie.title} (${st.format})`;
       });
-      const dayLabel =
-        intent.kind === 'tomorrow' ||
-        (intent.kind === 'hour' && intent.dayOffset === 1)
-          ? 'ngày mai'
-          : 'hôm nay';
+      const replyTitle =
+        selected.length === 1
+          ? `"${selected[0].title}"`
+          : selected.map((m) => `"${m.title}"`).join(' và ');
       return {
-        reply: `Suất chiếu "${m.title}" ${dayLabel}:\n\n${lines.join('\n')}\n\nGõ số suất (vd: "Chọn suất 2") hoặc giờ để đặt vé.`,
-        movies: [m],
-        // showtime meta encoded in reply; chat route booking flow handles "Chọn suất"
+        reply: `Suất chiếu ${replyTitle} ${dayLabel}:\n\n${lines.join('\n')}\n\nGõ số suất (vd: "Chọn suất 2") hoặc giờ để đặt vé.`,
+        // Không trả movies khi đã liệt kê suất để UI không hiện lại thẻ "Chọn để xem suất"
+        movies: [],
       };
     }
 
@@ -803,11 +938,7 @@ export async function buildFallbackChatReply(
       );
     }
 
-    const dayLabel =
-      intent.kind === 'tomorrow' ||
-      (intent.kind === 'hour' && intent.dayOffset === 1)
-        ? 'ngày mai'
-        : 'hôm nay';
+    const dayLabel = formatIntentDayLabel(intent);
 
     const timeLabel =
       intent.kind === 'hour'
@@ -830,8 +961,8 @@ export async function buildFallbackChatReply(
     const uniqueMovies = Array.from(byMovie.values()).slice(0, 12);
 
     const head = genreLabel
-      ? `Có ${uniqueMovies.length} phim ${genreLabel} có suất ${timeLabel}. Chọn một phim bên dưới để xem các suất chiếu.`
-      : `Có ${uniqueMovies.length} phim có suất ${timeLabel}. Chọn một phim bên dưới để xem các suất chiếu.`;
+      ? `Có ${uniqueMovies.length} phim ${genreLabel} có suất ${timeLabel}. Bấm phim bên dưới để xem chi tiết.`
+      : `Có ${uniqueMovies.length} phim có suất ${timeLabel}. Bấm phim bên dưới để xem chi tiết.`;
 
     return {
       reply: head,

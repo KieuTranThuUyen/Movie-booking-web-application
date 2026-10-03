@@ -66,9 +66,9 @@ export function parseBookingIntent(
   else if (/vip/.test(q)) draft.seatType = 'VIP';
   else if (/thường|standard/.test(q)) draft.seatType = 'STANDARD';
 
-  // Ngày
-  if (/hôm\s*nay|tối\s*nay|chiều\s*nay|sáng\s*nay/.test(q)) draft.dayOffset = 0;
-  else if (/ngày\s*mai|mai\s+/.test(q) || /\bmai\b/.test(q)) draft.dayOffset = 1;
+  // Ngày (kèm lỗi chính tả: mau → mai, hom → hôm)
+  if (/hôm\s*nay|hom\s*nay|tối\s*nay|chiều\s*nay|sáng\s*nay/.test(q)) draft.dayOffset = 0;
+  else if (/ngày\s*mai|ngày\s*mau|ngay\s*mai|ngay\s*mau|mai\s+/.test(q) || /\bmai\b/.test(q)) draft.dayOffset = 1;
 
   // Thành phố
   for (const c of CITY_MAP) {
@@ -81,7 +81,7 @@ export function parseBookingIntent(
   // Bỏ stopwords để lấy movie query
   let mq = message
     .replace(
-      /\d+\s*(người|vé|ghế|chỗ)|ghế\s*đôi|couple|vip|thường|hôm\s*nay|tối\s*nay|ngày\s*mai|\bmai\b|tp\.?\s*hcm|hồ\s*chí\s*minh|sài\s*gòn|hà\s*nội|đà\s*nẵng|muốn|xem|phim|ở|và|với|em|mình|tôi|cho|đặt\s*vé|mua\s*vé/gi,
+      /\d+\s*(người|vé|ghế|chỗ)|ghế\s*đôi|couple|vip|thường|hôm\s*nay|hom\s*nay|tối\s*nay|ngày\s*mai|ngày\s*mau|ngay\s*mai|\bmai\b|tp\.?\s*hcm|hồ\s*chí\s*minh|sài\s*gòn|hà\s*nội|đà\s*nẵng|muốn|xem|phim|ở|và|với|em|mình|tôi|cho|đặt\s*vé|mua\s*vé|có\s*suất\s*chiếu|suất\s*chiếu|có\s*suất|chiếu|nào|không|gì|các|của|ngày|mau/gi,
       ' ',
     )
     .replace(/\s+/g, ' ')
@@ -171,7 +171,7 @@ export async function findMatchingShowtimes(
     );
   }
 
-  // Lọc phim theo query — CHỈ khớp TÊN PHIM (không dùng synopsis → tránh nhiễu)
+  // Lọc phim theo query — tên phim hoặc thể loại
   if (draft.movieId) {
     filtered = filtered.filter((r) => r.movie.id === draft.movieId);
   } else if (draft.movieQuery) {
@@ -198,7 +198,33 @@ export async function findMatchingShowtimes(
           return tokens.every((tok) => t.includes(tok));
         });
       }
-      // 3) Không khớp tên → rỗng (KHÔNG trả suất phim khác)
+      // 3) Khớp thể loại (vd: "kinh dị", "hành động")
+      if (!byPhrase.length) {
+        const genreKeys = [
+          'kinh di',
+          'hai',
+          'hanh dong',
+          'tinh cam',
+          'hoat hinh',
+          'gia dinh',
+          'phieu luu',
+          'khoa hoc',
+          'than thoai',
+          'tam ly',
+          'horror',
+          'comedy',
+          'action',
+          'romance',
+          'animation',
+        ];
+        if (genreKeys.some((g) => nq.includes(g) || g.includes(nq))) {
+          byPhrase = filtered.filter((r) =>
+            normalize(r.movie.genre).includes(nq) ||
+            tokens.some((tok) => normalize(r.movie.genre).includes(tok)),
+          );
+        }
+      }
+      // 4) Không khớp → rỗng
       filtered = byPhrase;
     }
   }

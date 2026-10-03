@@ -12,6 +12,8 @@ import {
   isBookingQuestion,
   buildBookingAssistantReply,
   findMoviesByTitle,
+  formatIntentDayLabel,
+  isPopularQuestion,
 } from '@/lib/ai/movie-context';
 import { type BookingDraft } from '@/lib/ai/booking-intent';
 import {
@@ -61,11 +63,12 @@ const bodySchema = z.object({
     .nullable(),
 });
 
-const SYSTEM_PROMPT = `Bạn là trợ lý AI tư vấn phim VÀ hỗ trợ đặt vé cho website "DatVeXemPhim" (Việt Nam).
+const SYSTEM_PROMPT = `Bạn là trợ lý AI tư vấn phim cho website "DatVeXemPhim" (Việt Nam).
 Nhiệm vụ:
-- Tư vấn phim theo sở thích, tâm trạng, thể loại, độ tuổi.
-- Hỗ trợ đặt vé hội thoại: phân tích yêu cầu (phim, ngày, thành phố, số người, loại ghế) → đề xuất suất → user chọn → xác nhận → đưa link /dat-ve?showtime=ID.
-- KHÔNG tự tạo booking hay thanh toán. Chỉ đề xuất và chờ user xác nhận.
+- Tư vấn phim theo sở thích, thể loại, ngày chiếu.
+- Gợi ý danh sách phim và suất chiếu phù hợp.
+- Dừng ở gợi ý: user tự chọn phim/suất trên giao diện → sang trang /dat-ve để chọn ghế & thanh toán.
+- KHÔNG hỏi ghế, combo, voucher, số người trong chat. KHÔNG tự tạo booking.
 - Trả lời tiếng Việt, thân thiện, ngắn gọn. KHÔNG dùng markdown ** in đậm.
 - Chỉ dùng phim / suất CÓ TRONG dữ liệu được cung cấp.`;
 
@@ -88,6 +91,11 @@ async function handleBookingFlow(
   prevDraft: BookingFlowState | null | undefined,
 ) {
   const result = await runBookingFlow(message, prevDraft || null);
+  const seatUrl =
+    result.manualSeatUrl ||
+    (result.bookingPayload?.showtimeId
+      ? `/dat-ve?showtime=${encodeURIComponent(result.bookingPayload.showtimeId)}`
+      : undefined);
   return {
     reply: result.reply,
     movies: [] as ReturnType<typeof movieCards>,
@@ -95,12 +103,11 @@ async function handleBookingFlow(
     showtimeOptions: result.showtimeOptions,
     seatSuggestions: result.seatSuggestions,
     comboOptions: result.comboOptions,
-    canCreateBooking: result.canCreateBooking,
-    bookingPayload: result.bookingPayload,
-    confirmUrl: result.bookingPayload
-      ? `/dat-ve?showtime=${encodeURIComponent(result.bookingPayload.showtimeId)}`
-      : undefined,
-    manualSeatUrl: result.manualSeatUrl,
+    // AI chỉ gợi ý phim/suất — user chọn ghế & thanh toán trên /dat-ve
+    canCreateBooking: false,
+    bookingPayload: undefined,
+    confirmUrl: seatUrl,
+    manualSeatUrl: seatUrl,
   };
 }
 
@@ -118,53 +125,156 @@ export async function POST(req: NextRequest) {
     const { message, history, bookingDraft } = parsed.data;
     const movies = await getMoviesForAi(60);
 
-    // User chọn phim từ danh sách (sau khi hỏi suất theo thể loại/ngày)
-    const pickFilm = message.match(/chọn\s*phim\s+(.+)/i) || message.match(/^phim\s+(.+)/i);
-    const filmQuery = pickFilm ? pickFilm[1].trim() : '';
-    const titledPick = filmQuery
-      ? findMoviesByTitle(filmQuery, movies, 1)
-      : findMoviesByTitle(message, movies, 1);
-    const wantShowtimes =
-      /chọn\s*phim|các\s*suất|suất\s*chiếu|suất\s*của/.test(message.toLowerCase()) ||
-      (titledPick.length > 0 &&
-        /ngày\s*mai|hôm\s*nay|suất/.test(message.toLowerCase()));
+    const msgLower = message
+      .toLowerCase()
+      .normalize('NFC')
+      .replace(/\bngày\s*mau\b/g, 'ngày mai')
+      .replace(/\bngay\s*mai\b/g, 'ngày mai')
+      .replace(/\bngay\s*mau\b/g, 'ngày mai')
+      .replace(/\bhom\s*nay\b/g, 'hôm nay');
 
-    if (titledPick.length > 0 && (pickFilm || wantShowtimes)) {
+    // Câu hỏi duyệt theo thể loại / "có phim X nào" → KHÔNG dính draft cũ, không ép chọn 1 phim
+    const genresInMsg = extractGenreFromMessage(message);
+    const isBrowseGenreQuery =
+      genresInMsg.length > 0 &&
+      /có\s*phim|phim\s+\S+|thể\s*loại|suất\s*chiếu|ngày\s*mai|hôm\s*nay|chiếu\s*gì|phim\s*nào|các\s*phim|thứ\s*[2-7]|chủ\s*nhật|\bt[2-7]\b|\bcn\b|ngày\s*\d{1,2}/.test(
+        msgLower,
+      ) &&
+      !/chọn\s*phim\s+/.test(msgLower) &&
+      !/chọn\s*suất\s*\d/.test(msgLower) &&
+      !/(phim\s*này|các\s*phim\s*này|2\s*phim\s*này|những\s*phim\s*(này|trên|đó)|suất\s*(của\s*)?(2|các|cả))/.test(
+        msgLower,
+      );
+
+    // Tham chiếu danh sách vừa hiện: "4 phim trên", "các phim này", "suất của các phim trên"...
+    const refersToListed =
+      /(\d+\s*phim\s*(này|trên|đó|kia)|các\s*phim\s*(này|trên|đó|kia)|những\s*phim\s*(này|trên|đó|kia)|phim\s*(này|trên|đó)|cả\s*(2|hai|\d+)\s*phim|hai\s*phim\s*(này|trên)?|suất\s*(chiếu\s*)?(của\s*)?(các\s*)?(\d+\s*)?phim(\s*(này|trên|đó))?)/.test(
+        msgLower,
+      );
+    const draftListedIds: string[] = Array.isArray(
+      (bookingDraft as { lastListedMovieIds?: string[] } | null | undefined)
+        ?.lastListedMovieIds,
+    )
+      ? ((bookingDraft as { lastListedMovieIds: string[] }).lastListedMovieIds)
+      : [];
+
+    // User chọn phim từ danh sách (sau khi hỏi suất theo thể loại/ngày)
+    const pickFilm = message.match(/chọn\s*phim\s+(.+)/i);
+    const filmQuery = pickFilm ? pickFilm[1].trim() : '';
+    const wantsMultiple =
+      /cả\s*(2|hai|\d+)|tất\s*cả|cả\s*các\s*phim|và\s+|\d+\s*phim|hai\s*phim/.test(
+        msgLower,
+      );
+    const titleLimit = wantsMultiple ? 8 : 1;
+    // Không findMoviesByTitle lung tung khi đang tham chiếu "phim trên"
+    let titledPick = filmQuery
+      ? findMoviesByTitle(filmQuery, movies, titleLimit)
+      : isBrowseGenreQuery || refersToListed
+        ? []
+        : findMoviesByTitle(message, movies, titleLimit);
+
+    // "4 phim trên" → đúng danh sách vừa hiện (draft)
+    if (refersToListed && draftListedIds.length > 0) {
+      titledPick = movies.filter((m) => draftListedIds.includes(m.id));
+      titledPick.sort(
+        (a, b) => draftListedIds.indexOf(a.id) - draftListedIds.indexOf(b.id),
+      );
+    } else if (refersToListed && draftListedIds.length === 0) {
+      return NextResponse.json({
+        reply:
+          'Mình chưa nhớ danh sách phim vừa rồi. Bạn hỏi lại (vd: "phim hot nhất", "phim hành động ngày mai") rồi chọn suất nhé.',
+        movies: [],
+        source: 'ref-listed-empty',
+        bookingDraft: bookingDraft || null,
+        showtimeOptions: [],
+      });
+    }
+
+    const wantShowtimes =
+      /các\s*suất|suất\s*chiếu|suất\s*của|xem\s*suất|cho\s*mình\s*suất/.test(
+        msgLower,
+      ) ||
+      (titledPick.length > 0 &&
+        /ngày\s*mai|hôm\s*nay|suất|thứ\s*[2-7]|\bt[2-7]\b|ngày\s*\d/.test(
+          msgLower,
+        ) &&
+        !pickFilm);
+
+    // "Chọn phim X" → gợi ý trang chi tiết (không ép suất hôm nay)
+    if (pickFilm && titledPick.length > 0 && !wantShowtimes && !refersToListed) {
       const m = titledPick[0];
+      return NextResponse.json({
+        reply: `"${m.title}" — bấm thẻ bên dưới để xem chi tiết phim.`,
+        movies: movieCards([m]),
+        source: 'pick-film-detail',
+        bookingDraft: {
+          step: 'collect',
+          movieId: m.id,
+          movieTitle: m.title,
+          lastListedMovieIds: [m.id],
+          lastListedTitles: [m.title],
+        },
+        showtimeOptions: [],
+        confirmUrl: `/phim/${encodeURIComponent(m.slug)}`,
+      });
+    }
+
+    if (
+      titledPick.length > 0 &&
+      (wantShowtimes || refersToListed) &&
+      !isBrowseGenreQuery
+    ) {
       const intent = parseTimeIntent(message);
       const timeIntent =
         intent.kind === 'none' || intent.kind === 'now_showing'
           ? { kind: 'tomorrow' as const } // mặc định mai nếu vừa xem list mai; fallback today
           : intent;
-      // Ưu tiên: nếu history có "ngày mai" → tomorrow
+      // Ưu tiên: draft.dayOffset → history "ngày mai" → message
       const hist = history.map((h) => h.content).join(' ').toLowerCase();
       let useIntent = timeIntent;
       if (intent.kind === 'none') {
-        if (/ngày\s*mai/.test(hist) || /ngày\s*mai/.test(message.toLowerCase())) {
+        const draftDay = (bookingDraft as { dayOffset?: number } | null)?.dayOffset;
+        if (draftDay === 1 || /ngày\s*mai/.test(hist) || /ngày\s*mai/.test(msgLower)) {
           useIntent = { kind: 'tomorrow' };
-        } else if (/hôm\s*nay/.test(hist) || /hôm\s*nay/.test(message.toLowerCase())) {
+        } else if (draftDay === 0 || /hôm\s*nay/.test(hist) || /hôm\s*nay/.test(msgLower)) {
           useIntent = { kind: 'today' };
         } else {
           useIntent = { kind: 'today' };
         }
       }
-      let sts = await getShowtimesByIntent(useIntent, 30);
-      sts = sts.filter((st) => st.movie.id === m.id);
+      const dayLabel = formatIntentDayLabel(useIntent);
+      const dayOffsetFromIntent =
+        useIntent.kind === 'tomorrow'
+          ? 1
+          : useIntent.kind === 'day'
+            ? useIntent.dayOffset
+            : useIntent.kind === 'hour'
+              ? useIntent.dayOffset
+              : 0;
+      const movieIds = new Set(titledPick.map((m) => m.id));
+      let sts = await getShowtimesByIntent(useIntent, 60);
+      sts = sts.filter((st) => movieIds.has(st.movie.id));
+
       if (sts.length === 0) {
+        const names = titledPick.map((m) => `"${m.title}"`).join(', ');
         return NextResponse.json({
-          reply: `Hiện chưa có suất phù hợp cho "${m.title}". Bạn thử ngày khác nhé.`,
-          movies: movieCards([m]),
+          reply: `Hiện chưa có suất phù hợp cho ${names} ${dayLabel}. Bạn thử ngày khác nhé.`,
+          movies: movieCards(titledPick),
           source: 'pick-film',
           bookingDraft: {
-            movieId: m.id,
-            movieTitle: m.title,
-            movieQuery: m.title,
+            movieId: titledPick[0].id,
+            movieTitle: titledPick[0].title,
+            movieQuery: titledPick[0].title,
+            dayOffset: dayOffsetFromIntent,
             step: 'collect',
           },
           showtimeOptions: [],
         });
       }
-      const showtimeOptions = sts.slice(0, 10).map((st) => {
+
+      const movieById = new Map(titledPick.map((m) => [m.id, m]));
+      const showtimeOptions = sts.slice(0, 15).map((st) => {
+        const m = movieById.get(st.movie.id) || st.movie;
         const time = new Intl.DateTimeFormat('vi-VN', {
           timeZone: 'Asia/Ho_Chi_Minh',
           hour: '2-digit',
@@ -187,48 +297,58 @@ export async function POST(req: NextRequest) {
           couplePrice: 0,
         };
       });
-      const dayLabel =
-        useIntent.kind === 'tomorrow' ? 'ngày mai' : 'hôm nay';
+
+      const titles = titledPick.map((m) => m.title);
+      const replyTitle =
+        titles.length === 1
+          ? `"${titles[0]}"`
+          : titles.map((t) => `"${t}"`).join(' và ');
+
       return NextResponse.json({
-        reply: `Suất chiếu "${m.title}" ${dayLabel} — chọn một suất bên dưới (hoặc gõ "Chọn suất 1"):`,
-        movies: movieCards([m]),
+        reply: `Suất chiếu ${replyTitle} ${dayLabel} — bấm suất bên dưới để chọn ghế & thanh toán:`,
+        // Không trả movies khi đã có showtimeOptions để UI không hiện lại thẻ "Chọn để xem suất"
+        movies: [],
         source: 'pick-film',
         bookingDraft: {
-          movieId: m.id,
-          movieTitle: m.title,
-          movieQuery: m.title,
-          dayOffset: useIntent.kind === 'tomorrow' ? 1 : 0,
+          movieId: titledPick[0].id,
+          movieTitle: titledPick[0].title,
+          movieQuery: titledPick.map((m) => m.title).join(', '),
+          dayOffset: dayOffsetFromIntent,
           step: 'showtimes',
+          lastShowtimeOptions: showtimeOptions,
+          lastListedMovieIds: titledPick.map((m) => m.id),
+          lastListedTitles: titledPick.map((m) => m.title),
         },
         showtimeOptions,
       });
     }
 
 
-    // Flow đặt vé hội thoại (ưu tiên nếu đang trong draft hoặc hỏi đặt vé giàu ngữ cảnh)
+    // Flow gợi ý suất — chỉ khi đang chọn suất hoặc câu đặt vé rõ ràng
+    // (bỏ ghế/combo/voucher trong chat)
+    const isContinuingBooking =
+      /chọn\s*suất\s*\d|chọn\s*[abc]\b/i.test(msgLower) ||
+      (bookingDraft?.step === 'showtimes' &&
+        /chọn\s*suất|suất\s*\d/i.test(msgLower));
+
     const richBooking =
-      isBookingQuestion(message) ||
-      Boolean(bookingDraft?.step && bookingDraft.step !== 'collect') ||
-      (bookingDraft &&
-        (bookingDraft.movieQuery ||
-          bookingDraft.city ||
-          bookingDraft.quantity ||
-          bookingDraft.seatType));
+      !isBrowseGenreQuery &&
+      !refersToListed &&
+      (isBookingQuestion(message) || isContinuingBooking);
 
-    // Câu mô tả đặt vé kiểu demo (có thành phố / số người / ghế)
+    // Câu mô tả đặt vé có tên phim + ngày (không phải browse thể loại)
     const looksLikeBookingNL =
-      /(tối\s*nay|ngày\s*mai|hôm\s*nay).{0,40}(người|ghế|vé|rạp|cgv|galaxy|lotte)/i.test(
+      !isBrowseGenreQuery &&
+      !refersToListed &&
+      (/(tối\s*nay|ngày\s*mai|hôm\s*nay).{0,40}(vé|rạp|cgv|galaxy|lotte)/i.test(
         message,
       ) ||
-      /(marvel|avengers|người\s*nhện|kinh\s*dị|hài).{0,60}(tối|ngày|người|ghế)/i.test(
-        message,
-      ) ||
-      /\d+\s*người/.test(message);
+        /(marvel|avengers|người\s*nhện).{0,60}(tối|ngày)/i.test(message));
 
-    if (richBooking || looksLikeBookingNL || bookingDraft?.showtimeId) {
+    if (richBooking || looksLikeBookingNL) {
       const result = await handleBookingFlow(
         message,
-        bookingDraft as BookingDraft | null,
+        isBrowseGenreQuery ? null : (bookingDraft as BookingDraft | null),
       );
       return NextResponse.json({
         reply: result.reply,
@@ -242,6 +362,33 @@ export async function POST(req: NextRequest) {
         bookingPayload: result.bookingPayload,
         confirmUrl: result.confirmUrl,
         manualSeatUrl: result.manualSeatUrl,
+      });
+    }
+
+    // Câu hỏi duyệt thể loại / ngày / phim hot → fallback (trước LLM)
+    // Lưu lastListedMovieIds để lần sau user nói "4 phim trên" vẫn nhớ
+    if (isBrowseGenreQuery || isPopularQuestion(message)) {
+      const fb = await buildFallbackChatReply(message, movies);
+      const intentBrowse = parseTimeIntent(message);
+      const dayOff =
+        intentBrowse.kind === 'tomorrow'
+          ? 1
+          : intentBrowse.kind === 'day'
+            ? intentBrowse.dayOffset
+            : intentBrowse.kind === 'hour'
+              ? intentBrowse.dayOffset
+              : 0;
+      return NextResponse.json({
+        reply: fb.reply,
+        movies: movieCards(fb.movies),
+        source: isPopularQuestion(message) ? 'popular' : 'browse-genre',
+        bookingDraft: {
+          step: 'collect',
+          dayOffset: dayOff,
+          lastListedMovieIds: fb.movies.map((m) => m.id),
+          lastListedTitles: fb.movies.map((m) => m.title),
+        },
+        showtimeOptions: [],
       });
     }
 
@@ -319,7 +466,21 @@ export async function POST(req: NextRequest) {
           movies: movieCards(related),
           source: 'llm',
           model: result.model,
-          bookingDraft: null,
+          bookingDraft: related.length
+            ? {
+                step: 'collect',
+                dayOffset:
+                  intent.kind === 'tomorrow'
+                    ? 1
+                    : intent.kind === 'day'
+                      ? intent.dayOffset
+                      : intent.kind === 'hour'
+                        ? intent.dayOffset
+                        : 0,
+                lastListedMovieIds: related.map((m) => m.id),
+                lastListedTitles: related.map((m) => m.title),
+              }
+            : null,
           showtimeOptions: [],
         });
       }
@@ -331,17 +492,38 @@ export async function POST(req: NextRequest) {
         reply: fb.reply,
         movies: movieCards(fb.movies),
         source: 'booking-simple',
-        bookingDraft: null,
+        bookingDraft: fb.movies.length
+          ? {
+              step: 'collect',
+              lastListedMovieIds: fb.movies.map((m) => m.id),
+              lastListedTitles: fb.movies.map((m) => m.title),
+            }
+          : null,
         showtimeOptions: [],
       });
     }
 
     const fb = await buildFallbackChatReply(message, movies);
+    const intentFb = parseTimeIntent(message);
     return NextResponse.json({
       reply: fb.reply,
       movies: movieCards(fb.movies),
       source: 'fallback',
-      bookingDraft: null,
+      bookingDraft: fb.movies.length
+        ? {
+            step: 'collect',
+            dayOffset:
+              intentFb.kind === 'tomorrow'
+                ? 1
+                : intentFb.kind === 'day'
+                  ? intentFb.dayOffset
+                  : intentFb.kind === 'hour'
+                    ? intentFb.dayOffset
+                    : 0,
+            lastListedMovieIds: fb.movies.map((m) => m.id),
+            lastListedTitles: fb.movies.map((m) => m.title),
+          }
+        : null,
       showtimeOptions: [],
     });
   } catch (err) {

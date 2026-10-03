@@ -46,27 +46,34 @@ type Msg = {
 };
 
 const SUGGESTIONS = [
-  'Em muốn xem phim Marvel tối nay ở TP.HCM, 2 người ghế đôi',
-  'Hướng dẫn đặt vé',
+  'Phim hot nhất',
   'Suất chiếu hôm nay',
   'Gợi ý phim kinh dị',
+  'Phim hành động ngày mai',
 ];
+
+const WELCOME_MSG: Msg = {
+  id: 'welcome',
+  role: 'assistant',
+  content:
+    'Xin chào! Mình là trợ lý AI tư vấn phim & đặt vé DatVeXemPhim.\n\nBạn cần mình trợ giúp gì.',
+};
 
 export function AiChatbot() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft | null>(null);
-  const [messages, setMessages] = useState<Msg[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content:
-        'Xin chào! Mình là trợ lý AI tư vấn phim & đặt vé DatVeXemPhim.\n\nBạn có thể nói tự nhiên, ví dụ:\n"Muốn xem phim Marvel tối nay ở TP.HCM, 2 người ghế đôi"\n\nMình sẽ đề xuất suất → bạn chọn → xác nhận → sang trang chọn ghế (AI không tự thanh toán).',
-    },
-  ]);
+  const [messages, setMessages] = useState<Msg[]>([WELCOME_MSG]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const resetChat = useCallback(() => {
+    setMessages([{ ...WELCOME_MSG, id: `welcome-${Date.now()}` }]);
+    setBookingDraft(null);
+    setInput('');
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -172,19 +179,36 @@ export function AiChatbot() {
             <div>
               <p className="text-sm font-semibold text-white">AI Tư vấn & Đặt vé</p>
               <p className="text-xs text-slate-400">
-                Đề xuất suất → bạn xác nhận → chọn ghế trên web
+                Gợi ý phim & suất → bạn chọn ghế trên web
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
-              aria-label="Đóng"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={resetChat}
+                disabled={loading}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                aria-label="Làm mới chat"
+                title="Làm mới chat"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                  <path d="M8 16H3v5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+                aria-label="Đóng"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
@@ -205,12 +229,11 @@ export function AiChatbot() {
                   {m.showtimeOptions && m.showtimeOptions.length > 0 && !m.confirmUrl && (
                     <div className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
                       {m.showtimeOptions.map((opt, idx) => (
-                        <button
+                        <Link
                           key={opt.id}
-                          type="button"
-                          disabled={loading}
-                          onClick={() => void send(`Chọn suất ${idx + 1}`)}
-                          className="flex w-full flex-col rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-left text-xs transition hover:border-sky-400/40 hover:bg-black/50 disabled:opacity-50"
+                          href={`/dat-ve?showtime=${encodeURIComponent(opt.id)}`}
+                          onClick={() => setOpen(false)}
+                          className="flex w-full flex-col rounded-lg border border-white/10 bg-black/30 px-2.5 py-2 text-left text-xs transition hover:border-emerald-400/50 hover:bg-black/50"
                         >
                           <span className="font-medium text-white">
                             {idx + 1}. {opt.time} – {opt.cinema}
@@ -218,7 +241,10 @@ export function AiChatbot() {
                           <span className="text-slate-400">
                             {opt.movieTitle} · {opt.city}
                           </span>
-                        </button>
+                          <span className="mt-0.5 text-[10px] font-medium text-emerald-400">
+                            → Chọn ghế & thanh toán
+                          </span>
+                        </Link>
                       ))}
                     </div>
                   )}
@@ -230,23 +256,26 @@ export function AiChatbot() {
                         onClick={() => setOpen(false)}
                         className="flex w-full items-center justify-center rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
                       >
-                        Xác nhận → Chọn ghế & thanh toán
+                        {m.confirmUrl.startsWith('/phim/')
+                          ? 'Xem chi tiết phim'
+                          : 'Chọn ghế & thanh toán'}
                       </Link>
-                      <p className="text-[10px] text-slate-400">
-                        AI không tự tạo đơn. Bạn hoàn tất ghế/thanh toán trên trang đặt vé.
-                      </p>
+                      {!m.confirmUrl.startsWith('/phim/') && (
+                        <p className="text-[10px] text-slate-400">
+                          AI chỉ gợi ý phim/suất. Bạn chọn ghế và thanh toán trên trang đặt vé.
+                        </p>
+                      )}
                     </div>
                   )}
 
                   {m.movies && m.movies.length > 0 && (
                     <div className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
                       {m.movies.map((mv) => (
-                        <button
+                        <Link
                           key={mv.id}
-                          type="button"
-                          disabled={loading}
-                          onClick={() => void send(`Chọn phim ${mv.title}`)}
-                          className="flex w-full items-center gap-2 rounded-lg bg-black/20 p-1.5 text-left transition hover:bg-black/40 disabled:opacity-50"
+                          href={`/phim/${encodeURIComponent(mv.slug)}`}
+                          onClick={() => setOpen(false)}
+                          className="flex w-full items-center gap-2 rounded-lg bg-black/20 p-1.5 text-left transition hover:bg-black/40"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -259,10 +288,10 @@ export function AiChatbot() {
                               {mv.title}
                             </p>
                             <p className="truncate text-[10px] text-slate-400">
-                              {mv.genre} · {mv.ageRating} · Chọn để xem suất
+                              {mv.genre} · {mv.ageRating} · Xem chi tiết
                             </p>
                           </div>
-                        </button>
+                        </Link>
                       ))}
                     </div>
                   )}

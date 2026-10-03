@@ -234,6 +234,30 @@ export async function runBookingFlow(
   if (!state.quantity) state.quantity = state.seatType === 'COUPLE' ? 2 : 1;
   if (!state.seatType) state.seatType = 'ANY';
 
+  // Luồng đơn giản: AI chỉ gợi ý phim + suất. Các bước ghế/combo/voucher bỏ qua.
+  // Nếu đã có showtimeId (từ bước cũ) → đưa link đặt vé luôn.
+  if (
+    state.showtimeId &&
+    ['seats', 'seat_confirm', 'combo', 'voucher', 'summary', 'confirm'].includes(
+      state.step,
+    )
+  ) {
+    const url = `/dat-ve?showtime=${encodeURIComponent(state.showtimeId)}`;
+    return {
+      reply: [
+        `Suất ${state.startTimeLabel || ''} – ${state.cinemaName || ''} (${state.movieTitle || ''}).`,
+        'Bấm nút bên dưới để chọn ghế & thanh toán trên trang đặt vé.',
+      ].join('\n'),
+      state: { ...state, step: 'collect' },
+      showtimeOptions: [],
+      seatSuggestions: [],
+      comboOptions: [],
+      canCreateBooking: false,
+      manualSeatUrl: url,
+      bookingPayload: { showtimeId: state.showtimeId, seats: '' },
+    };
+  }
+
   // ===== SUMMARY / CONFIRM =====
   if (state.step === 'summary' || state.step === 'confirm') {
     if (/xác\s*nhận|đồng\s*ý|thanh\s*toán|đặt\s*đi|ok\b/.test(q)) {
@@ -587,36 +611,34 @@ export async function runBookingFlow(
     }
 
     if (chosen) {
+      // Luồng đơn giản: chọn suất → đưa link trang đặt vé (chọn ghế & thanh toán trên web)
       state.showtimeId = chosen.id;
       state.cinemaName = chosen.cinema;
       state.startTimeLabel = chosen.time;
       state.movieTitle = chosen.movieTitle;
       state.movieId = chosen.movieId;
       state.lastShowtimeOptions = options;
-      state.step = 'seats';
-      state.seatCodes = undefined;
-
-      const { codes } = await getAvailableSeatCodes(
-        chosen.id,
-        state.seatType,
-        state.quantity || 1,
-      );
-
-      return emptyResult(
-        [
-          `Đã chọn suất ${letters(options.indexOf(chosen))}. ${chosen.time} – ${chosen.cinema} (${chosen.movieTitle}).`,
+      state.step = 'collect';
+      const url = `/dat-ve?showtime=${encodeURIComponent(chosen.id)}`;
+      return {
+        reply: [
+          `Đã chọn: ${chosen.movieTitle}`,
+          `${chosen.time} – ${chosen.cinema} (${chosen.city})`,
           '',
-          'Bước chọn ghế: gõ mã ghế (vd: B5).',
-          codes.length ? `Gợi ý ghế trống: ${codes.join(', ')}` : 'Suất này đang ít ghế trống.',
-          'Hoặc "Tự chọn" để mở sơ đồ.',
+          'Bấm nút bên dưới để chọn ghế & thanh toán trên trang đặt vé.',
+          'AI chỉ gợi ý phim/suất — không tự đặt vé.',
         ].join('\n'),
         state,
-        {
-          showtimeOptions: [chosen],
-          seatSuggestions: codes,
-          manualSeatUrl: `/dat-ve?showtime=${encodeURIComponent(chosen.id)}`,
+        showtimeOptions: [],
+        seatSuggestions: [],
+        comboOptions: [],
+        canCreateBooking: false,
+        manualSeatUrl: url,
+        bookingPayload: {
+          showtimeId: chosen.id,
+          seats: '',
         },
-      );
+      };
     }
 
     if (state.step === 'showtimes' && options.length) {
@@ -628,14 +650,14 @@ export async function runBookingFlow(
             : state.seatType === 'VIP'
               ? o.vipPrice
               : o.standardPrice;
-        return `${letters(i)}. ${o.time} – ${o.cinema} (${o.city}) · ${o.movieTitle} · từ ${price.toLocaleString('vi-VN')}đ`;
+        return `${i + 1}. ${o.time} – ${o.cinema} (${o.city}) · ${o.movieTitle} · từ ${price.toLocaleString('vi-VN')}đ`;
       });
       return {
         reply: [
           `Suất chiếu phù hợp (${summarizeDraft(state)}):`,
           ...lines,
           '',
-          'Chọn suất: gõ A / B / C (hoặc "Chọn suất 1").',
+          'Bấm suất bên dưới để sang trang chọn ghế & thanh toán.',
         ].join('\n'),
         state: { ...state, step: 'showtimes', lastShowtimeOptions: options },
         showtimeOptions: options,
@@ -685,11 +707,11 @@ export async function runBookingFlow(
 
   return {
     reply: [
-      `Đặt vé: ${state.movieTitle || state.movieQuery} · ${state.dayOffset === 1 ? 'ngày mai' : 'hôm nay'}`,
+      `Gợi ý suất: ${state.movieTitle || state.movieQuery} · ${state.dayOffset === 1 ? 'ngày mai' : 'hôm nay'}`,
       'Các suất phù hợp:',
       ...lines,
       '',
-      'Chọn suất: A / B / C (hoặc bấm nút bên dưới).',
+      'Bấm suất bên dưới để sang trang chọn ghế & thanh toán.',
     ].join('\n'),
     state,
     showtimeOptions: options,
