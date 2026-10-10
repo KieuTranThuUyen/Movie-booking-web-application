@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 type Combo = {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
   imageUrl: string | null;
   price: number;
   stock: number;

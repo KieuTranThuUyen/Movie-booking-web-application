@@ -16,7 +16,7 @@ type CheckoutFormProps = {
   combos?: Array<{
     id: string;
     name: string;
-    description: string;
+    description: string | null;
     imageUrl: string | null;
     price: number;
     stock: number;

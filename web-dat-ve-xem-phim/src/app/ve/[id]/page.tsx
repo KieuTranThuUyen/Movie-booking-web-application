@@ -22,6 +22,7 @@ type TicketPageProps = {
 
   searchParams: Promise<{
     seat?: string;
+    combo?: string;
     checking?: string;
     print?: string;
   }>;
@@ -540,10 +541,10 @@ export default async function ElectronicTicketPage({
     );
 
   const activeCombos = booking.combos.filter(
-    (c) => c.status === TicketStatus.ACTIVE || c.status === 'ACTIVE',
+    (c) => c.status === TicketStatus.ACTIVE,
   );
   const usedCombos = booking.combos.filter(
-    (c) => c.status === TicketStatus.USED || c.status === 'USED',
+    (c) => c.status === TicketStatus.USED,
   );
   const comboQtyTotal = booking.combos.reduce(
     (sum, c) => sum + Number(c.quantity || 0),
@@ -900,11 +901,8 @@ export default async function ElectronicTicketPage({
 
               {booking.combos.map((c) => {
                 const isSelected = selectedCombo?.id === c.id;
-                const isUsed =
-                  c.status === TicketStatus.USED || c.status === 'USED';
-                const isCanceled =
-                  c.status === TicketStatus.CANCELED ||
-                  c.status === 'CANCELED';
+                const isUsed = c.status === TicketStatus.USED;
+                const isCanceled = c.status === TicketStatus.CANCELED;
                 const isInactive = isUsed || isCanceled;
                 return (
                   <Link
@@ -1399,12 +1397,8 @@ export default async function ElectronicTicketPage({
 
             <div className="grid gap-5">
               {visibleCombos.map((combo) => {
-                const isUsed =
-                  combo.status === TicketStatus.USED ||
-                  combo.status === 'USED';
-                const isCanceled =
-                  combo.status === TicketStatus.CANCELED ||
-                  combo.status === 'CANCELED';
+                const isUsed = combo.status === TicketStatus.USED;
+                const isCanceled = combo.status === TicketStatus.CANCELED;
                 const isInactive = isUsed || isCanceled;
                 const lineTotal =
                   Number(combo.unitPrice) * Number(combo.quantity);

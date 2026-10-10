@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 type AccountProfileProps = {
@@ -23,6 +24,7 @@ export function AccountProfile({
   image,
   role,
 }: AccountProfileProps) {
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
 
   const [form, setForm] = useState({
@@ -106,12 +108,15 @@ export function AccountProfile({
       setMessage(data.message ?? 'Cập nhật thành công.');
       setSuccess(true);
       setEditing(false);
-
-      /*
-       * Reload để session + dữ liệu trên server
-       * được cập nhật lại.
-       */
-      window.location.reload();
+      setForm((current) => ({
+        ...current,
+        name: data.user?.name ?? current.name,
+        phone: data.user?.phone ?? current.phone,
+        address: data.user?.address ?? current.address,
+        city: data.user?.city ?? current.city,
+        district: data.user?.district ?? current.district,
+      }));
+      router.refresh();
     } catch {
       setMessage('Không thể kết nối đến máy chủ.');
     } finally {
