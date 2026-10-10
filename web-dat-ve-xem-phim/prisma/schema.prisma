@@ -51,6 +51,8 @@ model User {
   seatHolds          SeatHold[]
   authTokens         AuthToken[]
   voucherRedemptions VoucherRedemption[]
+  movieComments      MovieComment[]
+  favorites          Favorite[]
 }
 
 /// Token dùng cho quên mật khẩu / xác thực email
@@ -162,6 +164,44 @@ model Movie {
   updatedAt DateTime @updatedAt
 
   showtimes Showtime[]
+  comments  MovieComment[]
+  favorites Favorite[]
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  movieId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@index([userId, createdAt])
+  @@index([movieId])
+}
+
+model MovieComment {
+  id        String   @id @default(cuid())
+  movieId   String
+  userId    String
+  parentId  String?
+  content   String   @db.Text
+  rating    Int?
+  imageUrl  String?  @db.Text
+  isHidden  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movie   Movie          @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  MovieComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies MovieComment[] @relation("CommentReplies")
+
+  @@index([movieId, isHidden, createdAt])
+  @@index([userId, movieId])
+  @@index([parentId])
 }
 
 model Showtime {
