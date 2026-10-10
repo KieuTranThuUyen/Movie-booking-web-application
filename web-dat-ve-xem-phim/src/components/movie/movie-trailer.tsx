@@ -3,10 +3,13 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 
+import { FavoriteButton } from '@/components/movie/favorite-button';
+
 type MovieTrailerProps = {
   imageUrl: string | null;
   trailerUrl: string | null;
   title: string;
+  movieId: string;
 };
 
 function getYoutubeEmbedUrl(url: string): string | null {
@@ -74,6 +77,7 @@ export function MovieTrailer({
   imageUrl,
   trailerUrl,
   title,
+  movieId,
 }: MovieTrailerProps) {
   const [showTrailer, setShowTrailer] = useState(false);
   const [origin, setOrigin] = useState('');
@@ -114,7 +118,7 @@ export function MovieTrailer({
           </div>
         </div>
       ) : imageUrl ? (
-        <div className="flex h-[270px] w-fit overflow-hidden rounded-2xl border border-white/10 bg-black shadow-xl">
+        <div className="relative flex h-[270px] w-fit overflow-hidden rounded-2xl border border-white/10 bg-black shadow-xl">
           <Image
             src={imageUrl}
             alt={`Ảnh ${title}`}
@@ -124,6 +128,7 @@ export function MovieTrailer({
             sizes="270px"
             className="h-[270px] w-auto object-contain"
           />
+          <FavoriteButton movieId={movieId} className="absolute right-3 top-3" />
         </div>
       ) : (
         <div className="flex h-[270px] w-[180px] items-center justify-center rounded-2xl border border-white/10 bg-slate-900 text-center text-sm text-slate-400">

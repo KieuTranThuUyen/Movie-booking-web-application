@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { FavoriteButton } from '@/components/movie/favorite-button';
 import type { Movie } from '@/lib/types';
 
 type PosterBannerProps = {
@@ -134,6 +135,11 @@ export function PosterBanner({ movies }: PosterBannerProps) {
             </div>
           </Link>
         ))}
+
+        <FavoriteButton
+          movieId={bannerMovies[activeIndex].id}
+          className="absolute right-4 top-4 z-20"
+        />
 
         {/* NÚT TRƯỚC / SAU */}
         {total > 1 && (
