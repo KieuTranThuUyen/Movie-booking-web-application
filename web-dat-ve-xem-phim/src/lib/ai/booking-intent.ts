@@ -22,7 +22,15 @@ export type BookingDraft = {
   showtimeId?: string;
   cinemaName?: string;
   startTimeLabel?: string;
-  step?: 'collect' | 'showtimes' | 'confirm';
+  step?:
+    | 'collect'
+    | 'showtimes'
+    | 'seats'
+    | 'seat_confirm'
+    | 'combo'
+    | 'voucher'
+    | 'summary'
+    | 'confirm';
 };
 
 export type ShowtimeOption = {

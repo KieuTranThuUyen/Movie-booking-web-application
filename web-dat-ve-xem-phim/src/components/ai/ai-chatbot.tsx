@@ -56,7 +56,7 @@ const WELCOME_MSG: Msg = {
   id: 'welcome',
   role: 'assistant',
   content:
-    'Xin chào! Mình là trợ lý AI tư vấn phim & đặt vé DatVeXemPhim.\n\nBạn cần mình trợ giúp gì.',
+    'Xin chào! Mình là trợ lý AI tư vấn phim của DatVeXemPhim.\n\nMình có thể gợi ý phim và tìm suất chiếu phù hợp. Khi chọn được suất, bạn sẽ chọn ghế và thanh toán trên trang đặt vé.',
 };
 
 export function AiChatbot() {
@@ -114,7 +114,13 @@ export function AiChatbot() {
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error || 'Lỗi chatbot');
+          if (res.status === 429) {
+            throw new Error('Bạn gửi hơi nhiều yêu cầu. Vui lòng thử lại sau khoảng một phút.');
+          }
+          if (res.status >= 500) {
+            throw new Error('Hệ thống tư vấn đang bận. Bạn thử lại sau ít phút nhé.');
+          }
+          throw new Error(data.error || 'Tin nhắn không hợp lệ');
         }
 
         if (data.bookingDraft) {
@@ -132,14 +138,17 @@ export function AiChatbot() {
             confirmUrl: data.confirmUrl as string | undefined,
           },
         ]);
-      } catch {
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : 'Hệ thống AI tạm thời không phản hồi.';
         setMessages((prev) => [
           ...prev,
           {
             id: `e-${Date.now()}`,
             role: 'assistant',
-            content:
-              'Xin lỗi, hệ thống AI tạm thời không phản hồi. Bạn thử lại sau hoặc đặt vé tại mục Suất chiếu nhé.',
+            content: `${errorMessage} Bạn có thể xem lịch tại mục Suất chiếu.`,
           },
         ]);
       } finally {
@@ -155,7 +164,7 @@ export function AiChatbot() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 via-fuchsia-500 to-sky-500 text-white shadow-lg shadow-fuchsia-500/30 transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-sky-400 print:hidden"
-        aria-label={open ? 'Đóng chatbot AI' : 'Mở chatbot AI tư vấn & đặt vé'}
+        aria-label={open ? 'Đóng chatbot AI' : 'Mở chatbot AI tư vấn phim'}
       >
         {open ? (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
@@ -173,11 +182,11 @@ export function AiChatbot() {
           className="fixed right-5 z-50 flex h-[min(600px,75vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-xl print:hidden"
           style={{ bottom: '5.5rem' }}
           role="dialog"
-          aria-label="AI Chatbot tư vấn và đặt vé"
+          aria-label="AI Chatbot tư vấn phim"
         >
           <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-rose-500/20 via-fuchsia-500/20 to-sky-500/20 px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-white">AI Tư vấn & Đặt vé</p>
+              <p className="text-sm font-semibold text-white">AI Tư vấn phim</p>
               <p className="text-xs text-slate-400">
                 Gợi ý phim & suất → bạn chọn ghế trên web
               </p>
@@ -335,7 +344,7 @@ export function AiChatbot() {
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="VD: Marvel tối nay HCM 2 người ghế đôi…"
+              placeholder="VD: Phim kinh dị hoặc suất chiếu tối nay…"
               maxLength={1000}
               disabled={loading}
               className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400/50 disabled:opacity-60"

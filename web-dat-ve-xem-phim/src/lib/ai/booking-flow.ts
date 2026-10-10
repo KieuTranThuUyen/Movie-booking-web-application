@@ -205,7 +205,7 @@ export async function runBookingFlow(
   }
 
   // Merge intent
-  let state: BookingFlowState = {
+  const state: BookingFlowState = {
     step: 'collect',
     ...(prev || {}),
     ...parseBookingIntent(message, prev || null),
@@ -586,7 +586,7 @@ export async function runBookingFlow(
   }
 
   // ===== SHOWTIMES: pick A/B/C or 1/2/3 =====
-  if (state.step === 'showtimes' || state.step === 'seats') {
+  if (state.step === 'showtimes') {
     const options =
       state.lastShowtimeOptions?.length
         ? state.lastShowtimeOptions

@@ -598,13 +598,10 @@ export async function getPopularMovies(
     _count: { id: true },
   });
 
-  let rows = groups;
-  if (rows.length === 0) {
-    rows = await prisma.booking.groupBy({
+  const rows = groups.length > 0 ? groups : await prisma.booking.groupBy({
       by: ['showtimeId'],
       _count: { id: true },
     });
-  }
 
   if (rows.length === 0) return [];
 

@@ -15,7 +15,6 @@ import {
   formatIntentDayLabel,
   isPopularQuestion,
 } from '@/lib/ai/movie-context';
-import { type BookingDraft } from '@/lib/ai/booking-intent';
 import {
   runBookingFlow,
   type BookingFlowState,
@@ -346,9 +345,12 @@ export async function POST(req: NextRequest) {
         /(marvel|avengers|người\s*nhện).{0,60}(tối|ngày)/i.test(message));
 
     if (richBooking || looksLikeBookingNL) {
+      const flowDraft: BookingFlowState | null = bookingDraft
+        ? { ...bookingDraft, step: bookingDraft.step ?? 'collect' }
+        : null;
       const result = await handleBookingFlow(
         message,
-        isBrowseGenreQuery ? null : (bookingDraft as BookingDraft | null),
+        isBrowseGenreQuery ? null : flowDraft,
       );
       return NextResponse.json({
         reply: result.reply,
