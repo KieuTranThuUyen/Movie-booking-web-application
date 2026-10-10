@@ -1,7 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  output: 'standalone',
+  serverExternalPackages: ['bcryptjs'],
+  ...(process.env.NODE_ENV === 'production' ? { output: 'standalone' } : {}),
+
+  webpack(config, { isServer }) {
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      {
+        module: /bcryptjs[\\/]dist[\\/]bcrypt\.js/,
+        message: /Can't resolve 'crypto'/,
+      },
+    ];
+
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        crypto: false,
+      };
+    }
+
+    return config;
+  },
 
   async headers() {
     const isProduction = process.env.NODE_ENV === 'production';

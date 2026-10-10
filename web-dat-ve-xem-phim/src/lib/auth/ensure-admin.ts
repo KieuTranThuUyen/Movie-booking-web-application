@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { hash } from 'bcryptjs';
 import { UserRole } from '@prisma/client';
 

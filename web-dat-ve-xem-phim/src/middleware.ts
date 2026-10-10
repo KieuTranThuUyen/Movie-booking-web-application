@@ -74,6 +74,11 @@ export async function middleware(request: NextRequest) {
       key: `booking:${ip}`,
       limit: 10,
     },
+    {
+      test: pathname === '/api/ai/chat' && method === 'POST',
+      key: `ai-chat:${ip}`,
+      limit: 20,
+    },
   ];
 
   for (const rule of limits) {
@@ -101,5 +106,6 @@ export const config = {
     '/api/seat-holds',
     '/api/bookings',
     '/api/bookings/:path*',
+    '/api/ai/chat',
   ],
 };
