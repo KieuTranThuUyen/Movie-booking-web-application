@@ -1,51 +1,37 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth/next';
-
 import { HeaderAccount } from '@/components/layout/header-account';
 import { SiteNav } from '@/components/layout/site-nav';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 
-/** Tách genre "A, B, C" → unique, sort A→Z (locale vi) */
 async function getGenreList(): Promise<string[]> {
-  const rows = await prisma.movie.findMany({
-    select: { genre: true },
-  });
-  const set = new Set<string>();
-  for (const r of rows) {
-    for (const part of r.genre.split(/[,/|]/)) {
-      const g = part.trim();
-      if (g) set.add(g);
+    const rows = await prisma.movie.findMany({
+        select: { genre: true },
+    });
+    const set = new Set<string>();
+    for (const r of rows) {
+        for (const part of r.genre.split(/[,/|]/)) {
+            const g = part.trim();
+            if (g)
+                set.add(g);
+        }
     }
-  }
-  return Array.from(set).sort((a, b) =>
-    a.localeCompare(b, 'vi', { sensitivity: 'base' }),
-  );
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
 }
-
 export async function SiteHeader() {
-  const session = await getServerSession(authOptions);
-  const genres = await getGenreList();
-
-  const logoHref =
-    session?.user?.role === 'ADMIN'
-      ? '/admin'
-      : '/';
-
-  return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
+    const session = await getServerSession(authOptions);
+    const genres = await getGenreList();
+    const logoHref = session?.user?.role === 'ADMIN'
+        ? '/admin'
+        : '/';
+    return (<header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
 
         <div className="flex items-center gap-6">
-          <Link
-            href={logoHref}
-            className="flex items-center gap-3 font-semibold tracking-wide text-white"
-            aria-label={
-              session?.user?.role === 'ADMIN'
-                ? 'Đi tới trang quản trị'
-                : 'Đi tới trang chủ'
-            }
-          >
+          <Link href={logoHref} className="flex items-center gap-3 font-semibold tracking-wide text-white" aria-label={session?.user?.role === 'ADMIN'
+            ? 'Đi tới trang quản trị'
+            : 'Đi tới trang chủ'}>
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-sky-500 text-sm shadow-glow">
               DVX
             </span>
@@ -60,39 +46,17 @@ export async function SiteHeader() {
             </div>
           </Link>
 
-          <SiteNav genres={genres} />
+          <SiteNav genres={genres}/>
         </div>
 
         <div className="hidden max-w-md flex-1 lg:flex">
-          <form
-            action="/phim"
-            method="GET"
-            className="relative w-full"
-          >
-            <input
-              type="text"
-              name="search"
-              placeholder="Tìm kiếm phim..."
-              aria-label="Tìm kiếm phim"
-              className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-white/20 focus:bg-white/10"
-            />
+          <form action="/phim" method="GET" className="relative w-full">
+            <input type="text" name="search" placeholder="Tìm kiếm phim..." aria-label="Tìm kiếm phim" className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-white/20 focus:bg-white/10"/>
 
-            <button
-              type="submit"
-              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white"
-              aria-label="Tìm kiếm"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-4-4" />
+            <button type="submit" className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Tìm kiếm">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="m20 20-4-4"/>
               </svg>
             </button>
           </form>
@@ -102,8 +66,6 @@ export async function SiteHeader() {
           <HeaderAccount />
         </div>
       </div>
-    </header>
-  );
+    </header>);
 }
-
 export default SiteHeader;

@@ -1,191 +1,114 @@
 import { NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-
 import { prisma } from '@/lib/db/prisma';
-
 type RouteContext = {
-  params: Promise<{ id: string }>;
+    params: Promise<{
+        id: string;
+    }>;
 };
-
 async function isAdmin(request: Request) {
-  const token = await getToken({
-    req: request as never,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-
-  return token?.role === 'ADMIN';
+    const token = await getToken({
+        req: request as never,
+        secret: process.env.NEXTAUTH_SECRET,
+    });
+    return token?.role === 'ADMIN';
 }
-
-export async function PATCH(
-  request: Request,
-  context: RouteContext,
-) {
-  if (!(await isAdmin(request))) {
-    return NextResponse.json(
-      { message: 'Bạn không có quyền thực hiện thao tác này.' },
-      { status: 403 },
-    );
-  }
-
-  try {
-    const { id } = await context.params;
-
-    if (!id) {
-      return NextResponse.json(
-        { message: 'ID rạp không hợp lệ.' },
-        { status: 400 },
-      );
+export async function PATCH(request: Request, context: RouteContext) {
+    if (!(await isAdmin(request))) {
+        return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
     }
-
-    const body = (await request.json()) as {
-      name?: string;
-      city?: string;
-      address?: string;
-    };
-
-    const existingCinema = await prisma.cinema.findUnique({
-      where: { id },
-    });
-
-    if (!existingCinema) {
-      return NextResponse.json(
-        { message: 'Không tìm thấy rạp.' },
-        { status: 404 },
-      );
+    try {
+        const { id } = await context.params;
+        if (!id) {
+            return NextResponse.json({ message: 'ID rạp không hợp lệ.' }, { status: 400 });
+        }
+        const body = (await request.json()) as {
+            name?: string;
+            city?: string;
+            address?: string;
+        };
+        const existingCinema = await prisma.cinema.findUnique({
+            where: { id },
+        });
+        if (!existingCinema) {
+            return NextResponse.json({ message: 'Không tìm thấy rạp.' }, { status: 404 });
+        }
+        const name = body.name !== undefined
+            ? body.name.trim()
+            : undefined;
+        const city = body.city !== undefined
+            ? body.city.trim()
+            : undefined;
+        const address = body.address !== undefined
+            ? body.address.trim()
+            : undefined;
+        if (body.name !== undefined &&
+            !name) {
+            return NextResponse.json({ message: 'Tên rạp không được để trống.' }, { status: 400 });
+        }
+        if (body.city !== undefined &&
+            !city) {
+            return NextResponse.json({ message: 'Thành phố không được để trống.' }, { status: 400 });
+        }
+        if (body.address !== undefined &&
+            !address) {
+            return NextResponse.json({ message: 'Địa chỉ không được để trống.' }, { status: 400 });
+        }
+        const cinema = await prisma.cinema.update({
+            where: { id },
+            data: {
+                name,
+                city,
+                address,
+            },
+        });
+        return NextResponse.json({
+            message: 'Cập nhật rạp thành công.',
+            cinema,
+        });
     }
-
-    const name =
-      body.name !== undefined
-        ? body.name.trim()
-        : undefined;
-
-    const city =
-      body.city !== undefined
-        ? body.city.trim()
-        : undefined;
-
-    const address =
-      body.address !== undefined
-        ? body.address.trim()
-        : undefined;
-
-    if (
-      body.name !== undefined &&
-      !name
-    ) {
-      return NextResponse.json(
-        { message: 'Tên rạp không được để trống.' },
-        { status: 400 },
-      );
+    catch {
+        return NextResponse.json({ message: 'Không thể cập nhật rạp.' }, { status: 500 });
     }
-
-    if (
-      body.city !== undefined &&
-      !city
-    ) {
-      return NextResponse.json(
-        { message: 'Thành phố không được để trống.' },
-        { status: 400 },
-      );
-    }
-
-    if (
-      body.address !== undefined &&
-      !address
-    ) {
-      return NextResponse.json(
-        { message: 'Địa chỉ không được để trống.' },
-        { status: 400 },
-      );
-    }
-
-    const cinema = await prisma.cinema.update({
-      where: { id },
-      data: {
-        name,
-        city,
-        address,
-      },
-    });
-
-    return NextResponse.json({
-      message: 'Cập nhật rạp thành công.',
-      cinema,
-    });
-  } catch {
-    return NextResponse.json(
-      { message: 'Không thể cập nhật rạp.' },
-      { status: 500 },
-    );
-  }
 }
-
-export async function DELETE(
-  request: Request,
-  context: RouteContext,
-) {
-  if (!(await isAdmin(request))) {
-    return NextResponse.json(
-      { message: 'Bạn không có quyền thực hiện thao tác này.' },
-      { status: 403 },
-    );
-  }
-
-  try {
-    const { id } = await context.params;
-
-    if (!id) {
-      return NextResponse.json(
-        { message: 'ID rạp không hợp lệ.' },
-        { status: 400 },
-      );
+export async function DELETE(request: Request, context: RouteContext) {
+    if (!(await isAdmin(request))) {
+        return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
     }
-
-    const cinema = await prisma.cinema.findUnique({
-      where: { id },
-      include: {
-        halls: {
-          include: {
-            _count: { select: { showtimes: true } },
-          },
-        },
-      },
-    });
-
-    if (!cinema) {
-      return NextResponse.json(
-        { message: 'Không tìm thấy rạp.' },
-        { status: 404 },
-      );
+    try {
+        const { id } = await context.params;
+        if (!id) {
+            return NextResponse.json({ message: 'ID rạp không hợp lệ.' }, { status: 400 });
+        }
+        const cinema = await prisma.cinema.findUnique({
+            where: { id },
+            include: {
+                halls: {
+                    include: {
+                        _count: { select: { showtimes: true } },
+                    },
+                },
+            },
+        });
+        if (!cinema) {
+            return NextResponse.json({ message: 'Không tìm thấy rạp.' }, { status: 404 });
+        }
+        const showtimeCount = cinema.halls.reduce((sum, hall) => sum + hall._count.showtimes, 0);
+        if (showtimeCount > 0) {
+            return NextResponse.json({
+                message: `Không thể xóa rạp vì đang có ${showtimeCount} suất chiếu. Vui lòng xóa hoặc chuyển suất chiếu trước.`,
+            }, { status: 400 });
+        }
+        await prisma.cinema.delete({
+            where: { id },
+        });
+        return NextResponse.json({
+            message: 'Xóa rạp thành công.',
+        });
     }
-
-    const showtimeCount = cinema.halls.reduce(
-      (sum, hall) => sum + hall._count.showtimes,
-      0,
-    );
-    if (showtimeCount > 0) {
-      return NextResponse.json(
-        {
-          message: `Không thể xóa rạp vì đang có ${showtimeCount} suất chiếu. Vui lòng xóa hoặc chuyển suất chiếu trước.`,
-        },
-        { status: 400 },
-      );
+    catch {
+        return NextResponse.json({
+            message: 'Không thể xóa rạp do đang có dữ liệu đặt vé hoặc suất chiếu liên quan.',
+        }, { status: 400 });
     }
-
-    await prisma.cinema.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({
-      message: 'Xóa rạp thành công.',
-    });
-  } catch {
-    return NextResponse.json(
-      {
-        message:
-          'Không thể xóa rạp do đang có dữ liệu đặt vé hoặc suất chiếu liên quan.',
-      },
-      { status: 400 },
-    );
-  }
 }

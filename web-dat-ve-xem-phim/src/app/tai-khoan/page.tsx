@@ -1,132 +1,108 @@
 import Link from 'next/link';
 import { getServerSession } from 'next-auth/next';
 import { redirect } from 'next/navigation';
-
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 import { AccountProfile } from '@/components/booking/account-profile';
 import { BookingHistoryList } from '@/components/booking/booking-history-list';
 import { MovieCard } from '@/components/movie/movie-card';
 import type { Movie } from '@/lib/types';
-
 function getBookingStatusLabel(status: string) {
-  switch (status) {
-    case 'PENDING':
-      return 'Chờ xử lý';
-
-    case 'CONFIRMED':
-      return 'Đã xác nhận';
-
-    case 'CANCELED':
-      return 'Đã hủy';
-
-    default:
-      return status;
-  }
+    switch (status) {
+        case 'PENDING':
+            return 'Chờ xử lý';
+        case 'CONFIRMED':
+            return 'Đã xác nhận';
+        case 'CANCELED':
+            return 'Đã hủy';
+        default:
+            return status;
+    }
 }
-
 function getPaymentStatusLabel(status: string) {
-  switch (status) {
-    case 'UNPAID':
-      return 'Chưa thanh toán';
-
-    case 'PAID':
-      return 'Đã thanh toán';
-
-    case 'REFUNDED':
-      return 'Đã hoàn tiền';
-
-    default:
-      return status;
-  }
+    switch (status) {
+        case 'UNPAID':
+            return 'Chưa thanh toán';
+        case 'PAID':
+            return 'Đã thanh toán';
+        case 'REFUNDED':
+            return 'Đã hoàn tiền';
+        default:
+            return status;
+    }
 }
-
 export default async function AccountPage() {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    redirect('/dang-nhap?callbackUrl=/tai-khoan');
-  }
-
-  const profile = await prisma.user.findUniqueOrThrow({
-    where: { id: session.user.id },
-    select: {
-      name: true,
-      email: true,
-      phone: true,
-      address: true,
-      city: true,
-      district: true,
-      image: true,
-      role: true,
-    },
-  });
-
-  const rawBookings = await prisma.booking.findMany({
-    where: {
-      userId: session.user.id,
-    },
-
-    orderBy: {
-      createdAt: 'desc',
-    },
-
-    include: {
-      showtime: {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+        redirect('/dang-nhap?callbackUrl=/tai-khoan');
+    }
+    const profile = await prisma.user.findUniqueOrThrow({
+        where: { id: session.user.id },
+        select: {
+            name: true,
+            email: true,
+            phone: true,
+            address: true,
+            city: true,
+            district: true,
+            image: true,
+            role: true,
+        },
+    });
+    const rawBookings = await prisma.booking.findMany({
+        where: {
+            userId: session.user.id,
+        },
+        orderBy: {
+            createdAt: 'desc',
+        },
         include: {
-          movie: true,
-
-          hall: {
-            include: {
-              cinema: true,
+            showtime: {
+                include: {
+                    movie: true,
+                    hall: {
+                        include: {
+                            cinema: true,
+                        },
+                    },
+                },
             },
-          },
+            tickets: true,
+            combos: {
+                include: {
+                    combo: true,
+                },
+            },
+            payment: true,
         },
-      },
-
-      tickets: true,
-
-      combos: {
-        include: {
-          combo: true,
+    });
+    const favoriteRecords = await prisma.favorite.findMany({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: 'desc' },
+        include: { movie: true },
+    });
+    const favoriteMovies = favoriteRecords.map(({ movie }) => movie as Movie);
+    const bookings = rawBookings.map((booking) => ({
+        id: booking.id,
+        bookingCode: booking.bookingCode,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        totalPrice: booking.totalPrice,
+        showtime: {
+            startTime: booking.showtime.startTime.toISOString(),
+            movie: { title: booking.showtime.movie.title },
+            hall: {
+                name: booking.showtime.hall.name,
+                cinema: { name: booking.showtime.hall.cinema.name },
+            },
         },
-      },
-
-      payment: true,
-    },
-  });
-
-  const favoriteRecords = await prisma.favorite.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: 'desc' },
-    include: { movie: true },
-  });
-
-  const favoriteMovies = favoriteRecords.map(({ movie }) => movie as Movie);
-
-  const bookings = rawBookings.map((booking) => ({
-    id: booking.id,
-    bookingCode: booking.bookingCode,
-    status: booking.status,
-    paymentStatus: booking.paymentStatus,
-    totalPrice: booking.totalPrice,
-    showtime: {
-      startTime: booking.showtime.startTime.toISOString(),
-      movie: { title: booking.showtime.movie.title },
-      hall: {
-        name: booking.showtime.hall.name,
-        cinema: { name: booking.showtime.hall.cinema.name },
-      },
-    },
-    tickets: booking.tickets.map((t) => ({ seatCode: t.seatCode })),
-    combos: booking.combos.map((c) => ({
-      quantity: c.quantity,
-      combo: { name: c.combo.name },
-    })),
-  }));
-
-  return (
-    <main className="min-h-screen bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
+        tickets: booking.tickets.map((t) => ({ seatCode: t.seatCode })),
+        combos: booking.combos.map((c) => ({
+            quantity: c.quantity,
+            combo: { name: c.combo.name },
+        })),
+    }));
+    return (<main className="min-h-screen bg-slate-950 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div>
           <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
@@ -144,21 +120,9 @@ export default async function AccountPage() {
 
         <div className="mt-10 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-6">
-            <AccountProfile
-              name={profile.name}
-              email={profile.email}
-              phone={profile.phone ?? ''}
-              address={profile.address ?? ''}
-              city={profile.city ?? ''}
-              district={profile.district ?? ''}
-              image={profile.image ?? ''}
-              role={profile.role}
-            />
+            <AccountProfile name={profile.name} email={profile.email} phone={profile.phone ?? ''} address={profile.address ?? ''} city={profile.city ?? ''} district={profile.district ?? ''} image={profile.image ?? ''} role={profile.role}/>
 
-            <Link
-              href="/doi-mat-khau"
-              className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400"
-            >
+            <Link href="/doi-mat-khau" className="inline-flex w-full items-center justify-center rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400">
               Đổi mật khẩu
             </Link>
           </div>
@@ -175,16 +139,13 @@ export default async function AccountPage() {
                 </p>
               </div>
 
-              <Link
-                href="/don-hang"
-                className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400"
-              >
+              <Link href="/don-hang" className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400">
                 Quản lý và tra cứu đơn đặt
               </Link>
             </div>
 
             <div className="mt-4">
-              <BookingHistoryList bookings={bookings} />
+              <BookingHistoryList bookings={bookings}/>
             </div>
           </section>
         </div>
@@ -200,20 +161,12 @@ export default async function AccountPage() {
             <span className="text-sm text-slate-400">{favoriteMovies.length} phim</span>
           </div>
 
-          {favoriteMovies.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
+          {favoriteMovies.length === 0 ? (<div className="mt-5 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
               Bạn chưa lưu bộ phim nào.
-            </div>
-          ) : (
-            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-              {favoriteMovies.map((movie) => (
-                <MovieCard key={movie.id} movie={movie} initialFavorite />
-              ))}
-            </div>
-          )}
+            </div>) : (<div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {favoriteMovies.map((movie) => (<MovieCard key={movie.id} movie={movie} initialFavorite/>))}
+            </div>)}
         </section>
       </div>
-    </main>
-  );
+    </main>);
 }
-

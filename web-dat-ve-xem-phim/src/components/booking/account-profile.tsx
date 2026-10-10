@@ -1,132 +1,108 @@
 'use client';
-
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-
 type AccountProfileProps = {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  district: string;
-  image: string;
-  role: string;
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    district: string;
+    image: string;
+    role: string;
 };
-
-export function AccountProfile({
-  name,
-  email,
-  phone,
-  address,
-  city,
-  district,
-  image,
-  role,
-}: AccountProfileProps) {
-  const router = useRouter();
-  const [editing, setEditing] = useState(false);
-
-  const [form, setForm] = useState({
-    name,
-    phone,
-    address,
-    city,
-    district,
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  const handleEdit = () => {
-    setForm({
-      name,
-      phone,
-      address,
-      city,
-      district,
+export function AccountProfile({ name, email, phone, address, city, district, image, role, }: AccountProfileProps) {
+    const router = useRouter();
+    const [editing, setEditing] = useState(false);
+    const [form, setForm] = useState({
+        name,
+        phone,
+        address,
+        city,
+        district,
     });
-
-    setMessage('');
-    setSuccess(false);
-    setEditing(true);
-  };
-
-  const handleCancel = () => {
-    setForm({
-      name,
-      phone,
-      address,
-      city,
-      district,
-    });
-
-    setMessage('');
-    setSuccess(false);
-    setEditing(false);
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    setLoading(true);
-    setMessage('');
-    setSuccess(false);
-
-    try {
-      const response = await fetch('/api/account', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: form.name,
-          phone: form.phone,
-          address: form.address,
-          city: form.city,
-          district: form.district,
-        }),
-      });
-
-      const data = (await response.json()) as {
-        message?: string;
-        user?: {
-          name: string | null;
-          phone: string | null;
-            address: string | null;
-            city: string | null;
-            district: string | null;
-        };
-      };
-
-      if (!response.ok) {
-        setMessage(data.message ?? 'Có lỗi xảy ra.');
-        return;
-      }
-
-      setMessage(data.message ?? 'Cập nhật thành công.');
-      setSuccess(true);
-      setEditing(false);
-      setForm((current) => ({
-        ...current,
-        name: data.user?.name ?? current.name,
-        phone: data.user?.phone ?? current.phone,
-        address: data.user?.address ?? current.address,
-        city: data.user?.city ?? current.city,
-        district: data.user?.district ?? current.district,
-      }));
-      router.refresh();
-    } catch {
-      setMessage('Không thể kết nối đến máy chủ.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (editing) {
-    return (
-      <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+    const [success, setSuccess] = useState(false);
+    const handleEdit = () => {
+        setForm({
+            name,
+            phone,
+            address,
+            city,
+            district,
+        });
+        setMessage('');
+        setSuccess(false);
+        setEditing(true);
+    };
+    const handleCancel = () => {
+        setForm({
+            name,
+            phone,
+            address,
+            city,
+            district,
+        });
+        setMessage('');
+        setSuccess(false);
+        setEditing(false);
+    };
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setLoading(true);
+        setMessage('');
+        setSuccess(false);
+        try {
+            const response = await fetch('/api/account', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: form.name,
+                    phone: form.phone,
+                    address: form.address,
+                    city: form.city,
+                    district: form.district,
+                }),
+            });
+            const data = (await response.json()) as {
+                message?: string;
+                user?: {
+                    name: string | null;
+                    phone: string | null;
+                    address: string | null;
+                    city: string | null;
+                    district: string | null;
+                };
+            };
+            if (!response.ok) {
+                setMessage(data.message ?? 'Có lỗi xảy ra.');
+                return;
+            }
+            setMessage(data.message ?? 'Cập nhật thành công.');
+            setSuccess(true);
+            setEditing(false);
+            setForm((current) => ({
+                ...current,
+                name: data.user?.name ?? current.name,
+                phone: data.user?.phone ?? current.phone,
+                address: data.user?.address ?? current.address,
+                city: data.user?.city ?? current.city,
+                district: data.user?.district ?? current.district,
+            }));
+            router.refresh();
+        }
+        catch {
+            setMessage('Không thể kết nối đến máy chủ.');
+        }
+        finally {
+            setLoading(false);
+        }
+    };
+    if (editing) {
+        return (<section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-lg font-semibold text-white">
@@ -138,184 +114,105 @@ export function AccountProfile({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white"
-          >
+          <button type="button" onClick={handleCancel} className="rounded-xl border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white">
             Hủy
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          {/* Họ tên */}
+          {}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Họ và tên
             </label>
 
-            <input
-              type="text"
-              value={form.name}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              placeholder="Nhập họ và tên"
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400"
-              required
-            />
+            <input type="text" value={form.name} onChange={(event) => setForm((current) => ({
+                ...current,
+                name: event.target.value,
+            }))} placeholder="Nhập họ và tên" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400" required/>
           </div>
 
-          {/* Email */}
+          {}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Email
             </label>
 
-            <input
-              type="email"
-              value={email}
-              disabled
-              className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-slate-500 outline-none"
-            />
+            <input type="email" value={email} disabled className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-slate-500 outline-none"/>
 
             <p className="mt-1 text-xs text-slate-500">
               Email dùng để đăng nhập nên không thể thay đổi.
             </p>
           </div>
 
-          {/* Số điện thoại */}
+          {}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Số điện thoại
             </label>
 
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  phone: event.target.value,
-                }))
-              }
-              placeholder="Nhập số điện thoại"
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400"
-            />
+            <input type="tel" value={form.phone} onChange={(event) => setForm((current) => ({
+                ...current,
+                phone: event.target.value,
+            }))} placeholder="Nhập số điện thoại" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400"/>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {(
-              [
+            {([
                 ['address', 'Địa chỉ'],
                 ['district', 'Quận / huyện'],
                 ['city', 'Tỉnh / thành phố'],
-              ] as const
-            ).map(([field, label]) => (
-              <label key={field} className="block space-y-2 text-sm text-slate-300">
+            ] as const).map(([field, label]) => (<label key={field} className="block space-y-2 text-sm text-slate-300">
                 <span>{label}</span>
-                <input
-                  type="text"
-                  value={form[field]}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      [field]: event.target.value,
-                    }))
-                  }
-                  placeholder={`Nhập ${label.toLowerCase()}`}
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400"
-                />
-              </label>
-            ))}
+                <input type="text" value={form[field]} onChange={(event) => setForm((current) => ({
+                    ...current,
+                    [field]: event.target.value,
+                }))} placeholder={`Nhập ${label.toLowerCase()}`} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400"/>
+              </label>))}
           </div>
 
-          {/* Vai trò */}
+          {}
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-300">
               Vai trò
             </label>
 
-            <input
-              type="text"
-              value={role}
-              disabled
-              className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-slate-500 outline-none"
-            />
+            <input type="text" value={role} disabled className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-slate-500 outline-none"/>
 
             <p className="mt-1 text-xs text-slate-500">
               Vai trò do hệ thống quản lý.
             </p>
           </div>
 
-          {/* Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          {}
+          <button type="submit" disabled={loading} className="w-full rounded-2xl bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
             {loading ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>
 
-          {message ? (
-            <p
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                success
-                  ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
-                  : 'border-rose-400/20 bg-rose-500/10 text-rose-300'
-              }`}
-            >
+          {message ? (<p className={`rounded-2xl border px-4 py-3 text-sm ${success
+                    ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
+                    : 'border-rose-400/20 bg-rose-500/10 text-rose-300'}`}>
               {message}
-            </p>
-          ) : null}
+            </p>) : null}
         </form>
-      </section>
-    );
-  }
-
-  return (
-    <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
+      </section>);
+    }
+    return (<section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          {image ? (
-            <img src={image} alt="" className="h-12 w-12 rounded-full object-cover" />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-500/20 text-lg font-bold text-sky-300">
+          {image ? (<img src={image} alt="" className="h-12 w-12 rounded-full object-cover"/>) : (<div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-500/20 text-lg font-bold text-sky-300">
               {(name.trim()[0] ?? '?').toUpperCase()}
-            </div>
-          )}
+            </div>)}
           <div>
             <div className="text-lg font-semibold text-white">Hồ sơ</div>
             <p className="text-sm text-slate-400">Thông tin cá nhân</p>
           </div>
         </div>
 
-        <button
-        type="button"
-        onClick={handleEdit}
-        className="group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-300 transition-all duration-200 hover:border-sky-400/40 hover:bg-sky-400/10 hover:text-sky-300"
-        >
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            className="h-4 w-4 transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110"
-        >
-            <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M16.862 3.487a2.1 2.1 0 0 1 2.97 2.97L8.25 18.04 4 19l.96-4.25L16.862 3.487Z"
-            />
-            <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="m15 5.35 3.65 3.65"
-            />
+        <button type="button" onClick={handleEdit} className="group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-300 transition-all duration-200 hover:border-sky-400/40 hover:bg-sky-400/10 hover:text-sky-300">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 3.487a2.1 2.1 0 0 1 2.97 2.97L8.25 18.04 4 19l.96-4.25L16.862 3.487Z"/>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m15 5.35 3.65 3.65"/>
         </svg>
 
         <span>Chỉnh sửa</span>
@@ -362,6 +259,5 @@ export function AccountProfile({
           </span>
         </div>
       </div>
-    </section>
-  );
+    </section>);
 }

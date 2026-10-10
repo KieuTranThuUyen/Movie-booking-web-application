@@ -34,10 +34,7 @@ body {
   }
 }
 
-/* ============================================================
-   IN VÉ ĐIỆN TỬ
-   Không in Header / Footer / Sidebar của website
-   ============================================================ */
+
 
 @media print {
   @page {
@@ -54,9 +51,7 @@ body {
     color: #000 !important;
   }
 
-  /*
-   * Ẩn Header, Footer và Sidebar của website
-   */
+  
   header,
   footer,
   nav,
@@ -64,16 +59,12 @@ body {
     display: none !important;
   }
 
-  /*
-   * Ẩn các nút / thành phần chỉ dùng khi xem trên màn hình
-   */
+  
   .print\:hidden {
     display: none !important;
   }
 
-  /*
-   * Nội dung chính khi in
-   */
+  
   #ticket-print-page {
     width: 100% !important;
     min-height: 0 !important;
@@ -82,9 +73,7 @@ body {
     background: white !important;
   }
 
-  /*
-   * Vé điện tử
-   */
+  
   #electronic-ticket {
     width: 100% !important;
     margin: 0 !important;
@@ -92,7 +81,7 @@ body {
     box-shadow: none !important;
   }
 
-  /* Viền bo tròn + in trắng đen cho vé ghế & combo */
+  
   .ticket-item,
   .combo-ticket-item {
     border: 2px solid #000 !important;
@@ -132,7 +121,7 @@ body {
     border-radius: 12px !important;
   }
 }
-/* Banner poster chạy ngang liên tục */
+
 @keyframes poster-marquee {
   0% {
     transform: translateX(0);

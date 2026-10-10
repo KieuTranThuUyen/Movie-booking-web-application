@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import { LoginForm } from '@/components/forms/login-form';
-
 export default function LoginPage() {
-  return (
-    <main className="page-shell py-12 lg:py-16">
+    return (<main className="page-shell py-12 lg:py-16">
       <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
         <section className="space-y-6 rounded-[32px] border border-white/10 bg-white/5 p-8 shadow-glow">
           <div className="inline-flex rounded-full border border-white/10 bg-slate-950/50 px-4 py-2 text-sm text-sky-200">
@@ -20,6 +18,5 @@ export default function LoginPage() {
 
         <LoginForm />
       </div>
-    </main>
-  );
+    </main>);
 }

@@ -1,67 +1,44 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth/next';
-
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
-
 type PaymentPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
+    params: Promise<{
+        id: string;
+    }>;
 };
-
-export default async function PaymentPage({
-  params,
-}: PaymentPageProps) {
-  const { id } = await params;
-
-  const session =
-    await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    redirect(
-      `/dang-nhap?callbackUrl=${encodeURIComponent(
-        `/thanh-toan/${id}`,
-      )}`,
-    );
-  }
-
-  const booking =
-    await prisma.booking.findUnique({
-      where: {
-        id,
-      },
-
-      include: {
-        showtime: {
-          include: {
-            movie: true,
-
-            hall: {
-              include: {
-                cinema: true,
-              },
-            },
-          },
+export default async function PaymentPage({ params, }: PaymentPageProps) {
+    const { id } = await params;
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+        redirect(`/dang-nhap?callbackUrl=${encodeURIComponent(`/thanh-toan/${id}`)}`);
+    }
+    const booking = await prisma.booking.findUnique({
+        where: {
+            id,
         },
-
-        tickets: true,
-
-        payment: true,
-      },
+        include: {
+            showtime: {
+                include: {
+                    movie: true,
+                    hall: {
+                        include: {
+                            cinema: true,
+                        },
+                    },
+                },
+            },
+            tickets: true,
+            payment: true,
+        },
     });
-
-  if (!booking) {
-    notFound();
-  }
-
-  if (
-    booking.userId !==
-    session.user.id
-  ) {
-    return (
-      <main className="min-h-screen bg-slate-950 px-6 py-20 text-center text-white">
+    if (!booking) {
+        notFound();
+    }
+    if (booking.userId !==
+        session.user.id) {
+        return (<main className="min-h-screen bg-slate-950 px-6 py-20 text-center text-white">
         <h1 className="text-2xl font-bold">
           Không có quyền truy cập
         </h1>
@@ -71,52 +48,34 @@ export default async function PaymentPage({
           của bạn.
         </p>
 
-        <Link
-          href="/don-hang"
-          className="mt-6 inline-flex rounded-full bg-white px-5 py-3 font-semibold text-slate-950"
-        >
+        <Link href="/don-hang" className="mt-6 inline-flex rounded-full bg-white px-5 py-3 font-semibold text-slate-950">
           Về đơn vé
         </Link>
-      </main>
-    );
-  }
+      </main>);
+    }
+    
 
-  /*
-   * ============================================================
-   * TRẠNG THÁI
-   * ============================================================
-   */
 
-  const isPaid =
-    booking.paymentStatus ===
-    'PAID';
 
-  const isConfirmed =
-    booking.status ===
-    'CONFIRMED';
 
-  const isCanceled =
-    booking.status ===
-    'CANCELED';
+    const isPaid = booking.paymentStatus ===
+        'PAID';
+    const isConfirmed = booking.status ===
+        'CONFIRMED';
+    const isCanceled = booking.status ===
+        'CANCELED';
+    const isPending = booking.status ===
+        'PENDING' &&
+        booking.paymentStatus !==
+            'PAID';
+    
 
-  const isPending =
-    booking.status ===
-      'PENDING' &&
-    booking.paymentStatus !==
-      'PAID';
 
-  /*
-   * ============================================================
-   * Nếu đã thanh toán thành công
-   * ============================================================
-   */
 
-  if (
-    isPaid &&
-    isConfirmed
-  ) {
-    return (
-      <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+
+    if (isPaid &&
+        isConfirmed) {
+        return (<main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
         <div className="mx-auto max-w-2xl">
           <section className="rounded-[28px] border border-emerald-400/20 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
             <div className="text-6xl">
@@ -138,9 +97,7 @@ export default async function PaymentPage({
               </p>
 
               <p className="mt-1 text-xl font-bold text-white">
-                {
-                  booking.bookingCode
-                }
+                {booking.bookingCode}
               </p>
 
               <p className="mt-4 text-sm text-slate-500">
@@ -148,43 +105,31 @@ export default async function PaymentPage({
               </p>
 
               <p className="mt-1 text-2xl font-bold text-emerald-300">
-                {booking.totalPrice.toLocaleString(
-                  'vi-VN',
-                )}{' '}
+                {booking.totalPrice.toLocaleString('vi-VN')}{' '}
                 đ
               </p>
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link
-                href={`/ve/${booking.id}`}
-                className="inline-flex items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300"
-              >
+              <Link href={`/ve/${booking.id}`} className="inline-flex items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300">
                 Xem vé
               </Link>
 
-              <Link
-                href="/don-hang"
-                className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
-              >
+              <Link href="/don-hang" className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-semibold text-white transition hover:bg-white/10">
                 Xem đơn hàng
               </Link>
             </div>
           </section>
         </div>
-      </main>
-    );
-  }
+      </main>);
+    }
+    
 
-  /*
-   * ============================================================
-   * BOOKING CANCELED
-   * ============================================================
-   */
 
-  if (isCanceled) {
-    return (
-      <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+
+
+    if (isCanceled) {
+        return (<main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
         <div className="mx-auto max-w-2xl">
           <section className="rounded-[28px] border border-rose-400/20 bg-slate-950/70 p-8 text-center shadow-glow backdrop-blur-xl">
             <div className="text-6xl">
@@ -200,26 +145,19 @@ export default async function PaymentPage({
               lực để thanh toán.
             </p>
 
-            <Link
-              href="/dat-ve"
-              className="mt-6 inline-flex rounded-2xl bg-white px-5 py-3 font-semibold text-slate-950"
-            >
+            <Link href="/dat-ve" className="mt-6 inline-flex rounded-2xl bg-white px-5 py-3 font-semibold text-slate-950">
               Quay lại đặt vé
             </Link>
           </section>
         </div>
-      </main>
-    );
-  }
+      </main>);
+    }
+    
 
-  /*
-   * ============================================================
-   * PENDING
-   * ============================================================
-   */
 
-  return (
-    <main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+
+
+    return (<main className="min-h-screen bg-slate-950 px-6 py-12 text-white">
       <div className="mx-auto max-w-4xl">
         <div className="text-center">
           <p className="text-sm uppercase tracking-[0.35em] text-sky-300/80">
@@ -250,9 +188,9 @@ export default async function PaymentPage({
         </div>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_380px]">
-          {/* ==================================================
-              PAYMENT
-          =================================================== */}
+          {
+
+}
 
           <section className="rounded-[28px] border border-white/10 bg-slate-950/70 p-8 shadow-glow backdrop-blur-xl">
             <div className="flex flex-col items-center text-center">
@@ -277,9 +215,7 @@ export default async function PaymentPage({
                   </span>
 
                   <span className="font-semibold text-white">
-                    {
-                      booking.bookingCode
-                    }
+                    {booking.bookingCode}
                   </span>
                 </div>
 
@@ -294,12 +230,7 @@ export default async function PaymentPage({
                 </div>
               </div>
 
-              <Link
-                href={`/api/payments/sepay/checkout/${encodeURIComponent(
-                  booking.id,
-                )}`}
-                className="mt-6 inline-flex w-full max-w-md items-center justify-center rounded-2xl bg-sky-400 px-5 py-4 font-semibold text-slate-950 transition hover:bg-sky-300"
-              >
+              <Link href={`/api/payments/sepay/checkout/${encodeURIComponent(booking.id)}`} className="mt-6 inline-flex w-full max-w-md items-center justify-center rounded-2xl bg-sky-400 px-5 py-4 font-semibold text-slate-950 transition hover:bg-sky-300">
                 Mở SePay Sandbox
               </Link>
 
@@ -312,9 +243,9 @@ export default async function PaymentPage({
             </div>
           </section>
 
-          {/* ==================================================
-              BOOKING INFO
-          =================================================== */}
+          {
+
+}
 
           <aside className="h-fit rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow">
             <h2 className="text-xl font-semibold">
@@ -328,11 +259,9 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {
-                    booking.showtime
-                      .movie
-                      .title
-                  }
+                  {booking.showtime
+            .movie
+            .title}
                 </p>
               </div>
 
@@ -342,12 +271,10 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1">
-                  {
-                    booking.showtime
-                      .hall
-                      .cinema
-                      .name
-                  }
+                  {booking.showtime
+            .hall
+            .cinema
+            .name}
                 </p>
               </div>
 
@@ -357,11 +284,9 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1">
-                  {
-                    booking.showtime
-                      .hall
-                      .name
-                  }
+                  {booking.showtime
+            .hall
+            .name}
                 </p>
               </div>
 
@@ -371,12 +296,8 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1">
-                  {new Date(
-                    booking.showtime
-                      .startTime,
-                  ).toLocaleString(
-                    'vi-VN',
-                  )}
+                  {new Date(booking.showtime
+            .startTime).toLocaleString('vi-VN')}
                 </p>
               </div>
 
@@ -387,18 +308,11 @@ export default async function PaymentPage({
 
                 <p className="mt-1 font-semibold">
                   {booking.tickets.length >
-                  0
-                    ? booking.tickets
-                        .map(
-                          (
-                            ticket,
-                          ) =>
-                            ticket.seatCode,
-                        )
-                        .join(
-                          ', ',
-                        )
-                    : 'Đang giữ ghế'}
+            0
+            ? booking.tickets
+                .map((ticket) => ticket.seatCode)
+                .join(', ')
+            : 'Đang giữ ghế'}
                 </p>
               </div>
 
@@ -408,9 +322,7 @@ export default async function PaymentPage({
                 </p>
 
                 <p className="mt-1 text-2xl font-bold text-sky-300">
-                  {booking.totalPrice.toLocaleString(
-                    'vi-VN',
-                  )}{' '}
+                  {booking.totalPrice.toLocaleString('vi-VN')}{' '}
                   đ
                 </p>
               </div>
@@ -420,16 +332,12 @@ export default async function PaymentPage({
                   Trạng thái đơn
                 </p>
 
-                <p
-                  className={
-                    isPending
-                      ? 'mt-1 font-semibold text-amber-400'
-                      : 'mt-1 font-semibold text-slate-300'
-                  }
-                >
+                <p className={isPending
+            ? 'mt-1 font-semibold text-amber-400'
+            : 'mt-1 font-semibold text-slate-300'}>
                   {isPending
-                    ? 'Chờ thanh toán'
-                    : booking.status}
+            ? 'Chờ thanh toán'
+            : booking.status}
                 </p>
               </div>
 
@@ -440,17 +348,16 @@ export default async function PaymentPage({
 
                 <p className="mt-1 font-semibold text-amber-400">
                   {booking.payment?.status ===
-                  'PENDING'
-                    ? 'Chưa thanh toán'
-                    : booking.payment
-                        ?.status ??
-                      'Chưa có giao dịch'}
+            'PENDING'
+            ? 'Chưa thanh toán'
+            : booking.payment
+                ?.status ??
+                'Chưa có giao dịch'}
                 </p>
               </div>
             </div>
           </aside>
         </div>
       </div>
-    </main>
-  );
+    </main>);
 }
