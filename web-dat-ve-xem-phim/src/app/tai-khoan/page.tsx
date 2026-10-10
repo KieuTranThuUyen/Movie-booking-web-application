@@ -6,6 +6,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 import { AccountProfile } from '@/components/booking/account-profile';
 import { BookingHistoryList } from '@/components/booking/booking-history-list';
+import { MovieCard } from '@/components/movie/movie-card';
+import type { Movie } from '@/lib/types';
 
 function getBookingStatusLabel(status: string) {
   switch (status) {
@@ -94,6 +96,14 @@ export default async function AccountPage() {
     },
   });
 
+  const favoriteRecords = await prisma.favorite.findMany({
+    where: { userId: session.user.id },
+    orderBy: { createdAt: 'desc' },
+    include: { movie: true },
+  });
+
+  const favoriteMovies = favoriteRecords.map(({ movie }) => movie as Movie);
+
   const bookings = rawBookings.map((booking) => ({
     id: booking.id,
     bookingCode: booking.bookingCode,
@@ -178,6 +188,30 @@ export default async function AccountPage() {
             </div>
           </section>
         </div>
+
+        <section className="mt-6 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold text-white">Phim yêu thích</div>
+              <p className="mt-1 text-sm text-slate-400">
+                Những bộ phim bạn đã lưu để xem lại.
+              </p>
+            </div>
+            <span className="text-sm text-slate-400">{favoriteMovies.length} phim</span>
+          </div>
+
+          {favoriteMovies.length === 0 ? (
+            <div className="mt-5 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
+              Bạn chưa lưu bộ phim nào.
+            </div>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {favoriteMovies.map((movie) => (
+                <MovieCard key={movie.id} movie={movie} initialFavorite />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );

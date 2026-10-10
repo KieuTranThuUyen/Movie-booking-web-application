@@ -1,6 +1,7 @@
 import { MovieCard } from '@/components/movie/movie-card';
 import { unifiedMovieSearch } from '@/lib/ai/search-movies';
 import { prisma } from '@/lib/db/prisma';
+import type { Movie } from '@/lib/types';
 
 type MoviesPageProps = {
   searchParams: Promise<{
@@ -17,7 +18,7 @@ export default async function MoviesPage({
   const search = params.search?.trim() ?? '';
   const status = params.status?.trim() ?? '';
 
-  let movies: Awaited<ReturnType<typeof prisma.movie.findMany>>;
+  let movies: Movie[];
   let interpretation = '';
 
   if (search) {

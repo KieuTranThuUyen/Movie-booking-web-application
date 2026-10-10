@@ -1,13 +1,15 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
+import { FavoriteButton } from '@/components/movie/favorite-button';
 import type { Movie } from '@/lib/types';
 
 type MovieCardProps = {
   movie: Movie;
+  initialFavorite?: boolean;
 };
 
-export function MovieCard({ movie }: MovieCardProps) {
+export function MovieCard({ movie, initialFavorite = false }: MovieCardProps) {
   const canBook = movie.isNowShowing && !movie.isComingSoon;
 
   const genres = movie.genre
@@ -19,7 +21,12 @@ export function MovieCard({ movie }: MovieCardProps) {
     : [];
 
   return (
-    <article className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-lg transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
+    <article className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-lg transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.06]">
+      <FavoriteButton
+        movieId={movie.id}
+        initialFavorite={initialFavorite}
+        className="absolute right-2 top-2 z-20"
+      />
       {/* Ảnh phim */}
       <Link
         href={`/phim/${movie.slug}`}
@@ -52,7 +59,7 @@ export function MovieCard({ movie }: MovieCardProps) {
 
           {/* Độ tuổi - chỉ hiển thị 1 lần */}
           {movie.ageRating && (
-            <span className="absolute right-2 top-2 rounded-md border border-white/30 bg-black/70 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-md">
+            <span className="absolute right-14 top-2 rounded-md border border-white/30 bg-black/70 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-md">
               {movie.ageRating}
             </span>
           )}
