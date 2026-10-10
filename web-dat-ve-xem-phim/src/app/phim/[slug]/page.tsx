@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { MovieTrailer } from '@/components/movie/movie-trailer';
+import { MovieComments } from '@/components/movie/movie-comments';
 
 type MovieDetailPageProps = {
   params: Promise<{ slug: string }>;
@@ -58,6 +59,7 @@ export default async function MovieDetailPage({
              ========================= */}
           <div className="lg:sticky lg:top-24 lg:self-start">
             <MovieTrailer
+              movieId={movie.id}
               imageUrl={movie.imageUrl}
               trailerUrl={movie.trailerUrl}
               title={movie.title}
@@ -150,6 +152,7 @@ export default async function MovieDetailPage({
 
           </div>
         </div>
+        <MovieComments movieId={movie.id} />
       </div>
     </main>
   );
