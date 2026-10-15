@@ -60,7 +60,10 @@ export function MovieCard({ movie, initialFavorite = false }: MovieCardProps) {
 
         {}
         <div className="mt-1.5 flex gap-2">
-          <Link href={`/phim/${movie.slug}`} className={`inline-flex items-center justify-center rounded-lg bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-950 transition hover:bg-slate-100 ${canBook ? 'flex-1' : 'w-full'}`}>
+          <Link
+            href={`/phim/${movie.slug}`}
+            className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-950 transition hover:bg-slate-100 ${canBook ? 'flex-1' : 'w-full'}`}
+          >
             Xem chi tiết
           </Link>
 
