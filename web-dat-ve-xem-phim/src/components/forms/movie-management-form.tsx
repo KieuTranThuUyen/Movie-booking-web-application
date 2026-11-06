@@ -1,6 +1,6 @@
 'use client';
 import type { FormEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 type MovieItem = {
     id: string;
     title: string;
@@ -20,19 +20,23 @@ type MovieManagementFormProps = {
     movies: MovieItem[];
 };
 
-function toDateInputValue(value: string | Date | null | undefined): string {
+function toDateTimeInputValue(value: string | Date | null | undefined): string {
     if (!value)
         return '';
-    
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-        return value.trim();
-    }
     const date = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(date.getTime()))
         return '';
-    return new Intl.DateTimeFormat('en-CA', {
+    const parts = new Intl.DateTimeFormat('sv-SE', {
         timeZone: 'Asia/Ho_Chi_Minh',
-    }).format(date);
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+    return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
 }
 const emptyForm = {
     title: '',
@@ -45,17 +49,28 @@ const emptyForm = {
     imageUrl: '',
     trailerUrl: '',
     releaseDate: '',
-    isNowShowing: true,
-    isComingSoon: false,
 };
 export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
     
     
     const [editingMovieId, setEditingMovieId] = useState('');
     
     const [form, setForm] = useState(emptyForm);
+    useEffect(() => {
+        const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
+    const upcomingMovies = useMemo(() => movies
+        .filter((movie) => new Date(movie.releaseDate).getTime() > currentTime)
+        .sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime()), [currentTime, movies]);
+    const nowShowingMovies = useMemo(() => movies
+        .filter((movie) => new Date(movie.releaseDate).getTime() <= currentTime)
+        .sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime()), [currentTime, movies]);
+    const [activeTab, setActiveTab] = useState<'coming' | 'now'>('coming');
+    const visibleMovies = activeTab === 'coming' ? upcomingMovies : nowShowingMovies;
     const selectedMovie = useMemo(() => movies.find((movie) => movie.id === editingMovieId), [editingMovieId, movies]);
     
     
@@ -85,9 +100,7 @@ export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
             posterUrl: movie.posterUrl,
             imageUrl: movie.imageUrl,
             trailerUrl: movie.trailerUrl ?? '',
-            releaseDate: toDateInputValue(movie.releaseDate),
-            isNowShowing: movie.isNowShowing,
-            isComingSoon: movie.isComingSoon,
+            releaseDate: toDateTimeInputValue(movie.releaseDate),
         });
         setMessage('');
     };
@@ -130,9 +143,7 @@ export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
                     posterUrl: data.movie.posterUrl,
                     imageUrl: data.movie.imageUrl,
                     trailerUrl: data.movie.trailerUrl ?? '',
-                    releaseDate: toDateInputValue(data.movie.releaseDate) || form.releaseDate,
-                    isNowShowing: data.movie.isNowShowing,
-                    isComingSoon: data.movie.isComingSoon,
+                    releaseDate: toDateTimeInputValue(data.movie.releaseDate) || form.releaseDate,
                 });
             }
         }
@@ -201,8 +212,16 @@ export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
           </button>
         </div>
 
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => setActiveTab('coming')} className={`rounded-xl px-3 py-2 text-sm font-semibold ${activeTab === 'coming' ? 'bg-amber-400 text-slate-950' : 'bg-white/5 text-slate-300'}`}>
+            Sắp chiếu ({upcomingMovies.length})
+          </button>
+          <button type="button" onClick={() => setActiveTab('now')} className={`rounded-xl px-3 py-2 text-sm font-semibold ${activeTab === 'now' ? 'bg-emerald-400 text-slate-950' : 'bg-white/5 text-slate-300'}`}>
+            Đang chiếu ({nowShowingMovies.length})
+          </button>
+        </div>
         <div className="mt-4 max-h-[600px] space-y-2 overflow-y-auto pr-1">
-          {movies.length === 0 ? (<div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-center">
+          {visibleMovies.length === 0 ? (<div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-center">
               <p className="text-sm text-slate-400">
                 Chưa có phim nào.
               </p>
@@ -210,7 +229,7 @@ export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
               <button type="button" onClick={handleCreateNew} className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-950">
                 + Tạo phim đầu tiên
               </button>
-            </div>) : (movies.map((movie) => (<button key={movie.id} type="button" onClick={() => syncSelectedMovie(movie.id)} className={`block w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${movie.id === editingMovieId
+            </div>) : (visibleMovies.map((movie) => (<button key={movie.id} type="button" onClick={() => syncSelectedMovie(movie.id)} className={`block w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${movie.id === editingMovieId
                 ? 'border-sky-400/60 bg-sky-500/15 text-white'
                 : 'border-white/10 bg-slate-950/60 text-slate-300 hover:border-white/20'}`}>
                 <div className="font-semibold text-white">
@@ -222,13 +241,9 @@ export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
                 </div>
 
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {movie.isNowShowing && (<span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300">
-                      Đang chiếu
-                    </span>)}
-
-                  {movie.isComingSoon && (<span className="rounded-full bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
-                      Sắp chiếu
-                    </span>)}
+                  <span className={`rounded-full px-2 py-1 text-[11px] ${new Date(movie.releaseDate).getTime() <= currentTime ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>
+                    {new Date(movie.releaseDate).getTime() <= currentTime ? 'Đang chiếu' : 'Sắp chiếu'}
+                  </span>
                 </div>
               </button>)))}
         </div>
@@ -305,7 +320,7 @@ export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
             </option>
           </select>
 
-          <input type="date" value={form.releaseDate} onChange={(event) => setForm((current) => ({
+          <input type="datetime-local" value={form.releaseDate} onChange={(event) => setForm((current) => ({
             ...current,
             releaseDate: event.target.value,
         }))} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400" required/>
@@ -334,27 +349,6 @@ export function MovieManagementForm({ movies, }: MovieManagementFormProps) {
             ...current,
             synopsis: event.target.value,
         }))} rows={5} placeholder="Mô tả phim" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-sky-400" required/>
-
-        {}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-            <input type="checkbox" checked={form.isNowShowing} onChange={(event) => setForm((current) => ({
-            ...current,
-            isNowShowing: event.target.checked,
-        }))}/>
-
-            Đang chiếu
-          </label>
-
-          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-            <input type="checkbox" checked={form.isComingSoon} onChange={(event) => setForm((current) => ({
-            ...current,
-            isComingSoon: event.target.checked,
-        }))}/>
-
-            Sắp chiếu
-          </label>
-        </div>
 
         {}
         <div className="flex flex-wrap gap-3">

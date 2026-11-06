@@ -20,20 +20,19 @@ export default async function MoviesPage({ searchParams, }: MoviesPageProps) {
         interpretation = result.interpretation;
     }
     else {
+        const now = new Date();
         const where: {
-            isNowShowing?: boolean;
-            isComingSoon?: boolean;
+            releaseDate?: { lte?: Date; gt?: Date };
         } = {};
         if (status === 'now' || status === 'dang-chieu') {
-            where.isNowShowing = true;
+            where.releaseDate = { lte: now };
         }
         else if (status === 'coming' || status === 'sap-chieu') {
-            where.isComingSoon = true;
+            where.releaseDate = { gt: now };
         }
         movies = await prisma.movie.findMany({
             where: Object.keys(where).length > 0 ? where : undefined,
             orderBy: [
-                { isNowShowing: 'desc' },
                 { releaseDate: 'desc' },
             ],
         });

@@ -13,6 +13,18 @@ async function isAdmin(request: Request) {
     });
     return token?.role === 'ADMIN';
 }
+function parseReleaseDate(value: string): Date {
+    const trimmed = value.trim();
+    return new Date(/^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? `${trimmed}T12:00:00+07:00`
+        : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)
+            ? `${trimmed}:00+07:00`
+            : trimmed);
+}
+function withDerivedStatus<T extends { releaseDate: Date }>(movie: T) {
+    const isNowShowing = movie.releaseDate <= new Date();
+    return { ...movie, isNowShowing, isComingSoon: !isNowShowing };
+}
 export async function PATCH(request: Request, context: RouteContext) {
     if (!(await isAdmin(request))) {
         return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
@@ -30,8 +42,6 @@ export async function PATCH(request: Request, context: RouteContext) {
             imageUrl?: string;
             trailerUrl?: string;
             releaseDate?: string;
-            isNowShowing?: boolean;
-            isComingSoon?: boolean;
         };
         if (!id) {
             return NextResponse.json({ message: 'ID phim không hợp lệ.' }, { status: 400 });
@@ -54,11 +64,7 @@ export async function PATCH(request: Request, context: RouteContext) {
             ? Number(body.duration)
             : undefined;
         
-        const releaseDate = body.releaseDate
-            ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(body.releaseDate.trim())
-                ? `${body.releaseDate.trim()}T12:00:00+07:00`
-                : body.releaseDate)
-            : undefined;
+        const releaseDate = body.releaseDate ? parseReleaseDate(body.releaseDate) : undefined;
         if (body.title !== undefined &&
             !title) {
             return NextResponse.json({ message: 'Tên phim không được để trống.' }, { status: 400 });
@@ -83,6 +89,7 @@ export async function PATCH(request: Request, context: RouteContext) {
                 return NextResponse.json({ message: 'Slug phim đã tồn tại.' }, { status: 409 });
             }
         }
+        const now = new Date();
         const movie = await prisma.movie.update({
             where: { id },
             data: {
@@ -100,13 +107,17 @@ export async function PATCH(request: Request, context: RouteContext) {
                     ? trailerUrl || null
                     : undefined,
                 releaseDate,
-                isNowShowing: body.isNowShowing,
-                isComingSoon: body.isComingSoon,
+                ...((releaseDate ?? existingMovie.releaseDate)
+                    ? {
+                        isNowShowing: (releaseDate ?? existingMovie.releaseDate) <= now,
+                        isComingSoon: (releaseDate ?? existingMovie.releaseDate) > now,
+                    }
+                    : {}),
             },
         });
         return NextResponse.json({
             message: 'Cập nhật phim thành công.',
-            movie,
+            movie: withDerivedStatus(movie),
         });
     }
     catch {

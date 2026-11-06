@@ -8,15 +8,27 @@ async function isAdmin(request: Request) {
     });
     return token?.role === 'ADMIN';
 }
+function parseReleaseDate(value: string): Date {
+    const trimmed = value.trim();
+    return new Date(/^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? `${trimmed}T12:00:00+07:00`
+        : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)
+            ? `${trimmed}:00+07:00`
+            : trimmed);
+}
+function withDerivedStatus<T extends { releaseDate: Date }>(movie: T) {
+    const isNowShowing = movie.releaseDate <= new Date();
+    return { ...movie, isNowShowing, isComingSoon: !isNowShowing };
+}
 export async function GET(request: Request) {
     if (!(await isAdmin(request))) {
         return NextResponse.json({ message: 'Bạn không có quyền thực hiện thao tác này.' }, { status: 403 });
     }
     try {
         const movies = await prisma.movie.findMany({
-            orderBy: [{ isNowShowing: 'desc' }, { releaseDate: 'desc' }],
+            orderBy: { releaseDate: 'desc' },
         });
-        return NextResponse.json(movies);
+        return NextResponse.json(movies.map(withDerivedStatus));
     }
     catch {
         return NextResponse.json({ message: 'Không thể tải danh sách phim.' }, { status: 500 });
@@ -38,8 +50,6 @@ export async function POST(request: Request) {
             imageUrl?: string;
             trailerUrl?: string;
             releaseDate?: string;
-            isNowShowing?: boolean;
-            isComingSoon?: boolean;
         };
         const title = body.title?.trim();
         const slug = body.slug?.trim();
@@ -51,11 +61,7 @@ export async function POST(request: Request) {
         const trailerUrl = body.trailerUrl?.trim();
         const duration = Number(body.duration);
         
-        const releaseDate = body.releaseDate
-            ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(body.releaseDate.trim())
-                ? `${body.releaseDate.trim()}T12:00:00+07:00`
-                : body.releaseDate)
-            : null;
+        const releaseDate = body.releaseDate ? parseReleaseDate(body.releaseDate) : null;
         if (!title ||
             !slug ||
             !genre ||
@@ -77,6 +83,7 @@ export async function POST(request: Request) {
         if (existingMovie) {
             return NextResponse.json({ message: 'Slug phim đã tồn tại.' }, { status: 409 });
         }
+        const now = new Date();
         const movie = await prisma.movie.create({
             data: {
                 title,
@@ -89,11 +96,11 @@ export async function POST(request: Request) {
                 imageUrl,
                 trailerUrl: trailerUrl || null,
                 releaseDate,
-                isNowShowing: Boolean(body.isNowShowing),
-                isComingSoon: Boolean(body.isComingSoon),
+                isNowShowing: releaseDate <= now,
+                isComingSoon: releaseDate > now,
             },
         });
-        return NextResponse.json({ message: 'Tạo phim thành công.', movie }, { status: 201 });
+        return NextResponse.json({ message: 'Tạo phim thành công.', movie: withDerivedStatus(movie) }, { status: 201 });
     }
     catch {
         return NextResponse.json({ message: 'Không thể tạo phim.' }, { status: 500 });
