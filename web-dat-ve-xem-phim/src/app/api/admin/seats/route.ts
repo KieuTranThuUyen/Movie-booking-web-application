@@ -3,6 +3,9 @@ import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 const SEAT_TYPES = ['STANDARD', 'VIP', 'COUPLE'] as const;
+function getSeatSize(type: string) {
+    return type === 'COUPLE' ? { width: 66, height: 44 } : { width: 44, height: 44 };
+}
 async function isAdmin(request: Request) {
     const token = await getToken({
         req: request as NextRequest,
@@ -49,10 +52,11 @@ export async function POST(request: Request) {
         if (!hall) {
             return NextResponse.json({ message: 'Không tìm thấy phòng chiếu.' }, { status: 404 });
         }
+        const seatSize = getSeatSize(type);
         if (positionX < 0 ||
             positionY < 0 ||
-            positionX >= hall.layoutWidth ||
-            positionY >= hall.layoutHeight) {
+            positionX + seatSize.width > hall.layoutWidth ||
+            positionY + seatSize.height > hall.layoutHeight) {
             return NextResponse.json({ message: 'Vị trí ghế nằm ngoài sơ đồ.' }, { status: 400 });
         }
         const duplicate = await prisma.seat.findUnique({
@@ -60,6 +64,20 @@ export async function POST(request: Request) {
         });
         if (duplicate) {
             return NextResponse.json({ message: `Ghế ${code} đã tồn tại trong phòng.` }, { status: 409 });
+        }
+        const nearbySeats = await prisma.seat.findMany({
+            where: { hallId },
+            select: { positionX: true, positionY: true, type: true, code: true },
+        });
+        const touchesSeat = nearbySeats.some((seat) => {
+            const otherSize = getSeatSize(seat.type);
+            return positionX < seat.positionX + otherSize.width + 2 &&
+                positionX + seatSize.width + 2 > seat.positionX &&
+                positionY < seat.positionY + otherSize.height + 2 &&
+                positionY + seatSize.height + 2 > seat.positionY;
+        });
+        if (touchesSeat) {
+            return NextResponse.json({ message: 'Vị trí ghế đang chạm hoặc chồng lên ghế khác.' }, { status: 400 });
         }
         const seat = await prisma.$transaction(async (tx) => {
             const created = await tx.seat.create({

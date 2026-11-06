@@ -37,8 +37,8 @@ function makeSeatsFromQuantities(hallId: string, counts: Record<SeatType, number
     const rows = Math.ceil(total / seatsPerRow);
     const startX = 100;
     const startY = 110;
-    const gapX = Math.min(58, Math.max(34, Math.floor((width - 200) / Math.max(seatsPerRow, 1))));
-    const gapY = Math.min(58, Math.max(42, Math.floor((height - 170) / Math.max(rows, 1))));
+    const gapX = Math.min(72, Math.max(counts.COUPLE > 0 ? 70 : 48, Math.floor((width - 200) / Math.max(seatsPerRow, 1))));
+    const gapY = Math.min(58, Math.max(48, Math.floor((height - 170) / Math.max(rows, 1))));
     const typeList: SeatType[] = [];
     if (preset === 'VIP_REAR') {
         for (let i = 0; i < counts.STANDARD; i++)
@@ -86,6 +86,7 @@ function makeSeatsFromQuantities(hallId: string, counts: Record<SeatType, number
                 x += gapX / 2;
             }
             const type = typeList[seatIndex] ?? 'STANDARD';
+            const seatWidth = type === 'COUPLE' ? 66 : 44;
             records.push({
                 hallId,
                 code: `${rowLabel}${c + 1}`,
@@ -93,13 +94,38 @@ function makeSeatsFromQuantities(hallId: string, counts: Record<SeatType, number
                 seatNumber: c + 1,
                 type,
                 isActive: true,
-                positionX: Math.round(Math.min(Math.max(x, 10), width - 50)),
+                positionX: Math.round(Math.min(Math.max(x, 10), width - seatWidth - 10)),
                 positionY: Math.round(Math.min(Math.max(y, 10), height - 50)),
             });
             seatIndex++;
         }
     }
     return records;
+}
+function seatsFitLayout(seats: Array<{ positionX: number; positionY: number; type: string }>, width: number, height: number) {
+    const seatSize = 44;
+    const withinBounds = seats.every((seat) => {
+        const seatWidth = seat.type === 'COUPLE' ? 66 : seatSize;
+        return seat.positionX >= 0 &&
+            seat.positionY >= 0 &&
+            seat.positionX + seatWidth <= width &&
+            seat.positionY + seatSize <= height;
+    });
+    if (!withinBounds)
+        return false;
+    for (let index = 0; index < seats.length; index++) {
+        for (const other of seats.slice(index + 1)) {
+            const currentWidth = seats[index].type === 'COUPLE' ? 66 : seatSize;
+            const otherWidth = other.type === 'COUPLE' ? 66 : seatSize;
+            if (seats[index].positionX < other.positionX + otherWidth + 2 &&
+                seats[index].positionX + currentWidth + 2 > other.positionX &&
+                seats[index].positionY < other.positionY + seatSize + 2 &&
+                seats[index].positionY + seatSize + 2 > other.positionY) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 export async function POST(request: Request) {
     if (!(await isAdmin(request))) {
@@ -182,6 +208,12 @@ export async function POST(request: Request) {
         const totalSeats = counts.STANDARD + counts.VIP + counts.COUPLE;
         if (totalSeats < 1 || totalSeats > 500) {
             return NextResponse.json({ message: 'Tổng số ghế phải từ 1 đến 500.' }, { status: 400 });
+        }
+        const previewSeats = makeSeatsFromQuantities('preview', counts, preset, width, height);
+        if (!seatsFitLayout(previewSeats, width, height)) {
+            return NextResponse.json({
+                message: 'Kích thước phòng không đủ chứa số ghế đã chọn. Vui lòng giảm số ghế hoặc tăng kích thước sơ đồ.',
+            }, { status: 400 });
         }
         const existingHall = await prisma.hall.findFirst({ where: { cinemaId, name } });
         if (existingHall) {

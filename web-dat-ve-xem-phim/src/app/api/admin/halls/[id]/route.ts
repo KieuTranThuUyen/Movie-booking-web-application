@@ -10,6 +10,14 @@ type RouteContext = {
 const PRESETS = ['STANDARD', 'AISLE_CENTER', 'STAGGERED', 'VIP_REAR', 'COUPLE_REAR', 'FREE'];
 const BLOCK_TYPES = ['AISLE', 'SPACE'];
 const SEAT_TYPES = ['STANDARD', 'VIP', 'COUPLE'];
+const SCREEN_ZONE = { top: 10, bottom: 82, gap: 8 };
+function getSeatSize(type: string) {
+    return type === 'COUPLE' ? { width: 66, height: 44 } : { width: 44, height: 44 };
+}
+function overlapsScreen(y: number, height: number) {
+    return y < SCREEN_ZONE.bottom + SCREEN_ZONE.gap &&
+        y + height > SCREEN_ZONE.top - SCREEN_ZONE.gap;
+}
 async function isAdmin(request: Request) {
     const token = await getToken({
         req: request as NextRequest,
@@ -101,9 +109,36 @@ export async function PATCH(request: Request, context: RouteContext) {
                 if (!SEAT_TYPES.includes(type)) {
                     return NextResponse.json({ message: `Loại ghế ${type} không hợp lệ.` }, { status: 400 });
                 }
-                if (!validInt(item.positionX, 0, layoutWidth - 1) ||
-                    !validInt(item.positionY, 0, layoutHeight - 1)) {
+                const seatSize = getSeatSize(type);
+                if (!validInt(item.positionX, 0, layoutWidth - seatSize.width) ||
+                    !validInt(item.positionY, 0, layoutHeight - seatSize.height)) {
                     return NextResponse.json({ message: `Vị trí ghế ${code} nằm ngoài sơ đồ.` }, { status: 400 });
+                }
+                if (overlapsScreen(Number(item.positionY), seatSize.height)) {
+                    return NextResponse.json({ message: `Ghế ${code} không được nằm cùng hàng với màn hình.` }, { status: 400 });
+                }
+            }
+            const submittedSeatPositions = body.seats.map((item) => ({
+                id: item.id,
+                type: item.type ?? hall.seats.find((seat) => seat.id === item.id)?.type ?? 'STANDARD',
+                positionX: item.positionX ?? hall.seats.find((seat) => seat.id === item.id)?.positionX ?? 0,
+                positionY: item.positionY ?? hall.seats.find((seat) => seat.id === item.id)?.positionY ?? 0,
+            }));
+            for (let index = 0; index < submittedSeatPositions.length; index++) {
+                const current = submittedSeatPositions[index];
+                for (const other of submittedSeatPositions.slice(index + 1)) {
+                    const currentSize = getSeatSize(current.type);
+                    const otherSize = getSeatSize(other.type);
+                    if (current.positionX < other.positionX + otherSize.width + 2 &&
+                        current.positionX + currentSize.width + 2 > other.positionX &&
+                        current.positionY < other.positionY + otherSize.height + 2 &&
+                        current.positionY + currentSize.height + 2 > other.positionY) {
+                        const currentSeat = hall.seats.find((seat) => seat.id === current.id);
+                        const otherSeat = hall.seats.find((seat) => seat.id === other.id);
+                        return NextResponse.json({
+                            message: `Ghế ${currentSeat?.code ?? current.id} đang chạm hoặc chồng lên ghế ${otherSeat?.code ?? other.id}.`,
+                        }, { status: 400 });
+                    }
                 }
             }
             const bookedSeatIds = new Set((await prisma.ticket.findMany({
@@ -202,6 +237,42 @@ export async function PATCH(request: Request, context: RouteContext) {
                     block.x + block.width > layoutWidth ||
                     block.y + block.height > layoutHeight) {
                     return NextResponse.json({ message: 'Có lối đi/khoảng trống không hợp lệ.' }, { status: 400 });
+                }
+                if (overlapsScreen(block.y, block.height)) {
+                    return NextResponse.json({ message: 'Khối không được nằm cùng hàng hoặc chạm vào màn hình.' }, { status: 400 });
+                }
+            }
+            for (let index = 0; index < body.layoutBlocks.length; index++) {
+                const current = body.layoutBlocks[index];
+                for (const other of body.layoutBlocks.slice(index + 1)) {
+                    if (current.x < other.x + other.width + 2 &&
+                        current.x + current.width + 2 > other.x &&
+                        current.y < other.y + other.height + 2 &&
+                        current.y + current.height + 2 > other.y) {
+                        return NextResponse.json({ message: 'Các khối trong sơ đồ không được chồng hoặc chạm vào nhau.' }, { status: 400 });
+                    }
+                }
+                const submittedSeatIds = new Set(body.seats?.map((item) => item.id) ?? []);
+                const seatsForLayout = [
+                    ...(body.seats?.map((item) => ({
+                        type: item.type ?? hall.seats.find((seat) => seat.id === item.id)?.type ?? 'STANDARD',
+                        positionX: item.positionX ?? hall.seats.find((seat) => seat.id === item.id)?.positionX ?? 0,
+                        positionY: item.positionY ?? hall.seats.find((seat) => seat.id === item.id)?.positionY ?? 0,
+                    })) ?? []),
+                    ...hall.seats
+                        .filter((seat) => !submittedSeatIds.has(seat.id))
+                        .map((seat) => ({ type: seat.type, positionX: seat.positionX, positionY: seat.positionY })),
+                ];
+                for (const block of body.layoutBlocks) {
+                    if (seatsForLayout.some((seat) => {
+                        const seatSize = getSeatSize(seat.type);
+                        return block.x < seat.positionX + seatSize.width + 2 &&
+                            block.x + block.width + 2 > seat.positionX &&
+                            block.y < seat.positionY + seatSize.height + 2 &&
+                            block.y + block.height + 2 > seat.positionY;
+                    })) {
+                        return NextResponse.json({ message: 'Khối không được chồng hoặc chạm vào ghế.' }, { status: 400 });
+                    }
                 }
             }
         }

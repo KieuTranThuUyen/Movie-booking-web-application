@@ -64,6 +64,131 @@ const TYPES: Array<{
     { value: 'COUPLE', label: 'Couple' },
 ];
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const BLOCK_GAP = 2;
+const SCREEN_ZONE = { top: 10, bottom: 82, gap: 8 };
+function getSeatSize(type: string) {
+    return type === 'COUPLE' ? { width: 66, height: 44 } : { width: 44, height: 44 };
+}
+function overlapsScreen(y: number, height: number): boolean {
+    return y < SCREEN_ZONE.bottom + SCREEN_ZONE.gap &&
+        y + height > SCREEN_ZONE.top - SCREEN_ZONE.gap;
+}
+function blocksOverlap(a: LayoutBlock, b: LayoutBlock): boolean {
+    return a.x < b.x + b.width + BLOCK_GAP &&
+        a.x + a.width + BLOCK_GAP > b.x &&
+        a.y < b.y + b.height + BLOCK_GAP &&
+        a.y + a.height + BLOCK_GAP > b.y;
+}
+function blockOverlapsSeat(block: LayoutBlock, seat: SeatOption): boolean {
+    const seatSize = getSeatSize(seat.type);
+    return block.x < seat.positionX + seatSize.width + BLOCK_GAP &&
+        block.x + block.width + BLOCK_GAP > seat.positionX &&
+        block.y < seat.positionY + seatSize.height + BLOCK_GAP &&
+        block.y + block.height + BLOCK_GAP > seat.positionY;
+}
+function seatsOverlap(a: SeatOption, b: SeatOption): boolean {
+    const aSize = getSeatSize(a.type);
+    const bSize = getSeatSize(b.type);
+    return a.positionX < b.positionX + bSize.width + BLOCK_GAP &&
+        a.positionX + aSize.width + BLOCK_GAP > b.positionX &&
+        a.positionY < b.positionY + bSize.height + BLOCK_GAP &&
+        a.positionY + aSize.height + BLOCK_GAP > b.positionY;
+}
+function hasSeatOverlap(seats: SeatOption[]): boolean {
+    return seats.some((seat, index) => seats.slice(index + 1).some((other) => seatsOverlap(seat, other)));
+}
+function seatOverlapsBlock(seat: SeatOption, block: LayoutBlock): boolean {
+    return blockOverlapsSeat(block, seat);
+}
+function findSeatPosition(
+    seat: SeatOption,
+    otherSeats: SeatOption[],
+    blocks: LayoutBlock[],
+    width: number,
+    height: number,
+    preferredX: number,
+    preferredY: number,
+) {
+    const size = getSeatSize(seat.type);
+    const maxX = Math.max(0, width - size.width);
+    const maxY = Math.max(0, height - size.height);
+    const x = Math.max(0, Math.min(maxX, Math.round(preferredX)));
+    const y = Math.max(0, Math.min(maxY, Math.round(preferredY)));
+    const isFree = (candidateX: number, candidateY: number) => {
+        const candidate = { ...seat, positionX: candidateX, positionY: candidateY };
+        return !otherSeats.some((other) => seatsOverlap(candidate, other)) &&
+            !blocks.some((block) => seatOverlapsBlock(candidate, block)) &&
+            !overlapsScreen(candidateY, size.height);
+    };
+    if (isFree(x, y))
+        return { x, y };
+    for (let radius = 6; radius <= Math.max(width, height); radius += 6) {
+        const candidates = [
+            [x - radius, y], [x + radius, y], [x, y - radius], [x, y + radius],
+            [x - radius, y - radius], [x + radius, y - radius],
+            [x - radius, y + radius], [x + radius, y + radius],
+        ];
+        for (const [candidateX, candidateY] of candidates) {
+            const boundedX = Math.max(0, Math.min(maxX, candidateX));
+            const boundedY = Math.max(0, Math.min(maxY, candidateY));
+            if (isFree(boundedX, boundedY))
+                return { x: boundedX, y: boundedY };
+        }
+    }
+    return null;
+}
+function findBlockPosition(block: LayoutBlock, others: LayoutBlock[], seats: SeatOption[], width: number, height: number, preferredX: number, preferredY: number) {
+    const maxX = Math.max(0, width - block.width);
+    const maxY = Math.max(0, height - block.height);
+    const x = Math.max(0, Math.min(maxX, Math.round(preferredX)));
+    const y = Math.max(0, Math.min(maxY, Math.round(preferredY)));
+    const isFree = (candidateX: number, candidateY: number) => {
+        const candidate = { ...block, x: candidateX, y: candidateY };
+        return !others.some((other) => blocksOverlap(candidate, other)) &&
+            !seats.some((seat) => blockOverlapsSeat(candidate, seat)) &&
+            !overlapsScreen(candidateY, block.height);
+    };
+    if (isFree(x, y))
+        return { x, y };
+    const step = 10;
+    for (let radius = step; radius <= Math.max(width, height); radius += step) {
+        const candidates = [
+            [x - radius, y], [x + radius, y], [x, y - radius], [x, y + radius],
+            [x - radius, y - radius], [x + radius, y - radius],
+            [x - radius, y + radius], [x + radius, y + radius],
+        ];
+        for (const [candidateX, candidateY] of candidates) {
+            const boundedX = Math.max(0, Math.min(maxX, candidateX));
+            const boundedY = Math.max(0, Math.min(maxY, candidateY));
+            if (isFree(boundedX, boundedY))
+                return { x: boundedX, y: boundedY };
+        }
+    }
+    return null;
+}
+function arrangeBlocks(
+    blocks: LayoutBlock[],
+    seats: SeatOption[],
+    width: number,
+    height: number,
+): LayoutBlock[] | null {
+    const arranged: LayoutBlock[] = [];
+    for (const block of blocks) {
+        const position = findBlockPosition(
+            block,
+            arranged,
+            seats,
+            width,
+            height,
+            block.x,
+            block.y,
+        );
+        if (!position)
+            return null;
+        arranged.push({ ...block, x: position.x, y: position.y });
+    }
+    return arranged;
+}
 function defaultCounts(total: number) {
     const vip = Math.min(12, Math.floor(total * 0.2));
     const couple = Math.min(4, Math.floor(total * 0.1));
@@ -124,10 +249,11 @@ function makePositions(seats: SeatOption[], preset: Preset, width: number, heigh
     const seatsPerRow = Math.min(14, Math.max(6, Math.ceil(Math.sqrt(total * 1.4))));
     const rowCount = Math.ceil(total / seatsPerRow);
     const availableWidth = width - sidePadding * 2;
+    const maxSeatWidth = ordered.some((seat) => seat.type === 'COUPLE') ? 66 : seatSize;
     let gapX = seatsPerRow > 1
         ? Math.floor((availableWidth - seatSize) / (seatsPerRow - 1))
         : 0;
-    gapX = Math.max(52, Math.min(gapX, 70));
+    gapX = Math.max(maxSeatWidth + 4, Math.min(gapX, 72));
     const availableHeight = height - topPadding - bottomPadding;
     let gapY = rowCount > 1 ? Math.floor(availableHeight / (rowCount - 1)) : 0;
     gapY = Math.max(52, Math.min(gapY, 62));
@@ -151,7 +277,7 @@ function makePositions(seats: SeatOption[], preset: Preset, width: number, heigh
         }
         const minX = Math.min(...positions);
         const maxX = Math.max(...positions);
-        const actualWidth = maxX - minX + seatSize;
+        const actualWidth = maxX - minX + maxSeatWidth;
         let centeredStartX = Math.round((width - actualWidth) / 2);
         centeredStartX = Math.max(sidePadding, Math.min(centeredStartX, width - sidePadding - actualWidth));
         for (let c = 0; c < seatsInRow; c++) {
@@ -235,6 +361,18 @@ export function CinemaManagementForm({ cinemas }: Props) {
     });
     const selectedCinema = useMemo(() => cinemaList.find((c) => c.id === selectedCinemaId), [cinemaList, selectedCinemaId]);
     const selectedHall = useMemo(() => selectedCinema?.halls.find((h) => h.id === selectedHallId), [selectedCinema, selectedHallId]);
+    useEffect(() => {
+        if (!selectedHall || !hasSeatOverlap(selectedHall.seats))
+            return;
+        const seats = makePositions(
+            selectedHall.seats,
+            (selectedHall.layoutPreset as Preset) || 'STANDARD',
+            selectedHall.layoutWidth,
+            selectedHall.layoutHeight,
+        );
+        updateHallLocal((hall) => ({ ...hall, seats }));
+        setMessage('Đã tự căn lại các ghế đang chạm nhau. Nhấn "Lưu sơ đồ" để áp dụng.');
+    }, [selectedHallId]);
     useEffect(() => {
         const el = canvasContainerRef.current;
         if (!el)
@@ -524,25 +662,45 @@ export function CinemaManagementForm({ cinemas }: Props) {
         const y = Math.max(0, Math.min(maxY, rawY));
         updateHallLocal((hall) => {
             if (dragging.kind === 'seat') {
+                const movingSeat = hall.seats.find((seat) => seat.id === dragging.id);
+                if (!movingSeat)
+                    return hall;
+                const position = findSeatPosition(
+                    movingSeat,
+                    hall.seats.filter((seat) => seat.id !== dragging.id),
+                    hall.layoutBlocks,
+                    hall.layoutWidth,
+                    hall.layoutHeight,
+                    x,
+                    y,
+                );
+                if (!position)
+                    return hall;
                 return {
                     ...hall,
                     seats: hall.seats.map((seat) => seat.id === dragging.id
-                        ? {
-                            ...seat,
-                            positionX: Math.round(x),
-                            positionY: Math.round(y),
-                        }
+                        ? { ...seat, positionX: position.x, positionY: position.y }
                         : seat),
                 };
             }
+            const movingBlock = hall.layoutBlocks.find((block) => block.id === dragging.id);
+            if (!movingBlock)
+                return hall;
+            const position = findBlockPosition(
+                movingBlock,
+                hall.layoutBlocks.filter((block) => block.id !== dragging.id),
+                hall.seats,
+                hall.layoutWidth,
+                hall.layoutHeight,
+                x,
+                y,
+            );
+            if (!position)
+                return hall;
             return {
                 ...hall,
                 layoutBlocks: hall.layoutBlocks.map((block) => block.id === dragging.id
-                    ? {
-                        ...block,
-                        x: Math.round(x),
-                        y: Math.round(y),
-                    }
+                    ? { ...block, x: position.x, y: position.y }
                     : block),
             };
         });
@@ -569,6 +727,32 @@ export function CinemaManagementForm({ cinemas }: Props) {
         const numberMatch = code.match(/\d+$/);
         const rowLabel = (rowMatch?.[0] ?? 'A').toUpperCase();
         const seatNumber = Number(numberMatch?.[0] ?? selectedHall.seats.length + 1);
+        const selectedType = selectedSeatIds.length > 0
+            ? selectedHall.seats.find((seat) => seat.id === selectedSeatIds[0])?.type ?? 'STANDARD'
+            : 'STANDARD';
+        const newSeatTemplate: SeatOption = {
+            id: 'new-seat',
+            code,
+            rowLabel,
+            seatNumber,
+            type: selectedType,
+            isActive: true,
+            positionX: 0,
+            positionY: 0,
+        };
+        const position = findSeatPosition(
+            newSeatTemplate,
+            selectedHall.seats,
+            selectedHall.layoutBlocks,
+            selectedHall.layoutWidth,
+            selectedHall.layoutHeight,
+            selectedHall.layoutWidth / 2,
+            selectedHall.layoutHeight / 2,
+        );
+        if (!position) {
+            setMessage('Không còn vị trí trống để thêm ghế trong sơ đồ.');
+            return;
+        }
         setLoading(true);
         setMessage('');
         try {
@@ -580,10 +764,10 @@ export function CinemaManagementForm({ cinemas }: Props) {
                     code,
                     rowLabel,
                     seatNumber,
-                    type: 'STANDARD',
+                    type: selectedType,
                     isActive: true,
-                    positionX: Math.round(selectedHall.layoutWidth / 2 - 22),
-                    positionY: 120,
+                    positionX: position.x,
+                    positionY: position.y,
                 }),
             });
             const data = await response.json();
@@ -722,6 +906,21 @@ export function CinemaManagementForm({ cinemas }: Props) {
             height: type === 'AISLE' ? selectedHall.layoutHeight - 150 : 60,
             label: type === 'AISLE' ? 'Lối đi' : 'Khoảng trống',
         };
+        const position = findBlockPosition(
+            block,
+            selectedHall.layoutBlocks,
+            selectedHall.seats,
+            selectedHall.layoutWidth,
+            selectedHall.layoutHeight,
+            block.x,
+            block.y,
+        );
+        if (!position) {
+            setMessage('Không còn vị trí trống để thêm khối trong sơ đồ.');
+            return;
+        }
+        block.x = position.x;
+        block.y = position.y;
         updateHallLocal((hall) => ({
             ...hall,
             layoutBlocks: [...hall.layoutBlocks, block],
@@ -742,15 +941,26 @@ export function CinemaManagementForm({ cinemas }: Props) {
         if (!selectedHall)
             return;
         const seats = makePositions(selectedHall.seats, preset, selectedHall.layoutWidth, selectedHall.layoutHeight);
+        const layoutBlocks = arrangeBlocks(
+            selectedHall.layoutBlocks,
+            seats,
+            selectedHall.layoutWidth,
+            selectedHall.layoutHeight,
+        );
+        if (!layoutBlocks) {
+            setMessage('Không đủ vị trí trống để xếp lại các khối theo mẫu này. Vui lòng xóa hoặc thu nhỏ khối.');
+            return;
+        }
         const nextHall = {
             ...clone(selectedHall),
             layoutPreset: preset,
             seats,
+            layoutBlocks,
         };
         updateHallLocal(() => nextHall);
         setSelectedSeatIds([]);
         const presetLabel = PRESETS.find((item) => item.value === preset)?.label ?? preset;
-        setMessage(`Đã áp dụng mẫu "${presetLabel}". Các hàng ghế đã được căn giữa. Nhấn "Lưu sơ đồ" để lưu.`);
+        setMessage(`Đã áp dụng mẫu "${presetLabel}". Ghế và các khối đã được xếp lại không chạm nhau. Nhấn "Lưu sơ đồ" để lưu.`);
     };
     const updateHallName = (name: string) => {
         updateHallLocal((hall) => ({ ...hall, name }));
@@ -1099,14 +1309,17 @@ export function CinemaManagementForm({ cinemas }: Props) {
                             : type === 'COUPLE'
                                 ? 'border-fuchsia-300/60 bg-fuchsia-400/20 text-fuchsia-100'
                                 : 'border-slate-400/40 bg-slate-500/20 text-slate-100';
-                        return (<button type="button" key={seat.id} onPointerDown={(event) => startSeatDrag(event, seat)} onClick={() => toggleSeat(seat.id)} className={`absolute flex h-11 w-11 items-center justify-center rounded-xl border text-[10px] font-bold shadow-lg transition ${typeClass} ${selected
+                        const seatSize = getSeatSize(type);
+                        return (<button type="button" key={seat.id} onPointerDown={(event) => startSeatDrag(event, seat)} onClick={() => toggleSeat(seat.id)} className={`absolute flex items-center justify-center rounded-xl border text-[10px] font-bold shadow-lg transition ${typeClass} ${selected
                                 ? 'ring-2 ring-sky-300 ring-offset-2 ring-offset-slate-950'
                                 : ''} ${!seat.isActive
                                 ? 'opacity-35 grayscale'
                                 : ''}`} style={{
                                 left: seat.positionX,
                                 top: seat.positionY,
-                            }} title={`${seat.code} — ${type}${seat.isActive
+                                    width: seatSize.width,
+                                    height: seatSize.height,
+                                }} title={`${seat.code} — ${type}${seat.isActive
                                 ? ''
                                 : ' (Đã khóa)'}`}>
                               {seat.code}

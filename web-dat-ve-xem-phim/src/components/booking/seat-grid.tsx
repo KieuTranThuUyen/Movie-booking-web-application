@@ -81,6 +81,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 const DEFAULT_LAYOUT_HEIGHT = 650;
 const DEFAULT_SEAT_SIZE = 44;
 const DEFAULT_SEAT_GAP = 8;
+const COUPLE_SEAT_WIDTH = 66;
 const formatRemainingTime = (expiresAt: string) => {
     const remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now());
     const totalSeconds = Math.floor(remaining / 1000);
@@ -94,6 +95,15 @@ const normalizeNumber = (value: unknown, fallback: number) => {
 };
 const getSeatType = (seat: Seat) => {
     return seat.type?.toUpperCase().trim() || 'STANDARD';
+};
+const getSeatDimensions = (seat: Seat) => {
+    const type = getSeatType(seat);
+    return {
+        width: type === 'COUPLE' || type === 'DOUBLE'
+            ? COUPLE_SEAT_WIDTH
+            : DEFAULT_SEAT_SIZE,
+        height: DEFAULT_SEAT_SIZE,
+    };
 };
 const getSeatTypeLabel = (seat: Seat) => {
     const type = getSeatType(seat);
@@ -612,7 +622,9 @@ export function SeatGrid({ movieSlug, showtimeId, movieTitle, cinemaName, hallNa
                 const position = getSeatPosition(seat);
                 const left = position.x * layoutScale;
                 const top = position.y * layoutScale;
-                const seatSize = DEFAULT_SEAT_SIZE * layoutScale;
+                const seatDimensions = getSeatDimensions(seat);
+                const seatWidth = seatDimensions.width * layoutScale;
+                const seatHeight = seatDimensions.height * layoutScale;
                 const isSelected = selectedSeats.includes(seat.code);
                 const isSold = soldSeatSet.has(seat.code);
                 const isInactive = !seat.isActive;
@@ -653,10 +665,10 @@ export function SeatGrid({ movieSlug, showtimeId, movieTitle, cinemaName, hallNa
                                     : `${typeClass} hover:brightness-125`}`} style={{
                         left,
                         top,
-                        width: seatSize,
-                        height: seatSize,
-                        minWidth: seatSize,
-                        minHeight: seatSize,
+                        width: seatWidth,
+                        height: seatHeight,
+                        minWidth: seatWidth,
+                        minHeight: seatHeight,
                         fontSize: Math.max(9, 12 * layoutScale),
                     }}>
                       {seat.code}
