@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { UserRole } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireAdmin, requireUser } from '@/lib/auth/session';
-import { saveCommentImages, serializeCommentImages } from '@/lib/comments/storage';
+import { removeCommentImages, saveCommentImages, serializeCommentImages } from '@/lib/comments/storage';
 import { createAdminReplyForComment } from '@/lib/comments/admin-reply';
 export const runtime = 'nodejs';
 type Context = {
@@ -73,10 +73,17 @@ export async function POST(request: Request, context: Context) {
                 return NextResponse.json({ message: 'Bạn chỉ có thể trả lời bình luận của người khác.' }, { status: 400 });
         }
         const imageUrls = await saveCommentImages(form.getAll('image').filter((value): value is File => value instanceof File));
-        const imageUrl = serializeCommentImages(imageUrls);
-        const comment = await prisma.$transaction(async (tx) => {
-            return tx.movieComment.create({ data: { movieId, userId: user.id, parentId, content, rating, imageUrl }, include: { user: { select: { id: true, name: true, role: true } } } });
-        });
+        let comment;
+        try {
+            const imageUrl = serializeCommentImages(imageUrls);
+            comment = await prisma.$transaction(async (tx) => {
+                return tx.movieComment.create({ data: { movieId, userId: user.id, parentId, content, rating, imageUrl }, include: { user: { select: { id: true, name: true, role: true } } } });
+            });
+        }
+        catch (error) {
+            await removeCommentImages(imageUrls);
+            throw error;
+        }
         let adminReply = null;
         if (user.role === UserRole.CUSTOMER) {
             const admin = await prisma.user.findFirst({

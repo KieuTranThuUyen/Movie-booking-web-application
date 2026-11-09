@@ -37,9 +37,16 @@ export async function PATCH(request: Request, context: Context) {
         const uploaded = await saveCommentImages(form.getAll('image').filter((value): value is File => value instanceof File));
         const imageUrls = [...existingImages.filter((imageUrl) => !removed.includes(imageUrl)), ...uploaded];
         const imageUrl = serializeCommentImages(imageUrls);
-        const updated = await prisma.$transaction(async (tx) => {
-            return tx.movieComment.update({ where: { id: commentId }, data: { content, rating, imageUrl }, include: { user: { select: { id: true, name: true, role: true } } } });
-        });
+        let updated;
+        try {
+            updated = await prisma.$transaction(async (tx) => {
+                return tx.movieComment.update({ where: { id: commentId }, data: { content, rating, imageUrl }, include: { user: { select: { id: true, name: true, role: true } } } });
+            });
+        }
+        catch (error) {
+            await removeCommentImages(uploaded);
+            throw error;
+        }
         await removeCommentImages(existingImages.filter((existingImage) => !imageUrls.includes(existingImage)));
         return NextResponse.json(updated);
     }
