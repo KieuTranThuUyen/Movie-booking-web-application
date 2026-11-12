@@ -54,6 +54,11 @@ export async function GET(_request: Request, context: RouteContext) {
                         seatCode: 'asc',
                     },
                 },
+                combos: {
+                    orderBy: {
+                        id: 'asc',
+                    },
+                },
             },
         });
         if (!booking) {
@@ -138,6 +143,7 @@ export async function GET(_request: Request, context: RouteContext) {
                         totalPrice: Number(booking.totalPrice),
                     },
                     tickets: [],
+                    combos: [],
                     payment: booking.payment
                         ? {
                             status: booking.payment
@@ -170,6 +176,10 @@ export async function GET(_request: Request, context: RouteContext) {
                 seatCode: ticket.seatCode,
                 price: Number(ticket.price),
                 status: ticket.status,
+            })),
+            combos: booking.combos.map((combo) => ({
+                id: combo.id,
+                status: combo.status,
             })),
             payment: booking.payment
                 ? {

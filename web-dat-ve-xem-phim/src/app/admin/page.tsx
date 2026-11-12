@@ -1,5 +1,6 @@
 import { BookingStatus, PaymentStatus, TicketStatus, } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { RevenueChart } from '@/components/admin/revenue-chart';
 const VND = new Intl.NumberFormat('vi-VN', {
     style: 'currency',
     currency: 'VND',
@@ -241,8 +242,9 @@ export default async function AdminPage() {
             day.revenue += Math.max(0, booking.totalPrice - booking.refundedAmount);
         }
     }
-    const maxRevenue = Math.max(...lastSevenDays.map((item) => item.revenue), 1);
     const maxBookings = Math.max(...lastSevenDays.map((item) => item.bookings), 1);
+    const sevenDayBookingTotal = lastSevenDays.reduce((total, item) => total + item.bookings, 0);
+    const sevenDayAverage = sevenDayBookingTotal / lastSevenDays.length;
     
 
 
@@ -360,8 +362,8 @@ export default async function AdminPage() {
         },
         {
             label: 'Vé đã bán',
-            value: formatNumber(activeTicketsCount),
-            note: `${formatNumber(ticketsCount)} vé trong hệ thống`,
+            value: formatNumber(ticketsCount),
+            note: `${formatNumber(activeTicketsCount)} vé còn hiệu lực`,
             tone: 'from-violet-500/25 to-blue-500/5',
         },
         {
@@ -546,7 +548,34 @@ export default async function AdminPage() {
 
 }
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <section className="rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-glow backdrop-blur-xl">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-emerald-300/80">
+              Phân tích tài chính
+            </p>
+            <h3 className="mt-1 text-xl font-semibold text-white">
+              Xu hướng doanh thu
+            </h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Doanh thu thực nhận sau khi trừ các khoản hoàn tiền
+            </p>
+          </div>
+          <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
+            7 ngày gần nhất
+          </span>
+        </div>
+        <RevenueChart data={lastSevenDays} />
+      </section>
+
+      <section className="rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-glow backdrop-blur-xl">
+        <div className="mb-5">
+          <h3 className="text-lg font-semibold text-white">Trạng thái vận hành</h3>
+          <p className="mt-1 text-xs text-slate-400">
+            Tổng hợp tình trạng đơn đặt và thanh toán
+          </p>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
 
         {}
 
@@ -637,6 +666,7 @@ export default async function AdminPage() {
         </div>
 
       </div>
+      </section>
 
       {
 
@@ -752,61 +782,6 @@ export default async function AdminPage() {
 }
 
       <div className="grid gap-6 lg:grid-cols-2">
-
-        {}
-
-        <div className="rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-glow backdrop-blur-xl">
-
-          <div>
-
-            <h3 className="text-lg font-semibold text-white">
-              Doanh thu 7 ngày gần nhất
-            </h3>
-
-            <p className="mt-1 text-xs text-slate-400">
-              Doanh thu sau khi trừ khoản hoàn tiền
-            </p>
-
-          </div>
-
-          <div className="mt-6 flex h-64 items-end gap-2 sm:gap-3">
-
-            {lastSevenDays.map((day) => {
-            const height = day.revenue === 0
-                ? 4
-                : Math.max(8, (day.revenue / maxRevenue) * 100);
-            return (<div key={day.key} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2">
-
-                  <div className="w-full text-center">
-
-                    <span className="text-[10px] text-slate-400 sm:text-xs">
-                      {day.revenue > 0
-                    ? formatCurrency(day.revenue)
-                    : '0 ₫'}
-                    </span>
-
-                  </div>
-
-                  <div className="flex h-40 w-full items-end justify-center">
-
-                    <div className="w-full max-w-10 rounded-t-xl bg-gradient-to-t from-emerald-500/80 to-teal-300/80 transition-all" style={{
-                    height: `${height}%`,
-                }}/>
-
-                  </div>
-
-                  <span className="text-[10px] text-slate-400 sm:text-xs">
-                    {day.label}
-                  </span>
-
-                </div>);
-        })}
-
-          </div>
-        </div>
-
-        {}
-
         <div className="rounded-[24px] border border-white/10 bg-slate-950/70 p-5 shadow-glow backdrop-blur-xl">
 
           <div>
@@ -854,6 +829,31 @@ export default async function AdminPage() {
 
           </div>
         </div>
+
+        <aside className="relative overflow-hidden rounded-[24px] border border-sky-400/20 bg-gradient-to-br from-sky-500/10 via-slate-950/80 to-indigo-500/10 p-5 shadow-glow">
+          <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-sky-400/15 blur-3xl" />
+          <div className="relative">
+            <p className="text-xs uppercase tracking-[0.2em] text-sky-300/80">Tóm tắt tuần</p>
+            <h3 className="mt-2 text-xl font-semibold text-white">Hiệu suất đặt vé</h3>
+            <p className="mt-1 text-sm text-slate-400">Tổng hợp nhanh trong 7 ngày gần nhất</p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-slate-400">Tổng booking</p>
+                <p className="mt-1 text-2xl font-bold text-white">{formatNumber(sevenDayBookingTotal)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-slate-400">Trung bình / ngày</p>
+                <p className="mt-1 text-2xl font-bold text-sky-200">{formatNumber(Math.round(sevenDayAverage))}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-slate-400">Ngày cao nhất</p>
+                <p className="mt-1 text-2xl font-bold text-indigo-200">
+                  {formatNumber(Math.max(...lastSevenDays.map((item) => item.bookings), 0))}
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
 
       </div>
 

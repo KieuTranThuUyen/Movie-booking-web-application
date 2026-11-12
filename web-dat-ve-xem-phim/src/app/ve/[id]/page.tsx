@@ -6,6 +6,7 @@ import { BookingQR } from '@/components/booking/booking-qr';
 import { AutoPrint } from '@/components/booking/auto-print';
 import { PrintTicketButton } from '@/components/booking/print-ticket-button';
 import { TicketPaymentWaiter } from '@/components/booking/ticket-payment-waiter';
+import { TicketStatusRefresher } from '@/components/booking/ticket-status-refresher';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db/prisma';
 type TicketPageProps = {
@@ -417,6 +418,21 @@ export default async function ElectronicTicketPage({ params, searchParams, }: Ti
 
 
     return (<main className="min-h-screen bg-slate-950 px-4 py-10 text-white print:bg-white print:px-0 print:py-0">
+      <TicketStatusRefresher
+        bookingId={booking.id}
+        booking={{
+          status: booking.status,
+          paymentStatus: booking.paymentStatus,
+        }}
+        tickets={booking.tickets.map((ticket) => ({
+          id: ticket.id,
+          status: ticket.status,
+        }))}
+        combos={booking.combos.map((combo) => ({
+          id: combo.id,
+          status: combo.status,
+        }))}
+      />
       <AutoPrint enabled={shouldAutoPrint && canPrint}/>
       <div className="mx-auto max-w-5xl print:max-w-none">
 

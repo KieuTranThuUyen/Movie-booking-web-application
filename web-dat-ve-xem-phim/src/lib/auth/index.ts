@@ -72,6 +72,7 @@ export async function findAuthenticatedUser(identifier: string, password: string
 export const authOptions: NextAuthOptions = {
     session: {
         strategy: 'jwt',
+        maxAge: 10 * 60,
     },
     pages: {
         signIn: '/dang-nhap',
