@@ -92,7 +92,6 @@ export function TicketQrCheckin() {
         const trimmed = value.trim();
         if (!trimmed || loading)
             return;
-        stopCamera();
         setLoading(true);
         setMessage('');
         setTicket(undefined);
@@ -128,6 +127,8 @@ export function TicketQrCheckin() {
             if (value) {
                 setCode(value);
                 await submitCode(value);
+                if (cameraOpen)
+                    scanTimerRef.current = window.setTimeout(() => scanWithBarcodeDetector(detector), 500);
                 return;
             }
         }
@@ -137,7 +138,7 @@ export function TicketQrCheckin() {
         scanTimerRef.current = window.setTimeout(() => scanWithBarcodeDetector(detector), 250);
     };
     
-    const scanWithJsQR = () => {
+    const scanWithJsQR = async () => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
         if (!video || !canvas || !cameraOpen || video.readyState < video.HAVE_ENOUGH_DATA) {
@@ -156,7 +157,9 @@ export function TicketQrCheckin() {
         });
         if (result?.data) {
             setCode(result.data);
-            void submitCode(result.data);
+            await submitCode(result.data);
+            if (cameraOpen)
+                scanTimerRef.current = window.setTimeout(scanWithJsQR, 500);
             return;
         }
         scanTimerRef.current = window.setTimeout(scanWithJsQR, 300);

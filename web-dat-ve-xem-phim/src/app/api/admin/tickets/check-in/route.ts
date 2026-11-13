@@ -3,6 +3,7 @@ import { getToken } from 'next-auth/jwt';
 import type { NextRequest } from 'next/server';
 import { TicketStatus } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
+import { expirePastTicketItems } from '@/lib/booking/expire-past-ticket-items';
 type CheckInBody = {
     code?: string;
 };
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: false, message: 'Chỉ quản trị viên mới được check-in vé.' }, { status: 403 });
     }
     try {
+        await expirePastTicketItems();
         const body = (await request.json()) as CheckInBody;
         const code = body.code?.trim();
         if (!code) {
@@ -52,6 +54,13 @@ export async function POST(request: Request) {
                     throw new Error('TICKET_ALREADY_USED');
                 if (combo.status === TicketStatus.CANCELED)
                     throw new Error('TICKET_CANCELED');
+                if (combo.booking.showtime.endTime <= new Date()) {
+                    await tx.bookingCombo.update({
+                        where: { id: combo.id },
+                        data: { status: TicketStatus.EXPIRED },
+                    });
+                    throw new Error('TICKET_EXPIRED');
+                }
                 const claimedCombo = await tx.bookingCombo.updateMany({
                     where: { id: combo.id, status: TicketStatus.ACTIVE },
                     data: { status: TicketStatus.USED, checkedInAt: new Date() },
