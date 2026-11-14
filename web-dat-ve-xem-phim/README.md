@@ -82,6 +82,13 @@ https://github.com/KieuTranThuUyen/Movie-booking-web-application
 - Tìm kiếm phim bằng câu hỏi tự nhiên
 - Hỗ trợ đề xuất phim bằng LLM nếu cấu hình API AI
 
+### 4. Quy tắc hủy vé và combo
+
+- Chỉ vé hoặc combo có trạng thái `ACTIVE` mới được phép hủy.
+- Vé hoặc combo đã `USED`, `EXPIRED` hoặc `CANCELED` sẽ bị từ chối hủy.
+- Quy tắc này được kiểm tra ở cả giao diện quản trị và API để tránh hủy các mục đã sử dụng, hết hạn hoặc đã hủy trước đó.
+- Nếu một vé hoặc combo là mục cuối cùng còn hiệu lực trong booking, cần sử dụng chức năng hủy toàn bộ đơn thay vì hủy riêng từng mục.
+
 ---
 
 ## Cấu trúc dự án
@@ -136,38 +143,53 @@ npm install
 
 ### 3) Cấu hình biến môi trường
 
-Tạo file `.env` từ cấu hình tương thích với project:
+Tạo file `.env` bằng cách sao chép `.env.example`, sau đó cập nhật các giá trị phù hợp:
 
 ```env
 DATABASE_URL="mysql://root:root@localhost:3306/cinema_booking"
-NEXTAUTH_SECRET="thay_bang_mot_chuoi_bi_mat_ran"
+# Chuỗi ngẫu nhiên dài (khuyến nghị tối thiểu 32 ký tự)
+NEXTAUTH_SECRET="thay_bang_chuoi_ngau_nhien_dai"
 NEXTAUTH_URL="http://localhost:3000"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 ADMIN_EMAIL="admin@example.com"
-ADMIN_PASSWORD="Admin@123"
+ADMIN_PASSWORD="Admin123!"
 ADMIN_NAME="Administrator"
 
+# URL dùng cho link đặt lại mật khẩu, xác thực email và callback thanh toán
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Email (tùy chọn)
 SMTP_HOST="smtp.gmail.com"
 SMTP_PORT="587"
-SMTP_USER="your-email@gmail.com"
-SMTP_PASS="your-app-password"
+SMTP_USER=""
+SMTP_PASS=""
 SMTP_SECURE="false"
-MAIL_FROM="your-email@gmail.com"
+MAIL_FROM="noreply@example.com"
+APP_NAME="Cinema Booking"
 
+# SePay Sandbox
 SEPAY_ENV="sandbox"
-SEPAY_MERCHANT_ID="your_merchant_id"
-SEPAY_SECRET_KEY="your_secret_key"
-SEPAY_PAYMENT_PREFIX="MOVIEBOOKING"
+SEPAY_MERCHANT_ID=""
+SEPAY_SECRET_KEY=""
+SEPAY_WEBHOOK_SECRET=""
+SEPAY_PAYMENT_PREFIX="MOVIE"
 
+# Google OAuth (tùy chọn)
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
 
+# OpenAI hoặc API tương thích OpenAI (tùy chọn)
 OPENAI_API_KEY=""
+OPENAI_BASE_URL="https://api.openai.com/v1"
 OPENAI_MODEL="gpt-4o-mini"
+
+# Cloudinary - lưu ảnh bình luận (tùy chọn)
+CLOUDINARY_CLOUD_NAME=""
+CLOUDINARY_API_KEY=""
+CLOUDINARY_API_SECRET=""
 ```
 
-> Nếu không dùng SMTP hoặc SePay, hệ thống vẫn có thể chạy ở chế độ cơ bản nhưng email thanh toán / xác thực sẽ bị tắt hoặc chuyển sang log local.
+> Có thể dùng trực tiếp file `.env.example` làm mẫu. Nếu không cấu hình SMTP hoặc SePay, hệ thống vẫn có thể chạy ở chế độ cơ bản nhưng email thanh toán / xác thực sẽ bị tắt hoặc chuyển sang log local. Cloudinary chỉ cần thiết khi sử dụng tính năng ảnh trong bình luận.
 
 ### 4) Khởi tạo database
 
@@ -248,6 +270,7 @@ Password: Admin@123
 - SePay ở môi trường sandbox cần cấu hình đúng `SEPAY_MERCHANT_ID` và `SEPAY_SECRET_KEY`.
 - AI features sẽ hoạt động khi có API key và cấu hình LLM hợp lệ.
 - Email xác thực / reset mật khẩu sẽ hiển thị nội dung log nếu SMTP chưa được cấu hình.
+- Không thể hủy vé hoặc combo đã sử dụng, hết hạn hoặc đã hủy; chỉ mục có trạng thái `ACTIVE` mới đủ điều kiện hủy.
 
 ---
 
