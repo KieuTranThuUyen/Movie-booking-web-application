@@ -35,6 +35,7 @@ export default function AdminLoginPage() {
             ? callbackUrl
             : '/admin';
         router.push(destination);
+        router.refresh();
     };
     return (<div className="mx-auto max-w-md">
       <form onSubmit={handleSubmit} className="space-y-4 rounded-[28px] border border-white/10 bg-slate-950/70 p-6 shadow-glow backdrop-blur-xl">
