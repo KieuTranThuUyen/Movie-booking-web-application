@@ -129,10 +129,10 @@ export async function DELETE(request: Request, context: RouteContext) {
                 status: 404,
             });
         }
-        if (ticket.status ===
-            TicketStatus.CANCELED) {
+        if (ticket.status !==
+            TicketStatus.ACTIVE) {
             return NextResponse.json({
-                message: `Vé ghế ${ticket.seatCode} đã được hủy trước đó.`,
+                message: `Vé ghế ${ticket.seatCode} không còn hiệu lực và không thể hủy.`,
             }, {
                 status: 400,
             });

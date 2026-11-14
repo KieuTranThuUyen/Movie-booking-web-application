@@ -85,8 +85,10 @@ export async function DELETE(request: Request, context: RouteContext) {
         if (!bookingCombo) {
             return NextResponse.json({ message: 'Không tìm thấy combo trong đơn này.' }, { status: 404 });
         }
-        if (bookingCombo.status === TicketStatus.CANCELED) {
-            return NextResponse.json({ message: 'Combo này đã bị hủy trước đó.' }, { status: 400 });
+        if (bookingCombo.status !== TicketStatus.ACTIVE) {
+            return NextResponse.json({
+                message: 'Combo không còn hiệu lực và không thể hủy.',
+            }, { status: 400 });
         }
         const remainingActiveTickets = booking.tickets.filter((t) => t.status === TicketStatus.ACTIVE);
         const remainingActiveCombos = booking.combos.filter((c) => c.status === TicketStatus.ACTIVE && c.id !== comboId);
