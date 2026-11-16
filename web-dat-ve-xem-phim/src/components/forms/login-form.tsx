@@ -10,6 +10,12 @@ export function LoginForm() {
     const [googleLoading, setGoogleLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [form, setForm] = useState({ identifier: '', password: '' });
+    const getCallbackUrl = () => {
+        const callbackUrl = new URLSearchParams(window.location.search).get('callbackUrl');
+        return callbackUrl?.startsWith('/') && !callbackUrl.startsWith('//')
+            ? callbackUrl
+            : '/';
+    };
     const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = event.target;
         setForm((current) => ({
@@ -25,7 +31,7 @@ export function LoginForm() {
             redirect: false,
             identifier: form.identifier,
             password: form.password,
-            callbackUrl: '/tai-khoan',
+            callbackUrl: getCallbackUrl(),
         });
         setLoading(false);
         if (result?.error) {
@@ -36,13 +42,13 @@ export function LoginForm() {
             router.push(result.url);
             return;
         }
-        router.push('/tai-khoan');
+        router.push('/');
     };
     const handleGoogle = async () => {
         setGoogleLoading(true);
         setMessage('');
         try {
-            await signIn('google', { callbackUrl: '/tai-khoan' });
+            await signIn('google', { callbackUrl: getCallbackUrl() });
         }
         catch {
             setMessage('Không thể đăng nhập bằng Google. Thử lại sau.');
