@@ -303,7 +303,7 @@ export function AdminSidebar() {
 
           {}
 
-          <Link href="/" onClick={() => setOpen(false)} className="
+          <Link href="/admin" onClick={() => setOpen(false)} className="
               group
               flex
               items-center
@@ -331,7 +331,7 @@ export function AdminSidebar() {
             </svg>
 
             <span>
-              Trang chủ
+              Tổng quan
             </span>
           </Link>
         </div>
