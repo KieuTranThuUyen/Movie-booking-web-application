@@ -24,7 +24,9 @@ const PLACEHOLDER_POSTER = 'data:image/svg+xml,' +
     </svg>`);
 export function PosterBanner({ movies }: PosterBannerProps) {
     const [current, setCurrent] = useState(0);
-    const bannerMovies = movies.filter((movie) => movie.isNowShowing !== false);
+    const bannerMovies = movies.filter((movie) =>
+        Boolean(movie.posterUrl?.trim() || movie.imageUrl?.trim())
+    );
     const total = bannerMovies.length;
     const activeIndex = total > 0 ? current % total : 0;
     const goNext = useCallback(() => {
@@ -54,7 +56,9 @@ export function PosterBanner({ movies }: PosterBannerProps) {
             {}
             <Image src={movie.posterUrl?.trim()
                 ? movie.posterUrl
-                : PLACEHOLDER_POSTER} alt={movie.title} fill unoptimized priority={index === 0} quality={100} sizes="(max-width: 1024px) 100vw, 1024px" className="object-cover object-center"/>
+                : movie.imageUrl?.trim()
+                    ? movie.imageUrl
+                    : PLACEHOLDER_POSTER} alt={movie.title} fill unoptimized priority={index === 0} quality={100} sizes="(max-width: 1024px) 100vw, 1024px" className="object-cover object-center"/>
 
             {}
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"/>

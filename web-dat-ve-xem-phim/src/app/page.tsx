@@ -34,7 +34,10 @@ export default async function HomePage() {
     const now = new Date();
     const [nowShowingRaw, upcomingRaw, bannerMoviesRaw, cinemasRaw, showtimesRaw] = await Promise.all([
         prisma.movie.findMany({
-            where: { releaseDate: { lte: now } },
+            where: {
+                releaseDate: { lte: now },
+                isNowShowing: true,
+            },
             orderBy: { releaseDate: 'desc' },
             select: movieListSelect,
             
@@ -47,7 +50,10 @@ export default async function HomePage() {
             take: 24,
         }),
         prisma.movie.findMany({
-            where: { releaseDate: { lte: now } },
+            where: {
+                releaseDate: { lte: now },
+                isNowShowing: true,
+            },
             orderBy: { releaseDate: 'desc' },
             select: movieListSelect,
             take: 8,
